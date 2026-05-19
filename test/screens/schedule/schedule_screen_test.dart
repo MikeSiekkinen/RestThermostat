@@ -85,8 +85,9 @@ void main() {
   ) async {
     final h = _setup(serial: 'abc', locale: const Locale('en', 'GB'));
     h.adapter.onGet(
-      '/api/devices/abc/schedule',
+      '/api/schedule',
       (s) => s.reply(200, _scheduleFixture()),
+      queryParameters: {'serial': 'abc'},
     );
 
     await tester.pumpWidget(h.widget);
@@ -108,8 +109,9 @@ void main() {
   ) async {
     final h = _setup(serial: 'abc', locale: const Locale('en', 'US'));
     h.adapter.onGet(
-      '/api/devices/abc/schedule',
+      '/api/schedule',
       (s) => s.reply(200, _scheduleFixture()),
+      queryParameters: {'serial': 'abc'},
     );
 
     await tester.pumpWidget(h.widget);
@@ -128,8 +130,9 @@ void main() {
   testWidgets('renders today\'s events on mount', (tester) async {
     final h = _setup(serial: 'abc');
     h.adapter.onGet(
-      '/api/devices/abc/schedule',
+      '/api/schedule',
       (s) => s.reply(200, _scheduleFixture()),
+      queryParameters: {'serial': 'abc'},
     );
 
     await tester.pumpWidget(h.widget);
@@ -158,8 +161,9 @@ void main() {
   testWidgets('shows empty-day placeholder for Friday', (tester) async {
     final h = _setup(serial: 'abc', locale: const Locale('en', 'GB'));
     h.adapter.onGet(
-      '/api/devices/abc/schedule',
+      '/api/schedule',
       (s) => s.reply(200, _scheduleFixture()),
+      queryParameters: {'serial': 'abc'},
     );
 
     await tester.pumpWidget(h.widget);
@@ -182,8 +186,9 @@ void main() {
   testWidgets('day switching changes the visible event list', (tester) async {
     final h = _setup(serial: 'abc', locale: const Locale('en', 'GB'));
     h.adapter.onGet(
-      '/api/devices/abc/schedule',
+      '/api/schedule',
       (s) => s.reply(200, _scheduleFixture()),
+      queryParameters: {'serial': 'abc'},
     );
 
     await tester.pumpWidget(h.widget);
@@ -217,8 +222,9 @@ void main() {
   ) async {
     final h = _setup(serial: 'abc', use24Hour: true);
     h.adapter.onGet(
-      '/api/devices/abc/schedule',
+      '/api/schedule',
       (s) => s.reply(200, _scheduleFixture()),
+      queryParameters: {'serial': 'abc'},
     );
 
     await tester.pumpWidget(h.widget);
@@ -242,8 +248,9 @@ void main() {
   ) async {
     final h = _setup(serial: 'abc');
     h.adapter.onGet(
-      '/api/devices/abc/schedule',
+      '/api/schedule',
       (s) => s.reply(200, _scheduleFixture()),
+      queryParameters: {'serial': 'abc'},
     );
 
     await tester.pumpWidget(h.widget);
@@ -265,8 +272,9 @@ void main() {
   ) async {
     final h = _setup(serial: 'abc', temperatureScale: 'F');
     h.adapter.onGet(
-      '/api/devices/abc/schedule',
+      '/api/schedule',
       (s) => s.reply(200, _scheduleFixture()),
+      queryParameters: {'serial': 'abc'},
     );
 
     await tester.pumpWidget(h.widget);
@@ -287,8 +295,9 @@ void main() {
   testWidgets('keeps Celsius for C-scale devices', (tester) async {
     final h = _setup(serial: 'abc', temperatureScale: 'C');
     h.adapter.onGet(
-      '/api/devices/abc/schedule',
+      '/api/schedule',
       (s) => s.reply(200, _scheduleFixture()),
+      queryParameters: {'serial': 'abc'},
     );
 
     await tester.pumpWidget(h.widget);
@@ -310,8 +319,14 @@ void main() {
   ) async {
     final h = _setup(serial: 'no-sched', locale: const Locale('en', 'GB'));
     h.adapter.onGet(
-      '/api/devices/no-sched/schedule',
-      (s) => s.reply(404, {'error': 'not found'}),
+      '/api/schedule',
+      (s) => s.reply(200, {
+        'serial': 'no-sched',
+        'schedule': null,
+        'object_revision': 0,
+        'object_timestamp': 0,
+      }),
+      queryParameters: {'serial': 'no-sched'},
     );
 
     await tester.pumpWidget(h.widget);

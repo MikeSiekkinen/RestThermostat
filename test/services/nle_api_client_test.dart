@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
+import 'package:rest_thermostat/models/schedule.dart';
 import 'package:rest_thermostat/services/nle_api_client.dart';
 
 void main() {
@@ -50,13 +51,14 @@ void main() {
   });
 
   group('getSchedule', () {
-    test('parses successful schedule response from fixture', () async {
+    test('parses envelope and inner schedule from fixture', () async {
       final raw = File('test/fixtures/schedule_one.json').readAsStringSync();
       final body = jsonDecode(raw);
 
       dioAdapter.onGet(
-        '/api/devices/02AA01AC041403JM/schedule',
+        '/api/schedule',
         (server) => server.reply(200, body),
+        queryParameters: {'serial': '02AA01AC041403JM'},
       );
 
       final schedule = await client.getSchedule('02AA01AC041403JM');
@@ -66,23 +68,113 @@ void main() {
       expect(schedule.eventsForDay(4), isEmpty);
     });
 
-    test('returns null on 404 (server has no schedule for device)', () async {
+    test('returns null when envelope.schedule is null', () async {
       dioAdapter.onGet(
-        '/api/devices/missing-serial/schedule',
-        (server) => server.reply(404, {'error': 'not found'}),
+        '/api/schedule',
+        (server) => server.reply(200, {
+          'serial': 'no-sched',
+          'schedule': null,
+          'object_revision': 0,
+          'object_timestamp': 0,
+        }),
+        queryParameters: {'serial': 'no-sched'},
       );
 
-      final schedule = await client.getSchedule('missing-serial');
+      final schedule = await client.getSchedule('no-sched');
       expect(schedule, isNull);
     });
 
     test('rethrows DioException on 500', () async {
       dioAdapter.onGet(
-        '/api/devices/abc/schedule',
+        '/api/schedule',
         (server) => server.reply(500, {'error': 'server error'}),
+        queryParameters: {'serial': 'abc'},
       );
 
       expect(() => client.getSchedule('abc'), throwsA(isA<DioException>()));
+    });
+  });
+
+  group('sendCommand', () {
+    test('POSTs /command with {serial, command, value}', () async {
+      Map<String, dynamic>? capturedBody;
+      dioAdapter.onPost(
+        '/command',
+        (server) => server.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+      // Use a fresh dio adapter that captures the request payload via
+      // interceptor — http_mock_adapter ignores data when no matcher is set,
+      // so we approximate by asserting on the inflight interceptor instead.
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            capturedBody = options.data as Map<String, dynamic>?;
+            handler.next(options);
+          },
+        ),
+      );
+
+      await client.sendCommand(
+        serial: 'abc',
+        command: 'set_mode',
+        value: 'heat',
+      );
+
+      expect(capturedBody, isNotNull);
+      expect(capturedBody!['serial'], 'abc');
+      expect(capturedBody!['command'], 'set_mode');
+      expect(capturedBody!['value'], 'heat');
+    });
+
+    test('throws DioException on 500', () async {
+      dioAdapter.onPost(
+        '/command',
+        (server) => server.reply(500, {'error': 'server error'}),
+        data: Matchers.any,
+      );
+      expect(
+        () => client.sendCommand(
+          serial: 'abc',
+          command: 'set_mode',
+          value: 'heat',
+        ),
+        throwsA(isA<DioException>()),
+      );
+    });
+  });
+
+  group('setSchedule', () {
+    test('POSTs /command with set_schedule + full schedule body', () async {
+      Object? capturedValue;
+      String? capturedCommand;
+      dioAdapter.onPost(
+        '/command',
+        (server) => server.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            final body = options.data as Map<String, dynamic>;
+            capturedCommand = body['command'] as String?;
+            capturedValue = body['value'];
+            handler.next(options);
+          },
+        ),
+      );
+      final schedule = Schedule.fromJson(
+        jsonDecode(File('test/fixtures/schedule_one.json').readAsStringSync())
+            as Map<String, dynamic>,
+      );
+
+      await client.setSchedule('abc', schedule);
+
+      expect(capturedCommand, 'set_schedule');
+      expect(capturedValue, isA<Map<String, dynamic>>());
+      final value = capturedValue as Map<String, dynamic>;
+      expect(value['days'], isA<Map<String, dynamic>>());
+      expect((value['days'] as Map).keys, hasLength(7));
     });
   });
 

@@ -6,6 +6,7 @@ import '../../models/schedule.dart';
 import '../../state/providers.dart';
 import '../../theme/colors.dart';
 import 'day_index.dart';
+import 'edit_event_screen.dart';
 
 /// Read-only schedule view for the active device per `docs/DESIGN.md` §6 and
 /// PRD §5.4. Editing arrives in #18.
@@ -27,11 +28,24 @@ class ScheduleScreen extends ConsumerStatefulWidget {
   /// spec ("mode-tinted underline").
   final DeviceMode deviceMode;
 
+  /// The active device's capabilities — gates the mode selector on Edit Event.
+  /// Defaults to a heat-only device for the backward-compatible cases where a
+  /// caller doesn't have a `Device` handy (tests, mostly).
+  final Capabilities capabilities;
+
   const ScheduleScreen({
     super.key,
     required this.serial,
     this.temperatureScale = 'F',
     this.deviceMode = DeviceMode.heat,
+    this.capabilities = const Capabilities(
+      canHeat: true,
+      canCool: false,
+      hasFan: false,
+      hasEmerHeat: false,
+      hasHumidifier: false,
+      hasDehumidifier: false,
+    ),
   });
 
   @override
@@ -52,7 +66,17 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
     final asyncSchedule = ref.watch(scheduleProvider(widget.serial));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Schedule')),
+      appBar: AppBar(
+        title: const Text('Schedule'),
+        actions: [
+          IconButton(
+            key: const ValueKey('add-event-button'),
+            tooltip: 'Add event',
+            icon: const Icon(Icons.add),
+            onPressed: () => _openNewEvent(asyncSchedule.value),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -78,6 +102,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                   data: (schedule) => _DayEventList(
                     events: schedule?.eventsForDay(_selectedDay) ?? const [],
                     temperatureScale: widget.temperatureScale,
+                    onTapEvent: (event) => _openEditEvent(schedule, event),
                   ),
                 ),
               ),
@@ -86,6 +111,58 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
         ),
       ),
     );
+  }
+
+  /// Resolve the schedule we hand to Edit Event. The screen is unreachable
+  /// before the first fetch completes (the AppBar action is enabled either
+  /// way), so when the user taps "+" before data arrives we synthesize a
+  /// minimal empty schedule. `set_schedule` is full-replace so an empty 7-day
+  /// payload is valid (DESIGN §6.7).
+  Schedule _scheduleOrEmpty(Schedule? existing) {
+    return existing ??
+        Schedule(
+          events: const {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []},
+          mode: 'HEAT',
+        );
+  }
+
+  Future<void> _openNewEvent(Schedule? schedule) async {
+    final result = await Navigator.of(context).push<Schedule?>(
+      MaterialPageRoute(
+        builder: (_) => EditEventScreen(
+          serial: widget.serial,
+          capabilities: widget.capabilities,
+          temperatureScale: widget.temperatureScale,
+          currentSchedule: _scheduleOrEmpty(schedule),
+          defaultDayIndex: _selectedDay,
+        ),
+      ),
+    );
+    if (result != null && mounted) {
+      // The optimistic write already happened in the editor; trigger a
+      // re-fetch so the screen reflects the server's eventual state. Edit
+      // Event's revert path also invalidates this, so this is a no-op overlap
+      // on the failure path.
+      ref.invalidate(scheduleProvider(widget.serial));
+    }
+  }
+
+  Future<void> _openEditEvent(Schedule? schedule, ScheduleEvent event) async {
+    final result = await Navigator.of(context).push<Schedule?>(
+      MaterialPageRoute(
+        builder: (_) => EditEventScreen(
+          serial: widget.serial,
+          capabilities: widget.capabilities,
+          temperatureScale: widget.temperatureScale,
+          currentSchedule: _scheduleOrEmpty(schedule),
+          defaultDayIndex: event.dayIndex,
+          existingEvent: event,
+        ),
+      ),
+    );
+    if (result != null && mounted) {
+      ref.invalidate(scheduleProvider(widget.serial));
+    }
   }
 }
 
@@ -187,8 +264,13 @@ class _DayTab extends StatelessWidget {
 class _DayEventList extends StatelessWidget {
   final List<ScheduleEvent> events;
   final String temperatureScale;
+  final ValueChanged<ScheduleEvent> onTapEvent;
 
-  const _DayEventList({required this.events, required this.temperatureScale});
+  const _DayEventList({
+    required this.events,
+    required this.temperatureScale,
+    required this.onTapEvent,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -222,8 +304,11 @@ class _DayEventList extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       itemCount: events.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, i) =>
-          _EventRow(event: events[i], temperatureScale: temperatureScale),
+      itemBuilder: (context, i) => _EventRow(
+        event: events[i],
+        temperatureScale: temperatureScale,
+        onTap: () => onTapEvent(events[i]),
+      ),
     );
   }
 }
@@ -231,8 +316,13 @@ class _DayEventList extends StatelessWidget {
 class _EventRow extends StatelessWidget {
   final ScheduleEvent event;
   final String temperatureScale;
+  final VoidCallback onTap;
 
-  const _EventRow({required this.event, required this.temperatureScale});
+  const _EventRow({
+    required this.event,
+    required this.temperatureScale,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -245,36 +335,46 @@ class _EventRow extends StatelessWidget {
     );
     final tempLabel = _formatTemp(event, temperatureScale);
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: tint.withValues(alpha: 0.10),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: tint.withValues(alpha: 0.35)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              timeLabel,
-              style: Theme.of(context).textTheme.headlineLarge,
-            ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: tint.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: tint.withValues(alpha: 0.35)),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          child: Row(
             children: [
-              Text(
-                tempLabel,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: tint,
-                  fontWeight: FontWeight.w600,
+              Expanded(
+                child: Text(
+                  timeLabel,
+                  style: Theme.of(context).textTheme.headlineLarge,
                 ),
               ),
-              const SizedBox(height: 2),
-              Text(event.type, style: Theme.of(context).textTheme.labelSmall),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    tempLabel,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: tint,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    event.type,
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                ],
+              ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }

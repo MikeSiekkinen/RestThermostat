@@ -49,18 +49,49 @@ class NleApiClient {
   }
 
   /// Fetch the active schedule for [serial], or `null` if the server has none
-  /// stored for that device (404). Other status codes still throw — the caller
-  /// surfaces them through the standard error UI.
+  /// stored for that device. Per the Control API spec the endpoint always
+  /// returns 200 with the response wrapped as
+  /// `{serial, schedule, object_revision, object_timestamp}`; `schedule` is
+  /// `null` when no schedule is stored.
   Future<Schedule?> getSchedule(String serial) async {
-    try {
-      final response = await dio.get<Map<String, dynamic>>(
-        '/api/devices/$serial/schedule',
-      );
-      return Schedule.fromJson(response.data!);
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 404) return null;
-      rethrow;
-    }
+    final response = await dio.get<Map<String, dynamic>>(
+      '/api/schedule',
+      queryParameters: {'serial': serial},
+    );
+    final inner = response.data?['schedule'];
+    if (inner is! Map<String, dynamic>) return null;
+    return Schedule.fromJson(inner);
+  }
+
+  /// Issue a write command per DESIGN §16.4. Body shape is
+  /// `{serial, command, value}` posted to `/command`.
+  ///
+  /// On success, an `AppLogger.commandIssued` entry is appended via the
+  /// underlying logger so the diagnostic log shows the command name + value
+  /// (never any credential). HTTP-level metadata is also captured by the dio
+  /// interceptor automatically.
+  ///
+  /// Errors propagate as [DioException] for the caller to surface in UI.
+  Future<void> sendCommand({
+    required String serial,
+    required String command,
+    required Object? value,
+  }) async {
+    AppLogger.instance.commandIssued(command, value);
+    await dio.post<dynamic>(
+      '/command',
+      data: {'serial': serial, 'command': command, 'value': value},
+    );
+  }
+
+  /// Thin wrapper over [sendCommand] that posts a full schedule object as the
+  /// `set_schedule` value. Schedule writes are full-replace per DESIGN §6.1.
+  Future<void> setSchedule(String serial, Schedule schedule) {
+    return sendCommand(
+      serial: serial,
+      command: 'set_schedule',
+      value: schedule.toJson(),
+    );
   }
 
   /// Maps a raw `Authorization` header value to a presence label

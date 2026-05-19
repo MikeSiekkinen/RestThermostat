@@ -191,6 +191,16 @@ class _Home extends ConsumerWidget {
     );
     final scheduleScale = scheduleDevice?.temperatureScale ?? 'F';
     final scheduleMode = scheduleDevice?.mode ?? DeviceMode.heat;
+    final scheduleCapabilities =
+        scheduleDevice?.capabilities ??
+        const Capabilities(
+          canHeat: true,
+          canCool: false,
+          hasFan: false,
+          hasEmerHeat: false,
+          hasHumidifier: false,
+          hasDehumidifier: false,
+        );
 
     return EmberBackground(
       mode: mode,
@@ -212,6 +222,7 @@ class _Home extends ConsumerWidget {
                         serial: scheduleSerial,
                         temperatureScale: scheduleScale,
                         deviceMode: scheduleMode,
+                        capabilities: scheduleCapabilities,
                       ),
                     ),
                   );
