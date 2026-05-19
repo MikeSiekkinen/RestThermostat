@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/device.dart';
 import '../services/nle_error.dart';
+import '../state/auth_failure_coordinator.dart';
 import '../state/providers.dart';
 import '../theme/colors.dart';
 import '../theme/typography.dart';
@@ -81,6 +82,11 @@ class _InteractiveAwayChipState extends ConsumerState<InteractiveAwayChip> {
         command: 'set_away',
         value: newAway,
       );
+    } on NleAuthError catch (_) {
+      if (!mounted) return;
+      ref.read(authFailureCoordinatorProvider).fire();
+      setState(() => _optimisticAway = null);
+      return;
     } on NleError catch (e) {
       if (!mounted) return;
       _revert(_messageFor(e, action: 'away'));
@@ -134,6 +140,10 @@ class _InteractiveAwayChipState extends ConsumerState<InteractiveAwayChip> {
         command: 'set_eco_temperatures',
         value: {'low': choice.lowC, 'high': choice.highC},
       );
+    } on NleAuthError catch (_) {
+      if (!mounted) return;
+      ref.read(authFailureCoordinatorProvider).fire();
+      return;
     } on NleError catch (e) {
       if (!mounted) return;
       _showSnack(_messageFor(e, action: 'eco temps'));

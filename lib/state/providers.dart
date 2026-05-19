@@ -7,6 +7,7 @@ import '../services/app_info.dart';
 import '../services/app_logger.dart';
 import '../services/nle_api_client.dart';
 import '../services/onboarding_store.dart';
+import 'auth_failure_coordinator.dart';
 import 'connection_status.dart';
 import 'device_state_source.dart';
 import 'devices_snapshot.dart';
@@ -83,10 +84,12 @@ final deviceStateSourceProvider = Provider.autoDispose<DeviceStateSource>((
   ref,
 ) {
   final client = ref.watch(nleApiClientProvider);
+  final authCoordinator = ref.watch(authFailureCoordinatorProvider);
   final source = PollingDeviceStateSource(
     fetchJson: client.fetchDevicesJson,
     cache: ref.watch(stateCacheProvider),
     logger: ref.watch(appLoggerProvider),
+    onAuthFailure: authCoordinator.fire,
   );
   source.start();
   ref.onDispose(source.dispose);

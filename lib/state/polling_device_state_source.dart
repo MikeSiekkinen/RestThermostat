@@ -49,6 +49,14 @@ class PollingDeviceStateSource implements DeviceStateSource {
   bool _disposed = false;
   ConnectionStatus _currentStatus = ConnectionStatus.initial;
 
+  /// Optional callback invoked when a poll fails with an [NleAuthError].
+  /// The host wires this to [AuthFailureCoordinator.fire] so the home shell
+  /// can surface the deep-link snackbar.
+  final void Function()? _onAuthFailure;
+
+  // The `:` form keeps the named arg `onAuthFailure` (an initializing formal
+  // would force renaming it to `_onAuthFailure` and exposing the private
+  // name in the public constructor).
   PollingDeviceStateSource({
     required this.fetchJson,
     required this.cache,
@@ -57,7 +65,10 @@ class PollingDeviceStateSource implements DeviceStateSource {
     this.rateLimitFallback = const Duration(seconds: 30),
     DateTime Function()? clock,
     this.logger,
-  }) : clock = clock ?? DateTime.now;
+    void Function()? onAuthFailure,
+  }) : clock = clock ?? DateTime.now,
+       // ignore: prefer_initializing_formals
+       _onAuthFailure = onAuthFailure;
 
   /// Reads cache (emits it if present), then begins the live polling loop.
   /// Safe to call once; subsequent calls are a no-op.
@@ -250,6 +261,9 @@ class PollingDeviceStateSource implements DeviceStateSource {
       _lastAttemptFailed = true;
       final wait = e.retryAfter ?? rateLimitFallback;
       pauseFor(wait);
+    } on NleAuthError catch (_) {
+      _lastAttemptFailed = true;
+      _onAuthFailure?.call();
     } catch (_) {
       _lastAttemptFailed = true;
     } finally {

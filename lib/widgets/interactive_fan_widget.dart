@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/device.dart';
 import '../services/nle_error.dart';
+import '../state/auth_failure_coordinator.dart';
 import '../state/providers.dart';
 import '../theme/colors.dart';
 import '../theme/typography.dart';
@@ -149,6 +150,11 @@ class _InteractiveFanWidgetState extends ConsumerState<InteractiveFanWidget> {
         command: 'set_fan',
         value: value,
       );
+    } on NleAuthError catch (_) {
+      if (!mounted) return;
+      ref.read(authFailureCoordinatorProvider).fire();
+      if (onErrorRevert) _revertOptimistic();
+      return;
     } on NleError catch (e) {
       if (!mounted) return;
       if (onErrorRevert) _revertOptimistic();

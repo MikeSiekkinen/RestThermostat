@@ -26,7 +26,16 @@ class SettingsScreen extends ConsumerStatefulWidget {
   /// re-route back to Welcome (see `lib/main.dart`).
   final VoidCallback onDisconnect;
 
-  const SettingsScreen({super.key, required this.onDisconnect});
+  /// When true, the Connection section's "Advanced" (auth) expander starts
+  /// expanded — used by the auth-failure deep-link snackbar so the user
+  /// lands directly on the credentials form.
+  final bool initiallyExpandAuth;
+
+  const SettingsScreen({
+    super.key,
+    required this.onDisconnect,
+    this.initiallyExpandAuth = false,
+  });
 
   @override
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
@@ -65,6 +74,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _passCtrl = TextEditingController();
     _tokenCtrl = TextEditingController();
     _authChoice = _AuthChoice.none;
+    if (widget.initiallyExpandAuth) {
+      _advancedExpanded = true;
+    }
 
     _urlCtrl.addListener(_invalidateGate);
     _userCtrl.addListener(_invalidateGate);

@@ -10,6 +10,7 @@ import 'screens/main_shell.dart';
 import 'services/app_info.dart';
 import 'services/onboarding_store.dart';
 import 'settings/settings_screen.dart';
+import 'state/auth_failure_coordinator.dart';
 import 'state/devices_snapshot.dart';
 import 'state/lifecycle_bridge.dart';
 import 'state/providers.dart';
@@ -167,11 +168,57 @@ class _Home extends ConsumerStatefulWidget {
 class _HomeState extends ConsumerState<_Home> {
   late final PageController _pageController = PageController();
   bool _fallbackSnackbarShown = false;
+  AuthFailureCoordinator? _authCoordinator;
+  VoidCallback? _authListener;
+
+  @override
+  void initState() {
+    super.initState();
+    // Hook the cross-cutting auth-failure signal. Fires from either the
+    // polling source (background 401) or any interactive widget's catch
+    // block (write 401). De-duplication lives in the coordinator. The
+    // coordinator reference is cached in a field so dispose() can detach
+    // without needing `ref` (which is unsafe post-deactivation).
+    _authCoordinator = ref.read(authFailureCoordinatorProvider);
+    _authListener = _showAuthFailureSnackbar;
+    _authCoordinator!.addListener(_authListener!);
+  }
 
   @override
   void dispose() {
+    if (_authCoordinator != null && _authListener != null) {
+      _authCoordinator!.removeListener(_authListener!);
+    }
     _pageController.dispose();
     super.dispose();
+  }
+
+  void _showAuthFailureSnackbar() {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text('Authentication failed.'),
+        action: SnackBarAction(
+          label: 'OPEN SETTINGS',
+          onPressed: () {
+            ref.read(authFailureCoordinatorProvider).reset();
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => SettingsScreen(
+                  initiallyExpandAuth: true,
+                  onDisconnect: () {
+                    Navigator.of(context).pop();
+                    widget.onDisconnect();
+                  },
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   /// DESIGN §4.5: if the persisted serial isn't in the latest snapshot,

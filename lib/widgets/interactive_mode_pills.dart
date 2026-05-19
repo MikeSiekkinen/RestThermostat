@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/device.dart';
 import '../services/nle_error.dart';
+import '../state/auth_failure_coordinator.dart';
 import '../state/providers.dart';
 import 'mode_pills.dart';
 
@@ -71,6 +72,13 @@ class _InteractiveModePillsState extends ConsumerState<InteractiveModePills> {
         command: 'set_mode',
         value: newMode.toApi(),
       );
+    } on NleAuthError catch (_) {
+      if (!mounted) return;
+      // Don't double-show a snackbar — the home shell handles the auth
+      // failure surface (with the Open Settings deep-link). Just revert.
+      ref.read(authFailureCoordinatorProvider).fire();
+      setState(() => _optimisticMode = null);
+      return;
     } on NleError catch (e) {
       if (!mounted) return;
       _revert(_messageFor(e));

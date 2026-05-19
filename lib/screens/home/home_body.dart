@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/device.dart';
+import '../../widgets/device_offline_overlay.dart';
 import '../../widgets/interactive_away_chip.dart';
 import '../../widgets/interactive_fan_widget.dart';
 import '../../widgets/interactive_mode_pills.dart';
@@ -36,6 +37,13 @@ class HomeBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dots = indicatorDots;
+    return DeviceOfflineOverlay(
+      offline: !device.isAvailable,
+      child: _content(dots),
+    );
+  }
+
+  Widget _content(Widget? dots) {
     return Stack(
       children: [
         Center(
