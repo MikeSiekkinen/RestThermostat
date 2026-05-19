@@ -97,6 +97,17 @@ class TemperatureDial extends StatefulWidget {
   /// parent should treat it as both an optimistic update AND a commit point.
   final ValueChanged<double>? onTargetTap;
 
+  /// Optional callback wired to the [Semantics.onIncrease] action so screen
+  /// readers (TalkBack/VoiceOver) can adjust the target temperature without
+  /// the user needing to interact with the visual ring. Called with the
+  /// requested ±direction; the parent owns the actual increment math + write.
+  /// When `null`, no `onIncrease`/`onDecrease` actions are advertised to
+  /// assistive tech — useful for the read-only fixture renderings in tests.
+  final VoidCallback? onIncrease;
+
+  /// Companion to [onIncrease] for the `onDecrease` action.
+  final VoidCallback? onDecrease;
+
   const TemperatureDial({
     super.key,
     required this.currentTemperatureCelsius,
@@ -109,6 +120,8 @@ class TemperatureDial extends StatefulWidget {
     this.onTargetDragUpdate,
     this.onTargetDragEnd,
     this.onTargetTap,
+    this.onIncrease,
+    this.onDecrease,
   });
 
   bool get _interactive =>
@@ -121,7 +134,6 @@ class TemperatureDial extends StatefulWidget {
 
   /// Map a Celsius temperature to a discrete tick index in `[0, tickCount)`.
   /// Clamps out-of-range values; never throws.
-  @visibleForTesting
   static int tickIndexForCelsius(double celsius) {
     final clamped = celsius.clamp(minCelsius, maxCelsius);
     final ratio = (clamped - minCelsius) / (maxCelsius - minCelsius);
@@ -131,7 +143,6 @@ class TemperatureDial extends StatefulWidget {
 
   /// Inverse of [tickIndexForCelsius]. Maps a tick index to the celsius
   /// value at that position on the ring. Out-of-range indexes are clamped.
-  @visibleForTesting
   static double celsiusForTickIndex(int index) {
     final clamped = index.clamp(0, tickCount - 1);
     final ratio = clamped / (tickCount - 1);
@@ -245,6 +256,22 @@ class _TemperatureDialState extends State<TemperatureDial> {
     _hapticThrottle.tryClick();
   }
 
+  /// Compute the display-unit value of the tick [direction] steps away from
+  /// [fromIndex], clamping at the band ends so the screen reader's
+  /// "increasedValue"/"decreasedValue" preview never reports out-of-range.
+  static double _adjacentDisplay(
+    int fromIndex,
+    int direction,
+    TemperatureDial widget,
+  ) {
+    final next = (fromIndex + direction).clamp(
+      0,
+      TemperatureDial.tickCount - 1,
+    );
+    final celsius = TemperatureDial.celsiusForTickIndex(next);
+    return TemperatureDial.celsiusToDisplay(celsius, widget.displayUnit);
+  }
+
   @override
   Widget build(BuildContext context) {
     final targetIndex = TemperatureDial.tickIndexForCelsius(
@@ -275,6 +302,17 @@ class _TemperatureDialState extends State<TemperatureDial> {
 
     final targetLabel = '${targetDisplay.round()}°';
     final currentLabel = 'Currently ${currentDisplay.round()}°';
+
+    // Screen-reader announcement: TalkBack/VoiceOver reads the label, then the
+    // value, then "tap to adjust" implicit on the slider role. The
+    // increase/decrease actions become swipe-up/swipe-down gestures.
+    final semanticUnit = widget.displayUnit.toUpperCase() == 'F'
+        ? 'Fahrenheit'
+        : 'Celsius';
+    final semanticLabel =
+        'Target temperature, '
+        'currently set to ${targetDisplay.round()} $semanticUnit. '
+        'Current temperature ${currentDisplay.round()} $semanticUnit.';
 
     return TweenAnimationBuilder<double>(
       // TweenAnimationBuilder tracks the previously-rendered value as the new
@@ -316,14 +354,37 @@ class _TemperatureDialState extends State<TemperatureDial> {
                   ),
                 ),
               );
-              if (!widget._interactive) return canvas;
-              return GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onPanStart: (d) => _dispatchPan(d.localPosition, size),
-                onPanUpdate: (d) => _dispatchPan(d.localPosition, size),
-                onPanEnd: (_) => _dispatchPanEnd(),
-                onTapUp: (d) => _dispatchTap(d.localPosition, size),
-                child: canvas,
+              if (!widget._interactive) {
+                return Semantics(
+                  label: semanticLabel,
+                  value: '${targetDisplay.round()}°$semanticUnit',
+                  readOnly: true,
+                  child: canvas,
+                );
+              }
+              // increasedValue/decreasedValue describe what the value will
+              // BECOME after the increase/decrease action — required by the
+              // Semantics framework whenever the corresponding onIncrease /
+              // onDecrease actions are set. Compute the next/prev tick's
+              // display value so screen readers can preview the change.
+              final nextDisplay = _adjacentDisplay(targetIndex, 1, widget);
+              final prevDisplay = _adjacentDisplay(targetIndex, -1, widget);
+              return Semantics(
+                slider: true,
+                label: semanticLabel,
+                value: '${targetDisplay.round()}°$semanticUnit',
+                increasedValue: '${nextDisplay.round()}°$semanticUnit',
+                decreasedValue: '${prevDisplay.round()}°$semanticUnit',
+                onIncrease: widget.onIncrease,
+                onDecrease: widget.onDecrease,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onPanStart: (d) => _dispatchPan(d.localPosition, size),
+                  onPanUpdate: (d) => _dispatchPan(d.localPosition, size),
+                  onPanEnd: (_) => _dispatchPanEnd(),
+                  onTapUp: (d) => _dispatchTap(d.localPosition, size),
+                  child: canvas,
+                ),
               );
             },
           ),

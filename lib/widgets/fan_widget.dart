@@ -160,27 +160,41 @@ class _FanWidgetState extends State<FanWidget>
         ? 'FAN ON • ${_formatCountdown(remaining)}'
         : 'FAN AUTO';
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AnimatedBuilder(
-          animation: _pulseController,
-          builder: (context, _) {
-            return SizedBox(
-              width: widget.diameter,
-              height: widget.diameter,
-              child: CustomPaint(
-                painter: _FanRingsPainter(
-                  phase: _pulseController.value,
-                  active: active,
-                ),
-              ),
-            );
-          },
+    // Screen-reader announcement: describe state + tap affordance. Includes
+    // the countdown when the timer is active so blind users hear the same
+    // information that's painted onto the label. The `button: true` role
+    // signals tap behavior to TalkBack/VoiceOver.
+    final semanticLabel = active
+        ? 'Fan on for ${_formatCountdown(remaining)}, tap to switch to auto'
+        : 'Fan auto, tap to turn on';
+
+    return Semantics(
+      label: semanticLabel,
+      button: true,
+      child: ExcludeSemantics(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedBuilder(
+              animation: _pulseController,
+              builder: (context, _) {
+                return SizedBox(
+                  width: widget.diameter,
+                  height: widget.diameter,
+                  child: CustomPaint(
+                    painter: _FanRingsPainter(
+                      phase: _pulseController.value,
+                      active: active,
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            Text(label, style: EmberTypography.labelSmall()),
+          ],
         ),
-        const SizedBox(height: 8),
-        Text(label, style: EmberTypography.labelSmall()),
-      ],
+      ),
     );
   }
 }
