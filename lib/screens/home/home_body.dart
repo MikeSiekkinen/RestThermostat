@@ -13,14 +13,29 @@ import '../../widgets/temperature_dial.dart';
 ///
 /// Presentation-only: receives the resolved [device] + display-name
 /// overrides; doesn't watch any provider itself.
+///
+/// Multi-device wiring (issue #15): [onNameTap] makes the device-name
+/// `Text` inside [StatusRow] tappable with a small caret (used to surface
+/// the [DevicePickerSheet] bottom sheet on multi-device setups), and
+/// [indicatorDots] slots between the dial and the mode pills. Both
+/// default to `null` for the single-device case so the row collapses.
 class HomeBody extends StatelessWidget {
   final Device device;
   final Map<String, String> overrides;
+  final VoidCallback? onNameTap;
+  final Widget? indicatorDots;
 
-  const HomeBody({super.key, required this.device, required this.overrides});
+  const HomeBody({
+    super.key,
+    required this.device,
+    required this.overrides,
+    this.onNameTap,
+    this.indicatorDots,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final dots = indicatorDots;
     return Stack(
       children: [
         Center(
@@ -30,7 +45,11 @@ class HomeBody extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                StatusRow(device: device, nameOverrides: overrides),
+                StatusRow(
+                  device: device,
+                  nameOverrides: overrides,
+                  onNameTap: onNameTap,
+                ),
                 InteractiveAwayChip(device: device),
                 const SizedBox(height: 8),
                 // Cap the dial at the §10.3 ~240dp diameter, but let it
@@ -45,7 +64,12 @@ class HomeBody extends StatelessWidget {
                     displayUnit: device.temperatureScale,
                   ),
                 ),
-                const SizedBox(height: 24),
+                if (dots != null) ...[
+                  const SizedBox(height: 12),
+                  dots,
+                  const SizedBox(height: 12),
+                ] else
+                  const SizedBox(height: 24),
                 InteractiveModePills(device: device),
               ],
             ),
