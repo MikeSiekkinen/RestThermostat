@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Android signing — keystore and properties are local-only / CI-injected.
+# See docs/RELEASE.md.
+/android/key.properties
+*.jks
+*.keystore
