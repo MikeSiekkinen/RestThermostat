@@ -151,6 +151,44 @@ void main() {
     });
   });
 
+  group('StatusRow multi-device caret', () {
+    testWidgets('omits the caret + tap target when onNameTap is null', (
+      tester,
+    ) async {
+      final device = _device(
+        mode: DeviceMode.off,
+        heater: false,
+        ac: false,
+        fan: false,
+      );
+      await _pump(tester, device);
+      expect(find.byIcon(Icons.expand_more), findsNothing);
+    });
+
+    testWidgets('renders the caret and invokes onNameTap when provided', (
+      tester,
+    ) async {
+      final device = _device(
+        mode: DeviceMode.off,
+        heater: false,
+        ac: false,
+        fan: false,
+      );
+      var tapped = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StatusRow(device: device, onNameTap: () => tapped++),
+          ),
+        ),
+      );
+
+      expect(find.byIcon(Icons.expand_more), findsOneWidget);
+      await tester.tap(find.text('Upstairs'));
+      expect(tapped, 1);
+    });
+  });
+
   group('StatusRow pulse animation', () {
     testWidgets('reduced-motion holds the dot at full brightness without '
         'animating', (tester) async {
