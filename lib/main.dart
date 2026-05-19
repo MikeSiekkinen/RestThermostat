@@ -1,14 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 
+import 'models/device.dart';
 import 'onboarding/onboarding_flow.dart';
 import 'services/onboarding_store.dart';
 import 'state/devices_snapshot.dart';
 import 'state/lifecycle_bridge.dart';
 import 'state/providers.dart';
+import 'theme/ember_theme.dart';
+import 'widgets/ember_background.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Force bundled-only font lookups. Any GoogleFonts.* call whose asset isn't
+  // present under assets/fonts/ will throw rather than silently fall back to
+  // an HTTP fetch.
+  GoogleFonts.config.allowRuntimeFetching = false;
+
+  // Edge-to-edge dark per docs/DESIGN.md §11.6: transparent status bar with
+  // light icons, transparent nav bar on Android.
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
+
   runApp(const ProviderScope(child: RestThermostatApp()));
 }
 
@@ -22,7 +45,7 @@ class RestThermostatApp extends StatelessWidget {
     return MaterialApp(
       title: 'Rest Thermostat',
       themeMode: ThemeMode.dark,
-      darkTheme: ThemeData.dark(useMaterial3: true),
+      darkTheme: emberTheme,
       home: _Bootstrap(store: store ?? FlutterOnboardingStore()),
     );
   }
@@ -69,8 +92,12 @@ class _BootstrapState extends ConsumerState<_Bootstrap> {
       future: _configFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+          return const EmberBackground(
+            mode: DeviceMode.off,
+            child: Scaffold(
+              backgroundColor: Colors.transparent,
+              body: Center(child: CircularProgressIndicator()),
+            ),
           );
         }
         final config = snapshot.data!;
@@ -94,13 +121,28 @@ class _Home extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(devicesSnapshotProvider);
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: async.when(
-            data: (snapshot) => _renderSnapshot(snapshot),
-            loading: () => const CircularProgressIndicator(),
-            error: (e, _) => Text('Error: $e'),
+
+    // Resolve the mode for the background gradient. Loading and error paths
+    // fall back to `off` (neutral gradient) — we don't want to flash a heat
+    // glow on a stale state before the first poll resolves.
+    final mode = async.maybeWhen(
+      data: (snapshot) => snapshot.devices.isEmpty
+          ? DeviceMode.off
+          : snapshot.devices.first.mode,
+      orElse: () => DeviceMode.off,
+    );
+
+    return EmberBackground(
+      mode: mode,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          child: Center(
+            child: async.when(
+              data: (snapshot) => _renderSnapshot(snapshot),
+              loading: () => const CircularProgressIndicator(),
+              error: (e, _) => Text('Error: $e'),
+            ),
           ),
         ),
       ),
