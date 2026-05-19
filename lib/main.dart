@@ -5,21 +5,15 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'models/device.dart';
 import 'onboarding/onboarding_flow.dart';
-import 'screens/schedule/schedule_screen.dart';
+import 'screens/home/home_body.dart';
+import 'screens/main_shell.dart';
 import 'services/app_info.dart';
 import 'services/onboarding_store.dart';
 import 'settings/settings_screen.dart';
-import 'state/devices_snapshot.dart';
 import 'state/lifecycle_bridge.dart';
 import 'state/providers.dart';
 import 'theme/ember_theme.dart';
 import 'widgets/ember_background.dart';
-import 'widgets/interactive_away_chip.dart';
-import 'widgets/interactive_fan_widget.dart';
-import 'widgets/interactive_mode_pills.dart';
-import 'widgets/interactive_temperature_dial.dart';
-import 'widgets/status_row.dart';
-import 'widgets/temperature_dial.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -172,39 +166,24 @@ class _Home extends ConsumerWidget {
       orElse: () => DeviceMode.off,
     );
 
-    // Active serial for the Schedule entry-point. Prefer the persisted
-    // active-device value; fall back to the first device in the snapshot when
-    // onboarding hasn't recorded one yet. Temporary wiring — #16 will replace
-    // this with a proper `activeSerial` provider.
-    final scheduleSerial =
-        activeSerial ??
-        async.maybeWhen(
-          data: (snapshot) =>
-              snapshot.devices.isEmpty ? null : snapshot.devices.first.serial,
-          orElse: () => null,
-        );
-    final scheduleDevice = async.maybeWhen<Device?>(
+    // Resolve the active device from the snapshot. Prefer the persisted
+    // active-serial; fall back to the first device. DESIGN §4.5's one-time
+    // bounce to onboarding on a missing serial is deferred — for now we
+    // degrade to "first" rather than crashing.
+    final activeDevice = async.maybeWhen<Device?>(
       data: (snapshot) {
         if (snapshot.devices.isEmpty) return null;
         return snapshot.devices.firstWhere(
-          (d) => d.serial == scheduleSerial,
+          (d) => d.serial == activeSerial,
           orElse: () => snapshot.devices.first,
         );
       },
       orElse: () => null,
     );
-    final scheduleScale = scheduleDevice?.temperatureScale ?? 'F';
-    final scheduleMode = scheduleDevice?.mode ?? DeviceMode.heat;
-    final scheduleCapabilities =
-        scheduleDevice?.capabilities ??
-        const Capabilities(
-          canHeat: true,
-          canCool: false,
-          hasFan: false,
-          hasEmerHeat: false,
-          hasHumidifier: false,
-          hasDehumidifier: false,
-        );
+    final lastSyncAt = async.maybeWhen<DateTime?>(
+      data: (snapshot) => snapshot.fetchedAt,
+      orElse: () => null,
+    );
 
     return EmberBackground(
       mode: mode,
@@ -215,23 +194,6 @@ class _Home extends ConsumerWidget {
           elevation: 0,
           title: const Text('Rest Thermostat'),
           actions: [
-            if (scheduleSerial != null)
-              IconButton(
-                tooltip: 'Schedule',
-                icon: const Icon(Icons.calendar_month),
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ScheduleScreen(
-                        serial: scheduleSerial,
-                        temperatureScale: scheduleScale,
-                        deviceMode: scheduleMode,
-                        capabilities: scheduleCapabilities,
-                      ),
-                    ),
-                  );
-                },
-              ),
             IconButton(
               tooltip: 'Settings',
               icon: const Icon(Icons.settings),
@@ -252,61 +214,22 @@ class _Home extends ConsumerWidget {
         ),
         body: SafeArea(
           child: async.when(
-            data: (snapshot) => _renderSnapshot(context, snapshot),
+            data: (snapshot) {
+              if (snapshot.devices.isEmpty) {
+                return const Center(child: Text('No devices'));
+              }
+              return MainShell(
+                device: activeDevice!,
+                overrides: overrides,
+                lastSyncAt: lastSyncAt,
+                homeTab: HomeBody(device: activeDevice, overrides: overrides),
+              );
+            },
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(child: Text('Error: $e')),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _renderSnapshot(BuildContext context, DevicesSnapshot snapshot) {
-    if (snapshot.devices.isEmpty) return const Text('No devices');
-    // Resolve which device to show. Prefer the persisted active serial (set
-    // during onboarding); fall back to the first device in the snapshot.
-    // DESIGN §4.5 has a one-time bounce to onboarding when the persisted
-    // serial isn't in the snapshot — deferred to a later ticket. For now
-    // we just degrade gracefully to "first" rather than blowing up.
-    final d = snapshot.devices.firstWhere(
-      (device) => device.serial == activeSerial,
-      orElse: () => snapshot.devices.first,
-    );
-    return Stack(
-      children: [
-        Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                StatusRow(device: d, nameOverrides: overrides),
-                InteractiveAwayChip(device: d),
-                const SizedBox(height: 8),
-                // Cap the dial at the §10.3 ~240dp diameter, but let it shrink
-                // on narrower viewports rather than overflowing.
-                ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: TemperatureDial.preferredDiameter,
-                    maxHeight: TemperatureDial.preferredDiameter,
-                  ),
-                  child: InteractiveTemperatureDial(
-                    device: d,
-                    displayUnit: d.temperatureScale,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                InteractiveModePills(device: d),
-              ],
-            ),
-          ),
-        ),
-        // Fan widget at the top-right of the body per DESIGN §10.2. Hidden
-        // automatically by FanWidget when `has_fan = false`. Tap behavior
-        // arrives in issue #13.
-        Positioned(top: 16, right: 16, child: InteractiveFanWidget(device: d)),
-      ],
     );
   }
 }
