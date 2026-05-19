@@ -14,6 +14,7 @@ import 'state/lifecycle_bridge.dart';
 import 'state/providers.dart';
 import 'theme/ember_theme.dart';
 import 'widgets/ember_background.dart';
+import 'widgets/fan_widget.dart';
 import 'widgets/mode_pills.dart';
 import 'widgets/status_row.dart';
 import 'widgets/temperature_dial.dart';
@@ -248,12 +249,10 @@ class _Home extends ConsumerWidget {
           ],
         ),
         body: SafeArea(
-          child: Center(
-            child: async.when(
-              data: (snapshot) => _renderSnapshot(context, snapshot),
-              loading: () => const CircularProgressIndicator(),
-              error: (e, _) => Text('Error: $e'),
-            ),
+          child: async.when(
+            data: (snapshot) => _renderSnapshot(context, snapshot),
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Center(child: Text('Error: $e')),
           ),
         ),
       ),
@@ -271,41 +270,50 @@ class _Home extends ConsumerWidget {
       (device) => device.serial == activeSerial,
       orElse: () => snapshot.devices.first,
     );
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          StatusRow(device: d, nameOverrides: overrides),
-          const SizedBox(height: 24),
-          // Cap the dial at the §10.3 ~240dp diameter, but let it shrink on
-          // narrower viewports rather than overflowing.
-          ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: TemperatureDial.preferredDiameter,
-              maxHeight: TemperatureDial.preferredDiameter,
-            ),
-            child: TemperatureDial(
-              currentTemperatureCelsius: d.currentTemperature,
-              targetTemperatureCelsius: d.targetTemperature,
-              mode: d.mode,
-              displayUnit: d.temperatureScale,
-              capabilities: d.capabilities,
+    return Stack(
+      children: [
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                StatusRow(device: d, nameOverrides: overrides),
+                const SizedBox(height: 24),
+                // Cap the dial at the §10.3 ~240dp diameter, but let it shrink
+                // on narrower viewports rather than overflowing.
+                ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: TemperatureDial.preferredDiameter,
+                    maxHeight: TemperatureDial.preferredDiameter,
+                  ),
+                  child: TemperatureDial(
+                    currentTemperatureCelsius: d.currentTemperature,
+                    targetTemperatureCelsius: d.targetTemperature,
+                    mode: d.mode,
+                    displayUnit: d.temperatureScale,
+                    capabilities: d.capabilities,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                // Mode pills are read-only in this ticket; #12 will wire taps
+                // to `POST /command set_mode`. Pass a no-op so the row stays
+                // tappable-looking while the action is plumbed in a follow-up.
+                ModePills(
+                  currentMode: d.mode,
+                  capabilities: d.capabilities,
+                  onModeTap: (_) {},
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 24),
-          // Mode pills are read-only in this ticket; #12 will wire taps to
-          // `POST /command set_mode`. Pass a no-op so the row stays visually
-          // tappable-looking (Semantics-button + ripple-free GestureDetector)
-          // while the action is plumbed in a follow-up.
-          ModePills(
-            currentMode: d.mode,
-            capabilities: d.capabilities,
-            onModeTap: (_) {},
-          ),
-        ],
-      ),
+        ),
+        // Fan widget at the top-right of the body per DESIGN §10.2. Hidden
+        // automatically by FanWidget when `has_fan = false`. Tap behavior
+        // arrives in issue #13.
+        Positioned(top: 16, right: 16, child: FanWidget(device: d)),
+      ],
     );
   }
 }
