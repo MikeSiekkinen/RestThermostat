@@ -42,11 +42,13 @@ void main() {
     adapter.onGet('/api/devices', (server) => server.reply(200, body));
 
     await tester.pumpWidget(_wrap(store: store, dio: dio));
-    await tester.pumpAndSettle();
-    // Dio's mock adapter resolves the response via real-zone microtasks;
-    // pumpAndSettle alone doesn't drain them in widget tests.
-    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
-    await tester.pumpAndSettle();
+    // Drain async — the FutureBuilder for onboarding config + Dio's mock
+    // adapter both resolve via real-zone microtasks. We can't pumpAndSettle
+    // because StatusRow's pulse animation repeats forever once Home mounts.
+    for (var i = 0; i < 6; i++) {
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
     // Device name renders above the dial; the dial widget itself is mounted
     // and shows the converted target temperature in its center label. The
