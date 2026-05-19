@@ -116,4 +116,202 @@ void main() {
       }
     });
   });
+
+  group('ScheduleEvent', () {
+    test('timeSeconds converts hour+minute to seconds-since-midnight', () {
+      const e = ScheduleEvent(
+        dayIndex: 0,
+        hour: 6,
+        minute: 0,
+        type: 'HEAT',
+        targetTemp: 20.0,
+      );
+      expect(e.timeSeconds, 21600);
+    });
+
+    test('toJson round-trips HEAT events', () {
+      const e = ScheduleEvent(
+        dayIndex: 0,
+        hour: 6,
+        minute: 30,
+        type: 'HEAT',
+        targetTemp: 20.0,
+      );
+      expect(e.toJson(), {'time': 23400, 'type': 'HEAT', 'temp': 20.0});
+    });
+
+    test('toJson emits temp-min / temp-max for RANGE events', () {
+      const e = ScheduleEvent(
+        dayIndex: 3,
+        hour: 6,
+        minute: 0,
+        type: 'RANGE',
+        targetTempLow: 18.0,
+        targetTempHigh: 23.0,
+      );
+      expect(e.toJson(), {
+        'time': 21600,
+        'type': 'RANGE',
+        'temp-min': 18.0,
+        'temp-max': 23.0,
+      });
+    });
+
+    test('== compares by all fields', () {
+      const a = ScheduleEvent(
+        dayIndex: 0,
+        hour: 6,
+        minute: 0,
+        type: 'HEAT',
+        targetTemp: 20.0,
+      );
+      const b = ScheduleEvent(
+        dayIndex: 0,
+        hour: 6,
+        minute: 0,
+        type: 'HEAT',
+        targetTemp: 20.0,
+      );
+      const c = ScheduleEvent(
+        dayIndex: 0,
+        hour: 6,
+        minute: 0,
+        type: 'HEAT',
+        targetTemp: 21.0,
+      );
+      expect(a, equals(b));
+      expect(a, isNot(equals(c)));
+    });
+
+    test('copyWith mutates only the named fields', () {
+      const e = ScheduleEvent(
+        dayIndex: 0,
+        hour: 6,
+        minute: 0,
+        type: 'HEAT',
+        targetTemp: 20.0,
+      );
+      final updated = e.copyWith(hour: 7, targetTemp: 22.0);
+      expect(updated.hour, 7);
+      expect(updated.targetTemp, 22.0);
+      expect(updated.dayIndex, 0);
+      expect(updated.type, 'HEAT');
+    });
+
+    test('copyWith with nullify* clears nullable fields', () {
+      const e = ScheduleEvent(
+        dayIndex: 0,
+        hour: 6,
+        minute: 0,
+        type: 'RANGE',
+        targetTempLow: 18.0,
+        targetTempHigh: 23.0,
+      );
+      final cleared = e.copyWith(
+        nullifyTargetTempLow: true,
+        nullifyTargetTempHigh: true,
+      );
+      expect(cleared.targetTempLow, isNull);
+      expect(cleared.targetTempHigh, isNull);
+    });
+  });
+
+  group('Schedule mutation helpers', () {
+    Schedule emptyWeek() => const Schedule(
+      events: {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []},
+      mode: 'HEAT',
+    );
+
+    test('addEvent appends and keeps the day sorted by time', () {
+      var schedule = emptyWeek();
+      const noon = ScheduleEvent(
+        dayIndex: 0,
+        hour: 12,
+        minute: 0,
+        type: 'HEAT',
+        targetTemp: 21.0,
+      );
+      const dawn = ScheduleEvent(
+        dayIndex: 0,
+        hour: 6,
+        minute: 0,
+        type: 'HEAT',
+        targetTemp: 20.0,
+      );
+      schedule = schedule.addEvent(noon).addEvent(dawn);
+      expect(schedule.eventsForDay(0), [dawn, noon]);
+    });
+
+    test('replaceEvent swaps within a day and re-sorts', () {
+      var schedule = emptyWeek();
+      const original = ScheduleEvent(
+        dayIndex: 0,
+        hour: 6,
+        minute: 0,
+        type: 'HEAT',
+        targetTemp: 20.0,
+      );
+      schedule = schedule.addEvent(original);
+      final shifted = original.copyWith(hour: 8, targetTemp: 22.0);
+      schedule = schedule.replaceEvent(original, shifted);
+      expect(schedule.eventsForDay(0), [shifted]);
+    });
+
+    test('replaceEvent is a no-op when the original isn\'t present', () {
+      final schedule = emptyWeek();
+      const missing = ScheduleEvent(
+        dayIndex: 0,
+        hour: 6,
+        minute: 0,
+        type: 'HEAT',
+        targetTemp: 20.0,
+      );
+      final after = schedule.replaceEvent(missing, missing.copyWith(hour: 7));
+      expect(after.eventsForDay(0), isEmpty);
+    });
+
+    test('removeEvent drops the matching entry', () {
+      var schedule = emptyWeek();
+      const a = ScheduleEvent(
+        dayIndex: 0,
+        hour: 6,
+        minute: 0,
+        type: 'HEAT',
+        targetTemp: 20.0,
+      );
+      const b = ScheduleEvent(
+        dayIndex: 0,
+        hour: 12,
+        minute: 0,
+        type: 'HEAT',
+        targetTemp: 21.0,
+      );
+      schedule = schedule.addEvent(a).addEvent(b);
+      schedule = schedule.removeEvent(a);
+      expect(schedule.eventsForDay(0), [b]);
+    });
+
+    test('toJson emits all seven days even if empty', () {
+      final schedule = emptyWeek();
+      final json = schedule.toJson();
+      expect(json['days'], isA<Map<String, dynamic>>());
+      final days = json['days'] as Map<String, dynamic>;
+      for (var i = 0; i < 7; i++) {
+        expect(days.containsKey('$i'), isTrue, reason: 'day $i missing');
+      }
+    });
+
+    test('toJson preserves version, name, and mode', () {
+      const schedule = Schedule(
+        events: {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []},
+        version: 2,
+        name: 'Weekday/Weekend',
+        mode: 'HEAT',
+      );
+      final json = schedule.toJson();
+      expect(json['version'], 2);
+      expect(json['name'], 'Weekday/Weekend');
+      expect(json['mode'], 'HEAT');
+    });
+  });
 }

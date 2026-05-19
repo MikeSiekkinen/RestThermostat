@@ -63,6 +63,37 @@ class NleApiClient {
     }
   }
 
+  /// Issue a write command per DESIGN §16.4. Body shape is
+  /// `{serial, command, value}` posted to `/command`.
+  ///
+  /// On success, an `AppLogger.commandIssued` entry is appended via the
+  /// underlying logger so the diagnostic log shows the command name + value
+  /// (never any credential). HTTP-level metadata is also captured by the dio
+  /// interceptor automatically.
+  ///
+  /// Errors propagate as [DioException] for the caller to surface in UI.
+  Future<void> sendCommand({
+    required String serial,
+    required String command,
+    required Object? value,
+  }) async {
+    AppLogger.instance.commandIssued(command, value);
+    await dio.post<dynamic>(
+      '/command',
+      data: {'serial': serial, 'command': command, 'value': value},
+    );
+  }
+
+  /// Thin wrapper over [sendCommand] that posts a full schedule object as the
+  /// `set_schedule` value. Schedule writes are full-replace per DESIGN §6.1.
+  Future<void> setSchedule(String serial, Schedule schedule) {
+    return sendCommand(
+      serial: serial,
+      command: 'set_schedule',
+      value: schedule.toJson(),
+    );
+  }
+
   /// Maps a raw `Authorization` header value to a presence label
   /// (`"bearer"`/`"basic"`/`"none"`) without leaking the credential itself.
   static String _authPresence(String? header) {

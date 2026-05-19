@@ -65,6 +65,75 @@ class ScheduleEvent {
 
   /// Minutes since midnight — convenient for sorting events within a day.
   int get minutesOfDay => hour * 60 + minute;
+
+  /// Seconds since midnight — wire format for the `time` field on writes.
+  int get timeSeconds => (hour * 60 + minute) * 60;
+
+  /// Return a copy with the given fields replaced. Pass `nullify*` flags to
+  /// explicitly set a nullable field to `null` (since the standard
+  /// `field: null` argument is indistinguishable from "use existing").
+  ScheduleEvent copyWith({
+    int? dayIndex,
+    int? hour,
+    int? minute,
+    String? type,
+    double? targetTemp,
+    double? targetTempHigh,
+    double? targetTempLow,
+    bool nullifyTargetTemp = false,
+    bool nullifyTargetTempHigh = false,
+    bool nullifyTargetTempLow = false,
+  }) {
+    return ScheduleEvent(
+      dayIndex: dayIndex ?? this.dayIndex,
+      hour: hour ?? this.hour,
+      minute: minute ?? this.minute,
+      type: type ?? this.type,
+      targetTemp: nullifyTargetTemp ? null : (targetTemp ?? this.targetTemp),
+      targetTempHigh: nullifyTargetTempHigh
+          ? null
+          : (targetTempHigh ?? this.targetTempHigh),
+      targetTempLow: nullifyTargetTempLow
+          ? null
+          : (targetTempLow ?? this.targetTempLow),
+    );
+  }
+
+  /// Serialize back to the NLE wire shape (`time` seconds, lowercase keys for
+  /// range temps as `temp-min`/`temp-max`).
+  Map<String, dynamic> toJson() {
+    final json = <String, dynamic>{'time': timeSeconds, 'type': type};
+    if (type == 'RANGE') {
+      if (targetTempLow != null) json['temp-min'] = targetTempLow;
+      if (targetTempHigh != null) json['temp-max'] = targetTempHigh;
+    } else {
+      if (targetTemp != null) json['temp'] = targetTemp;
+    }
+    return json;
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is ScheduleEvent &&
+        other.dayIndex == dayIndex &&
+        other.hour == hour &&
+        other.minute == minute &&
+        other.type == type &&
+        other.targetTemp == targetTemp &&
+        other.targetTempHigh == targetTempHigh &&
+        other.targetTempLow == targetTempLow;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    dayIndex,
+    hour,
+    minute,
+    type,
+    targetTemp,
+    targetTempHigh,
+    targetTempLow,
+  );
 }
 
 /// A device's weekly schedule.
@@ -141,5 +210,78 @@ class Schedule {
     }
 
     return Schedule(events: events, version: version, name: name, mode: mode);
+  }
+
+  /// Return a copy with [events] (and optionally any top-level field) replaced.
+  Schedule copyWith({
+    Map<int, List<ScheduleEvent>>? events,
+    int? version,
+    String? name,
+    String? mode,
+  }) {
+    return Schedule(
+      events: events ?? this.events,
+      version: version ?? this.version,
+      name: name ?? this.name,
+      mode: mode ?? this.mode,
+    );
+  }
+
+  /// Serialize back to the NLE wire shape used by `POST /command set_schedule`.
+  /// All seven days are emitted, even empty ones (DESIGN §6.7 — empty list is
+  /// a valid day).
+  Map<String, dynamic> toJson() {
+    final days = <String, List<Map<String, dynamic>>>{};
+    for (var i = 0; i < 7; i++) {
+      final list = events[i] ?? const <ScheduleEvent>[];
+      days['$i'] = [for (final e in list) e.toJson()];
+    }
+    final json = <String, dynamic>{'days': days};
+    if (version != null) json['version'] = version;
+    if (name != null) json['name'] = name;
+    if (mode != null) json['mode'] = mode;
+    return json;
+  }
+
+  /// Add [event] to its `dayIndex`. Returns a new [Schedule]; sorts the
+  /// day's events by `minutesOfDay` to keep the day list in time order.
+  Schedule addEvent(ScheduleEvent event) {
+    final next = Map<int, List<ScheduleEvent>>.from(events);
+    final day = List<ScheduleEvent>.from(next[event.dayIndex] ?? const [])
+      ..add(event)
+      ..sort((a, b) => a.minutesOfDay.compareTo(b.minutesOfDay));
+    next[event.dayIndex] = day;
+    return copyWith(events: next);
+  }
+
+  /// Replace [oldEvent] with [newEvent] within its day. If [oldEvent] is not
+  /// found in the schedule, the schedule is returned unchanged. Both events
+  /// must share a `dayIndex`.
+  Schedule replaceEvent(ScheduleEvent oldEvent, ScheduleEvent newEvent) {
+    assert(
+      oldEvent.dayIndex == newEvent.dayIndex,
+      'replaceEvent operates within a single day per DESIGN §6.4',
+    );
+    final dayList = events[oldEvent.dayIndex];
+    if (dayList == null) return this;
+    final index = dayList.indexOf(oldEvent);
+    if (index == -1) return this;
+    final next = Map<int, List<ScheduleEvent>>.from(events);
+    final updated = List<ScheduleEvent>.from(dayList);
+    updated[index] = newEvent;
+    updated.sort((a, b) => a.minutesOfDay.compareTo(b.minutesOfDay));
+    next[oldEvent.dayIndex] = updated;
+    return copyWith(events: next);
+  }
+
+  /// Remove [event] from its day. If not found, the schedule is returned
+  /// unchanged.
+  Schedule removeEvent(ScheduleEvent event) {
+    final dayList = events[event.dayIndex];
+    if (dayList == null) return this;
+    if (!dayList.contains(event)) return this;
+    final next = Map<int, List<ScheduleEvent>>.from(events);
+    next[event.dayIndex] = List<ScheduleEvent>.from(dayList)..remove(event);
+    return copyWith(events: next);
   }
 }
