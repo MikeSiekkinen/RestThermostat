@@ -14,7 +14,7 @@ import 'state/lifecycle_bridge.dart';
 import 'state/providers.dart';
 import 'theme/ember_theme.dart';
 import 'widgets/ember_background.dart';
-import 'widgets/fan_widget.dart';
+import 'widgets/interactive_fan_widget.dart';
 import 'widgets/interactive_mode_pills.dart';
 import 'widgets/interactive_temperature_dial.dart';
 import 'widgets/status_row.dart';
@@ -303,7 +303,7 @@ class _Home extends ConsumerWidget {
         // Fan widget at the top-right of the body per DESIGN §10.2. Hidden
         // automatically by FanWidget when `has_fan = false`. Tap behavior
         // arrives in issue #13.
-        Positioned(top: 16, right: 16, child: FanWidget(device: d)),
+        Positioned(top: 16, right: 16, child: InteractiveFanWidget(device: d)),
       ],
     );
   }

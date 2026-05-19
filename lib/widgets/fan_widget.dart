@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../models/device.dart';
 import '../theme/colors.dart';
 import '../theme/typography.dart';
 
@@ -32,15 +31,21 @@ import '../theme/typography.dart';
 /// Animation lifecycle: pulse controller pauses on background lifecycle
 /// transitions (§11.4) and when `MediaQuery.disableAnimations` is set (§11.7).
 class FanWidget extends StatefulWidget {
-  /// The device whose fan state this widget reflects.
-  final Device device;
+  /// Whether the device supports a fan (`capabilities.has_fan`). When false
+  /// the widget collapses to a zero-size [SizedBox.shrink], so callers can
+  /// place it unconditionally and the row collapses cleanly.
+  final bool hasFan;
+
+  /// Whether a fan timer is currently active.
+  final bool fanTimerActive;
+
+  /// Unix epoch second (UTC) at which the active fan timer expires. Only
+  /// meaningful when [fanTimerActive] is true. Verified semantics: this is
+  /// a fixed deadline, not a seconds-remaining counter (see
+  /// [[nle-api-reference]] memory).
+  final int fanTimerTimeout;
 
   /// Clock injection for tests. Production calls [DateTime.now].
-  ///
-  /// `fan_timer_timeout` from the NLE API is interpreted as a Unix epoch
-  /// timestamp in seconds (UTC). The countdown is `max(0, timeout - now())`.
-  /// If the live server returns seconds-remaining instead, this needs to
-  /// flip — flagged for live-server verification.
   final DateTime Function() now;
 
   /// Optional fixed diameter. Defaults to the §10.2 spec of 52dp.
@@ -48,7 +53,9 @@ class FanWidget extends StatefulWidget {
 
   const FanWidget({
     super.key,
-    required this.device,
+    required this.hasFan,
+    required this.fanTimerActive,
+    required this.fanTimerTimeout,
     this.now = DateTime.now,
     this.diameter = 52.0,
   });
@@ -87,7 +94,7 @@ class _FanWidgetState extends State<FanWidget>
   @override
   void didUpdateWidget(covariant FanWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.device.fanTimerActive != widget.device.fanTimerActive) {
+    if (oldWidget.fanTimerActive != widget.fanTimerActive) {
       _syncPulse();
       _maybeStartCountdownTicker();
     }
@@ -113,7 +120,7 @@ class _FanWidgetState extends State<FanWidget>
   }
 
   void _syncPulse() {
-    final shouldRun = widget.device.fanTimerActive && !_reducedMotion;
+    final shouldRun = widget.fanTimerActive && !_reducedMotion;
     if (shouldRun) {
       if (!_pulseController.isAnimating) {
         _pulseController.repeat();
@@ -127,7 +134,7 @@ class _FanWidgetState extends State<FanWidget>
   void _maybeStartCountdownTicker() {
     _countdownTicker?.cancel();
     _countdownTicker = null;
-    if (!widget.device.fanTimerActive) return;
+    if (!widget.fanTimerActive) return;
     _countdownTicker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -143,12 +150,11 @@ class _FanWidgetState extends State<FanWidget>
 
   @override
   Widget build(BuildContext context) {
-    final device = widget.device;
-    if (!device.capabilities.hasFan) return const SizedBox.shrink();
+    if (!widget.hasFan) return const SizedBox.shrink();
 
-    final active = device.fanTimerActive;
+    final active = widget.fanTimerActive;
     final remaining = active
-        ? _remainingFor(device.fanTimerTimeout, widget.now())
+        ? _remainingFor(widget.fanTimerTimeout, widget.now())
         : Duration.zero;
     final label = active
         ? 'FAN ON • ${_formatCountdown(remaining)}'

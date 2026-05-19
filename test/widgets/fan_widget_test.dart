@@ -1,34 +1,12 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rest_thermostat/models/device.dart';
 import 'package:rest_thermostat/widgets/fan_widget.dart';
 
-Device _device({
+Future<void> _pump(
+  WidgetTester tester, {
   required bool hasFan,
   required bool fanTimerActive,
   int fanTimerTimeout = 0,
-}) {
-  final raw = File('test/fixtures/devices_one.json').readAsStringSync();
-  final fixture = jsonDecode(raw) as Map<String, dynamic>;
-  final entry = Map<String, dynamic>.from(
-    (fixture['devices'] as List).first as Map<String, dynamic>,
-  );
-  entry['fan_timer_active'] = fanTimerActive;
-  entry['fan_timer_timeout'] = fanTimerTimeout;
-  final caps = Map<String, dynamic>.from(
-    entry['capabilities'] as Map<String, dynamic>,
-  );
-  caps['has_fan'] = hasFan;
-  entry['capabilities'] = caps;
-  return Device.fromJson(entry);
-}
-
-Future<void> _pump(
-  WidgetTester tester,
-  Device device, {
   DateTime Function()? now,
   bool disableAnimations = false,
 }) {
@@ -37,7 +15,12 @@ Future<void> _pump(
       home: Scaffold(
         body: MediaQuery(
           data: MediaQueryData(disableAnimations: disableAnimations),
-          child: FanWidget(device: device, now: now ?? DateTime.now),
+          child: FanWidget(
+            hasFan: hasFan,
+            fanTimerActive: fanTimerActive,
+            fanTimerTimeout: fanTimerTimeout,
+            now: now ?? DateTime.now,
+          ),
         ),
       ),
     ),
@@ -75,8 +58,7 @@ void main() {
 
   group('FanWidget rendering', () {
     testWidgets('auto state renders "FAN AUTO" label', (tester) async {
-      final device = _device(hasFan: true, fanTimerActive: false);
-      await _pump(tester, device);
+      await _pump(tester, hasFan: true, fanTimerActive: false);
       expect(find.text('FAN AUTO'), findsOneWidget);
     });
 
@@ -85,12 +67,13 @@ void main() {
     ) async {
       final now = DateTime.utc(2026, 5, 19, 12, 0, 0);
       final timeout = now.add(const Duration(seconds: 43));
-      final device = _device(
+      await _pump(
+        tester,
         hasFan: true,
         fanTimerActive: true,
         fanTimerTimeout: timeout.millisecondsSinceEpoch ~/ 1000,
+        now: () => now,
       );
-      await _pump(tester, device, now: () => now);
       expect(find.text('FAN ON • 0:43'), findsOneWidget);
     });
 
@@ -99,36 +82,33 @@ void main() {
       (tester) async {
         final now = DateTime.utc(2026, 5, 19, 12, 0, 0);
         final timeout = now.add(const Duration(minutes: 2, seconds: 7));
-        final device = _device(
+        await _pump(
+          tester,
           hasFan: true,
           fanTimerActive: true,
           fanTimerTimeout: timeout.millisecondsSinceEpoch ~/ 1000,
+          now: () => now,
         );
-        await _pump(tester, device, now: () => now);
         expect(find.text('FAN ON • 2:07'), findsOneWidget);
       },
     );
 
-    testWidgets(
-      'hidden when capabilities.has_fan is false (no rendered output)',
-      (tester) async {
-        final device = _device(hasFan: false, fanTimerActive: false);
-        await _pump(tester, device);
-        // No label, no canvas placeholder — widget shrinks to nothing.
-        expect(find.text('FAN AUTO'), findsNothing);
-        expect(find.textContaining('FAN ON'), findsNothing);
-        expect(
-          find.byWidgetPredicate(
-            (w) => w is SizedBox && w.width == 52.0 && w.height == 52.0,
-          ),
-          findsNothing,
-        );
-      },
-    );
+    testWidgets('hidden when hasFan is false (no rendered output)', (
+      tester,
+    ) async {
+      await _pump(tester, hasFan: false, fanTimerActive: false);
+      expect(find.text('FAN AUTO'), findsNothing);
+      expect(find.textContaining('FAN ON'), findsNothing);
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is SizedBox && w.width == 52.0 && w.height == 52.0,
+        ),
+        findsNothing,
+      );
+    });
 
-    testWidgets('renders a 52dp canvas when has_fan=true', (tester) async {
-      final device = _device(hasFan: true, fanTimerActive: false);
-      await _pump(tester, device);
+    testWidgets('renders a 52dp canvas when hasFan=true', (tester) async {
+      await _pump(tester, hasFan: true, fanTimerActive: false);
       expect(
         find.byWidgetPredicate(
           (w) => w is SizedBox && w.width == 52.0 && w.height == 52.0,
@@ -145,14 +125,14 @@ void main() {
       (tester) async {
         final now = DateTime.utc(2026, 5, 19, 12, 0, 0);
         final timeout = now.add(const Duration(seconds: 43));
-        final device = _device(
+        await _pump(
+          tester,
           hasFan: true,
           fanTimerActive: true,
           fanTimerTimeout: timeout.millisecondsSinceEpoch ~/ 1000,
+          now: () => now,
+          disableAnimations: true,
         );
-        await _pump(tester, device, now: () => now, disableAnimations: true);
-        // If the controller were still repeating, pumpAndSettle would hang
-        // forever; reduced motion stops it.
         await tester.pumpAndSettle();
         expect(find.text('FAN ON • 0:43'), findsOneWidget);
       },
@@ -161,21 +141,20 @@ void main() {
     testWidgets('pauses cleanly on AppLifecycleState.paused', (tester) async {
       final now = DateTime.utc(2026, 5, 19, 12, 0, 0);
       final timeout = now.add(const Duration(seconds: 43));
-      final device = _device(
+      await _pump(
+        tester,
         hasFan: true,
         fanTimerActive: true,
         fanTimerTimeout: timeout.millisecondsSinceEpoch ~/ 1000,
+        now: () => now,
       );
-      await _pump(tester, device, now: () => now);
 
       final binding = tester.binding;
       binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
       await tester.pump();
-      // Should settle quickly once paused — no infinite animation.
       await tester.pumpAndSettle();
       expect(find.text('FAN ON • 0:43'), findsOneWidget);
 
-      // Resume — animation restarts; we don't pumpAndSettle (would deadlock).
       binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pump();
       expect(find.text('FAN ON • 0:43'), findsOneWidget);
