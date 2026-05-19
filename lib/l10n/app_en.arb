@@ -1,0 +1,471 @@
+{
+  "@@locale": "en",
+
+  "appTitle": "Rest Thermostat",
+  "@appTitle": {
+    "description": "Application title shown in the home AppBar and OS task switcher."
+  },
+
+  "homeAppBarTitle": "Rest Thermostat",
+  "@homeAppBarTitle": {
+    "description": "Title rendered in the home-screen AppBar."
+  },
+
+  "homeSettingsTooltip": "Settings",
+  "@homeSettingsTooltip": {
+    "description": "Tooltip for the gear/settings IconButton in the home AppBar."
+  },
+
+  "homeNoDevices": "No devices",
+  "@homeNoDevices": {
+    "description": "Body shown when the server returns a successful response with zero devices."
+  },
+
+  "homeErrorPrefix": "Error: {error}",
+  "@homeErrorPrefix": {
+    "description": "Body shown when the devices-snapshot stream surfaces an unexpected error.",
+    "placeholders": {
+      "error": { "type": "Object" }
+    }
+  },
+
+  "homeAuthFailed": "Authentication failed.",
+  "@homeAuthFailed": {
+    "description": "SnackBar copy when an auth failure (401/403) is detected anywhere in the app."
+  },
+
+  "homeAuthOpenSettingsAction": "OPEN SETTINGS",
+  "@homeAuthOpenSettingsAction": {
+    "description": "SnackBar action button label that deep-links to Settings with the auth section pre-expanded."
+  },
+
+  "homeActiveDeviceFallback": "Active device changed — it wasn't in the latest device list.",
+  "@homeActiveDeviceFallback": {
+    "description": "One-time SnackBar shown when the persisted active serial isn't in the latest /api/devices response and the source falls back to the first device per DESIGN §4.5."
+  },
+
+  "deviceUnnamedFallback": "unnamed",
+  "@deviceUnnamedFallback": {
+    "description": "Display name used when a device's server-side name is null or empty AND no local override exists."
+  },
+
+  "deviceOfflineLabel": "DEVICE OFFLINE",
+  "@deviceOfflineLabel": {
+    "description": "Chip rendered on top of the home body when the active device reports is_available=false."
+  },
+
+  "statusHeating": "Heating",
+  "statusCooling": "Cooling",
+  "statusFanOnly": "Fan only",
+  "statusIdle": "Idle",
+  "statusOff": "Off",
+  "@statusHeating": { "description": "Status-row text when the heater is running." },
+  "@statusCooling": { "description": "Status-row text when the A/C is running." },
+  "@statusFanOnly": { "description": "Status-row text when only the fan is running." },
+  "@statusIdle": { "description": "Status-row text when no equipment is running but a heating/cooling mode is selected." },
+  "@statusOff": { "description": "Status-row text when the device is off and no fan is running." },
+
+  "modePillOff": "OFF",
+  "modePillHeat": "HEAT",
+  "modePillCool": "COOL",
+  "modePillAuto": "AUTO",
+  "@modePillOff": { "description": "Label for the off mode pill in the home screen." },
+  "@modePillHeat": { "description": "Label for the heat mode pill in the home screen." },
+  "@modePillCool": { "description": "Label for the cool mode pill in the home screen." },
+  "@modePillAuto": { "description": "Label for the heat-cool (auto) mode pill in the home screen." },
+
+  "modeChangeServerRejected": "Server rejected mode change",
+  "modeChangeFailed": "Couldn't change mode",
+  "@modeChangeServerRejected": { "description": "Snackbar copy when a set_mode write returns a 4xx without a server-provided message." },
+  "@modeChangeFailed": { "description": "Generic snackbar copy when a set_mode write fails for non-4xx reasons." },
+
+  "fanLabelAuto": "FAN AUTO",
+  "@fanLabelAuto": { "description": "Visible label below the fan widget when the fan is in auto mode." },
+
+  "fanLabelOn": "FAN ON • {countdown}",
+  "@fanLabelOn": {
+    "description": "Visible label below the fan widget when the timer is active. Countdown is pre-formatted M:SS.",
+    "placeholders": {
+      "countdown": { "type": "String", "example": "0:43" }
+    }
+  },
+
+  "fanSemanticAuto": "Fan auto, tap to turn on",
+  "@fanSemanticAuto": { "description": "TalkBack/VoiceOver announcement for the fan widget when in auto mode." },
+
+  "fanSemanticOn": "Fan on for {countdown}, tap to switch to auto",
+  "@fanSemanticOn": {
+    "description": "Screen-reader announcement for the fan widget when the timer is active.",
+    "placeholders": {
+      "countdown": { "type": "String", "example": "0:43" }
+    }
+  },
+
+  "fanChangeServerRejected": "Server rejected fan command",
+  "fanChangeFailed": "Couldn't change fan",
+  "@fanChangeServerRejected": { "description": "Snackbar copy when a set_fan write returns a 4xx without a server message." },
+  "@fanChangeFailed": { "description": "Generic snackbar copy when a set_fan write fails for non-4xx reasons." },
+
+  "fanDurationSheetTitle": "RUN FAN FOR",
+  "fanDurationMinutes": "{minutes} MINUTES",
+  "fanDuration1Hour": "1 HOUR",
+  "fanDurationHours": "{hours} HOURS",
+  "@fanDurationSheetTitle": { "description": "Header inside the fan-duration bottom sheet." },
+  "@fanDurationMinutes": {
+    "description": "Fan duration choice for less than an hour, e.g. 15 MINUTES.",
+    "placeholders": { "minutes": { "type": "int" } }
+  },
+  "@fanDuration1Hour": { "description": "Fan duration choice for exactly 1 hour (singular)." },
+  "@fanDurationHours": {
+    "description": "Fan duration choice for 2+ hours.",
+    "placeholders": { "hours": { "type": "int" } }
+  },
+
+  "awayChipLabel": "AWAY",
+  "@awayChipLabel": { "description": "Text inside the AWAY chip when the device is in away/eco mode." },
+
+  "awaySemanticOn": "Away mode on, tap to disable. Long press to edit eco temperatures.",
+  "awaySemanticOff": "Away mode off, tap to enable. Long press to edit eco temperatures.",
+  "@awaySemanticOn": { "description": "Screen-reader announcement when the AWAY chip is active." },
+  "@awaySemanticOff": { "description": "Screen-reader announcement when the AWAY chip is inactive." },
+
+  "awayToggleFailed": "Couldn't toggle away",
+  "awayToggleServerRejected": "Server rejected away change",
+  "awayEcoSaveFailed": "Couldn't save eco temperatures",
+  "awayEcoSaveServerRejected": "Server rejected eco temps change",
+  "@awayToggleFailed": { "description": "Generic snackbar copy when set_away fails for non-4xx reasons." },
+  "@awayToggleServerRejected": { "description": "Snackbar copy when set_away returns a 4xx without a server message." },
+  "@awayEcoSaveFailed": { "description": "Generic snackbar copy when set_eco_temperatures fails for non-4xx reasons." },
+  "@awayEcoSaveServerRejected": { "description": "Snackbar copy when set_eco_temperatures returns a 4xx without a server message." },
+
+  "ecoSheetTitle": "ECO TEMPERATURES",
+  "ecoSheetLowLabel": "LOW (HEAT)",
+  "ecoSheetHighLabel": "HIGH (COOL)",
+  "ecoSheetValidationLowHigh": "Low must be lower than high.",
+  "ecoSheetCancel": "CANCEL",
+  "ecoSheetSave": "SAVE",
+  "@ecoSheetTitle": { "description": "Header inside the eco-temperatures bottom sheet." },
+  "@ecoSheetLowLabel": { "description": "Slider label for the eco low/heat setpoint." },
+  "@ecoSheetHighLabel": { "description": "Slider label for the eco high/cool setpoint." },
+  "@ecoSheetValidationLowHigh": { "description": "Inline error when the user sets low ≥ high." },
+  "@ecoSheetCancel": { "description": "Cancel button in the eco-temperatures bottom sheet." },
+  "@ecoSheetSave": { "description": "Save button in the eco-temperatures bottom sheet." },
+
+  "dialTemperatureFailed": "Couldn't update temperature",
+  "dialTemperatureNotConfirmed": "Couldn't confirm new temperature",
+  "dialRetry": "Retry",
+  "@dialTemperatureFailed": { "description": "Snackbar copy when a set_temperature write fails outright." },
+  "@dialTemperatureNotConfirmed": { "description": "Snackbar copy when set_temperature succeeds but no reconciliation match arrives within 7s." },
+  "@dialRetry": { "description": "Action label on dial-failure snackbars that re-issues the write." },
+
+  "stalePillRetry": "RETRY",
+  "stalePillReconnecting": "Reconnecting…",
+  "stalePillRateLimited": "Server busy — retrying",
+  "stalePillNotConnected": "Not connected",
+  "stalePillLastUpdated": "Last updated {elapsed}",
+  "stalePillElapsedJustNow": "just now",
+  "stalePillElapsedOneMinute": "1 min ago",
+  "stalePillElapsedMinutes": "{minutes} min ago",
+  "stalePillElapsedOneHour": "1 hour ago",
+  "stalePillElapsedHours": "{hours} hours ago",
+  "@stalePillRetry": { "description": "Retry button in the home-screen stale-state pill." },
+  "@stalePillReconnecting": { "description": "Pill copy during an active reconnection attempt after a poll failure." },
+  "@stalePillRateLimited": { "description": "Pill copy when polling is paused due to a 429 rate-limit." },
+  "@stalePillNotConnected": { "description": "Pill copy when no successful poll has happened yet and the source is failing." },
+  "@stalePillLastUpdated": {
+    "description": "Pill copy when stale with a known prior successful poll.",
+    "placeholders": { "elapsed": { "type": "String", "example": "3 min ago" } }
+  },
+  "@stalePillElapsedJustNow": { "description": "Elapsed bucket inserted into stalePillLastUpdated when <60s have passed." },
+  "@stalePillElapsedOneMinute": { "description": "Elapsed bucket for 60–119s." },
+  "@stalePillElapsedMinutes": {
+    "description": "Elapsed bucket for 2–59 minutes.",
+    "placeholders": { "minutes": { "type": "int" } }
+  },
+  "@stalePillElapsedOneHour": { "description": "Elapsed bucket for 60–119 minutes." },
+  "@stalePillElapsedHours": {
+    "description": "Elapsed bucket for 2+ hours.",
+    "placeholders": { "hours": { "type": "int" } }
+  },
+
+  "welcomeTitle": "Rest Thermostat",
+  "welcomeBody": "Connect to your NoLongerEvil server to control your Gen 1/2 Nest thermostats.",
+  "welcomeDocsLink": "Docs: {url}",
+  "welcomeStartButton": "Get started",
+  "@welcomeTitle": { "description": "Welcome-screen headline." },
+  "@welcomeBody": { "description": "Welcome-screen body paragraph." },
+  "@welcomeDocsLink": {
+    "description": "Selectable docs link rendered under the welcome body.",
+    "placeholders": { "url": { "type": "String" } }
+  },
+  "@welcomeStartButton": { "description": "Welcome-screen primary CTA." },
+
+  "serverSetupTitle": "Server Setup",
+  "serverAddressLabel": "Server address",
+  "serverAddressHint": "nest.home or 192.168.1.42",
+  "serverAddressRequired": "Server address is required.",
+  "advancedSectionTitle": "Advanced",
+  "authChoiceLabel": "Authentication",
+  "authChoiceNone": "None",
+  "authChoiceBasic": "Basic",
+  "authChoiceBearer": "Bearer",
+  "authUsernameLabel": "Username",
+  "authPasswordLabel": "Password",
+  "authPasswordShow": "Show password",
+  "authPasswordHide": "Hide password",
+  "authTokenLabel": "Token",
+  "authTokenShow": "Show token",
+  "authTokenHide": "Hide token",
+  "connectButton": "Connect",
+  "@serverSetupTitle": { "description": "AppBar title on the Server Setup screen." },
+  "@serverAddressLabel": { "description": "Text field label for the NLE server URL." },
+  "@serverAddressHint": { "description": "Hint text shown inside the empty server-address field." },
+  "@serverAddressRequired": { "description": "Inline validation error when the server-address field is empty." },
+  "@advancedSectionTitle": { "description": "Expander title that reveals the authentication picker." },
+  "@authChoiceLabel": { "description": "Dropdown label for the authentication type." },
+  "@authChoiceNone": { "description": "Dropdown option: no authentication (default)." },
+  "@authChoiceBasic": { "description": "Dropdown option: HTTP Basic authentication." },
+  "@authChoiceBearer": { "description": "Dropdown option: Bearer-token authentication." },
+  "@authUsernameLabel": { "description": "Username text field label (HTTP Basic auth)." },
+  "@authPasswordLabel": { "description": "Password text field label (HTTP Basic auth)." },
+  "@authPasswordShow": { "description": "Visibility-toggle tooltip when the password field is obscured." },
+  "@authPasswordHide": { "description": "Visibility-toggle tooltip when the password field is visible." },
+  "@authTokenLabel": { "description": "Bearer-token text field label." },
+  "@authTokenShow": { "description": "Visibility-toggle tooltip when the bearer-token field is obscured." },
+  "@authTokenHide": { "description": "Visibility-toggle tooltip when the bearer-token field is visible." },
+  "@connectButton": { "description": "Primary submit button on the Server Setup screen." },
+
+  "connectFailedAuth": "Authentication failed.",
+  "connectFailedUnreachable": "Couldn't reach server.",
+  "@connectFailedAuth": { "description": "Inline error after Test Connection when the server rejected credentials (401/403)." },
+  "@connectFailedUnreachable": { "description": "Inline error after Test Connection for any non-auth failure." },
+
+  "devicePickerTitle": "Choose a thermostat",
+  "noDevicesTitle": "No thermostats registered.",
+  "noDevicesBody": "Pair your Nest Gen 1/2 with your NoLongerEvil server before continuing.",
+  "noDevicesGoBack": "Go back",
+  "@devicePickerTitle": { "description": "AppBar title on the onboarding device-picker screen." },
+  "@noDevicesTitle": { "description": "Blocking copy headline when the server has no devices registered." },
+  "@noDevicesBody": { "description": "Blocking copy body when the server has no devices registered." },
+  "@noDevicesGoBack": { "description": "Button on the no-devices screen that returns to Server Setup." },
+
+  "devicePickerSheetHeader": "Devices",
+  "@devicePickerSheetHeader": { "description": "Header inside the home-screen device-picker bottom sheet." },
+
+  "settingsTitle": "Settings",
+  "settingsConnectionSection": "Connection",
+  "settingsTestConnection": "Test connection",
+  "settingsSave": "Save",
+  "settingsCancel": "Cancel",
+  "settingsConnectionSaved": "Connection settings saved.",
+  "settingsTestSuccess": "{count, plural, =1{Connected — 1 device found.} other{Connected — {count} devices found.}}",
+  "settingsDevicesSection": "Devices",
+  "settingsDevicesLoadError": "Couldn't load devices: {error}",
+  "settingsNoDevices": "No devices.",
+  "settingsDiagnosticsSection": "Diagnostics",
+  "settingsViewLogs": "View logs",
+  "settingsViewLogsSubtitle": "In-memory diagnostic log of recent app activity.",
+  "settingsAboutSection": "About",
+  "settingsAboutVersion": "Rest Thermostat {version} (build {buildNumber})",
+  "settingsAboutCredit": "For Cody Kociemba's NoLongerEvil project",
+  "settingsAboutDocsLink": "NLE docs: {url}",
+  "settingsAboutSourceLink": "Source: {url}",
+  "settingsDangerZoneSection": "Danger zone",
+  "settingsDisconnect": "Disconnect from server",
+  "settingsDisconnectDialogTitle": "Disconnect from server?",
+  "settingsDisconnectDialogBody": "This will remove your server settings and saved credentials. Continue?",
+  "settingsDisconnectConfirm": "Disconnect",
+  "settingsRenameDialogTitle": "Rename thermostat",
+  "settingsRenameDisplayLabel": "Display name",
+  "settingsRenameHelp": "Leave empty to use the server name",
+  "@settingsTitle": { "description": "AppBar title on the Settings screen." },
+  "@settingsConnectionSection": { "description": "Settings section header for the URL+auth re-edit form." },
+  "@settingsTestConnection": { "description": "Outlined button that triggers a test fetch against the entered URL." },
+  "@settingsSave": { "description": "Filled button that persists the URL+auth after a successful test." },
+  "@settingsCancel": { "description": "Generic Cancel button label used in Settings dialogs." },
+  "@settingsConnectionSaved": { "description": "Confirmation snackbar after Save succeeds." },
+  "@settingsTestSuccess": {
+    "description": "Inline success message after Test Connection. Uses ICU plural for device count.",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "@settingsDevicesSection": { "description": "Settings section header for the per-device rename list." },
+  "@settingsDevicesLoadError": {
+    "description": "Inline error when the Settings Devices section can't fetch /api/devices.",
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "@settingsNoDevices": { "description": "Placeholder shown when /api/devices returns an empty list inside the Settings Devices section." },
+  "@settingsDiagnosticsSection": { "description": "Settings section header for the diagnostics row that opens the logs screen." },
+  "@settingsViewLogs": { "description": "ListTile title that opens the diagnostic logs screen." },
+  "@settingsViewLogsSubtitle": { "description": "ListTile subtitle for the View logs row." },
+  "@settingsAboutSection": { "description": "Settings section header for the About/version/credit block." },
+  "@settingsAboutVersion": {
+    "description": "Version + build line in the About section.",
+    "placeholders": {
+      "version": { "type": "String" },
+      "buildNumber": { "type": "String" }
+    }
+  },
+  "@settingsAboutCredit": { "description": "Single-line credit to the NLE project, rendered under the version." },
+  "@settingsAboutDocsLink": {
+    "description": "Docs URL line in the About section.",
+    "placeholders": { "url": { "type": "String" } }
+  },
+  "@settingsAboutSourceLink": {
+    "description": "Source-repo URL line in the About section.",
+    "placeholders": { "url": { "type": "String" } }
+  },
+  "@settingsDangerZoneSection": { "description": "Section header above the Disconnect button." },
+  "@settingsDisconnect": { "description": "Destructive button that wipes the saved config + cache + secure storage." },
+  "@settingsDisconnectDialogTitle": { "description": "Title of the confirm-disconnect dialog." },
+  "@settingsDisconnectDialogBody": { "description": "Body of the confirm-disconnect dialog." },
+  "@settingsDisconnectConfirm": { "description": "Destructive action label inside the confirm-disconnect dialog." },
+  "@settingsRenameDialogTitle": { "description": "Title of the per-device rename dialog." },
+  "@settingsRenameDisplayLabel": { "description": "Text-field label for the new display name." },
+  "@settingsRenameHelp": { "description": "Helper text under the rename field; empty = clear the override." },
+
+  "scheduleTitle": "Schedule",
+  "scheduleAddEventTooltip": "Add event",
+  "scheduleEmptyTitle": "No events scheduled",
+  "scheduleEmptyHint": "Tap + to add one",
+  "scheduleLoadError": "Couldn't load schedule: {error}",
+  "scheduleEventTypeHeat": "HEAT",
+  "scheduleEventTypeCool": "COOL",
+  "scheduleEventTypeRange": "RANGE",
+  "scheduleEventSemanticLabel": "Event at {time}, {temp} {modeLower}, tap to edit.",
+  "@scheduleTitle": { "description": "AppBar title on the Schedule screen." },
+  "@scheduleAddEventTooltip": { "description": "Tooltip on the AppBar + IconButton that opens the new-event editor." },
+  "@scheduleEmptyTitle": { "description": "Empty-state title shown for a day with no events." },
+  "@scheduleEmptyHint": { "description": "Empty-state subtitle hinting at the + button." },
+  "@scheduleLoadError": {
+    "description": "Body shown when /api/schedule fails.",
+    "placeholders": { "error": { "type": "Object" } }
+  },
+  "@scheduleEventTypeHeat": { "description": "Type label rendered on schedule event rows for HEAT events." },
+  "@scheduleEventTypeCool": { "description": "Type label rendered on schedule event rows for COOL events." },
+  "@scheduleEventTypeRange": { "description": "Type label rendered on schedule event rows for RANGE/auto events." },
+  "@scheduleEventSemanticLabel": {
+    "description": "Merged Semantics label TalkBack/VoiceOver reads for each schedule event row.",
+    "placeholders": {
+      "time": { "type": "String", "example": "6:00 AM" },
+      "temp": { "type": "String", "example": "68°F" },
+      "modeLower": { "type": "String", "example": "heat" }
+    }
+  },
+
+  "editEventTitleNew": "New Event",
+  "editEventTitleEdit": "Edit Event",
+  "editEventCancel": "Cancel",
+  "editEventSave": "Save",
+  "editEventTimeLabel": "Time",
+  "editEventRepeatLabel": "Repeat",
+  "editEventDeleteButton": "Delete Event",
+  "editEventDeleteDialogTitle": "Delete event?",
+  "editEventDeleteDialogBody": "This will remove the event from this day.",
+  "editEventDeleteConfirm": "Delete",
+  "editEventSavedSnack": "Schedule saved",
+  "editEventSaveFailedSnack": "Couldn't save schedule. Retry?",
+  "editEventRetryAction": "Retry",
+  "@editEventTitleNew": { "description": "AppBar title when creating a new schedule event." },
+  "@editEventTitleEdit": { "description": "AppBar title when editing an existing schedule event." },
+  "@editEventCancel": { "description": "AppBar leading button on the edit-event screen." },
+  "@editEventSave": { "description": "AppBar trailing button that submits the edit-event form." },
+  "@editEventTimeLabel": { "description": "Section header above the time picker." },
+  "@editEventRepeatLabel": { "description": "Section header above the repeat-days row (new-event mode only)." },
+  "@editEventDeleteButton": { "description": "Destructive button at the bottom of the edit-event screen (edit-mode only)." },
+  "@editEventDeleteDialogTitle": { "description": "Title of the delete-event confirm dialog." },
+  "@editEventDeleteDialogBody": { "description": "Body of the delete-event confirm dialog." },
+  "@editEventDeleteConfirm": { "description": "Destructive action label inside the delete-event confirm dialog." },
+  "@editEventSavedSnack": { "description": "Snackbar shown after a successful set_schedule write." },
+  "@editEventSaveFailedSnack": { "description": "Snackbar shown when set_schedule fails — pairs with the Retry action." },
+  "@editEventRetryAction": { "description": "Action button on the save-failed snackbar that re-issues set_schedule." },
+
+  "detailsSectionCurrent": "CURRENT",
+  "detailsSectionSystem": "SYSTEM",
+  "detailsHumidity": "HUMIDITY",
+  "detailsSetpoint": "SETPOINT",
+  "detailsSetpointSourceTooltip": "Source is derived locally from schedule + away state. (Derived)",
+  "detailsComfortDry": "Dry",
+  "detailsComfortComfortable": "Comfortable",
+  "detailsComfortHumid": "Humid",
+  "detailsSetpointSourceAway": "Away",
+  "detailsSetpointSourceScheduled": "Scheduled",
+  "detailsSetpointSourceManual": "Manual",
+  "detailsStatus": "STATUS",
+  "detailsStatusConnected": "Connected",
+  "detailsStatusOffline": "Offline",
+  "detailsServer": "SERVER",
+  "detailsFirmware": "FIRMWARE",
+  "detailsLastSync": "LAST SYNC",
+  "detailsLastSyncEmpty": "—",
+  "detailsLastSyncNoPoll": "No successful poll yet",
+  "detailsLastSyncJustNow": "just now",
+  "detailsLastSyncSeconds": "{seconds} seconds ago",
+  "detailsLastSyncOneMinute": "1 minute ago",
+  "detailsLastSyncMinutes": "{minutes} minutes ago",
+  "detailsLastSyncOneHour": "1 hour ago",
+  "detailsLastSyncHours": "{hours} hours ago",
+  "detailsLastSyncOneDay": "1 day ago",
+  "detailsLastSyncDays": "{days} days ago",
+  "@detailsSectionCurrent": { "description": "Section header above the current humidity + setpoint tiles on the Details tab." },
+  "@detailsSectionSystem": { "description": "Section header above the system-info rows on the Details tab." },
+  "@detailsHumidity": { "description": "Label for the humidity stat tile." },
+  "@detailsSetpoint": { "description": "Label for the setpoint stat tile." },
+  "@detailsSetpointSourceTooltip": { "description": "Long-press tooltip body explaining the (Derived) suffix." },
+  "@detailsComfortDry": { "description": "Comfort-label subtitle on the humidity tile when humidity < 30%." },
+  "@detailsComfortComfortable": { "description": "Comfort-label subtitle when 30–50% humidity." },
+  "@detailsComfortHumid": { "description": "Comfort-label subtitle when humidity > 50%." },
+  "@detailsSetpointSourceAway": { "description": "Setpoint-source subtitle when the device is in eco/away mode." },
+  "@detailsSetpointSourceScheduled": { "description": "Setpoint-source subtitle when the target matches the active scheduled event." },
+  "@detailsSetpointSourceManual": { "description": "Setpoint-source subtitle when the target doesn't match any other source." },
+  "@detailsStatus": { "description": "Row label for the device connectivity status." },
+  "@detailsStatusConnected": { "description": "Row value when device.isAvailable is true." },
+  "@detailsStatusOffline": { "description": "Row value when device.isAvailable is false." },
+  "@detailsServer": { "description": "Row label for the server URL." },
+  "@detailsFirmware": { "description": "Row label for the NLE firmware version." },
+  "@detailsLastSync": { "description": "Row label for the last-successful-poll timestamp." },
+  "@detailsLastSyncEmpty": { "description": "Placeholder em-dash for empty fields in the system-info section." },
+  "@detailsLastSyncNoPoll": { "description": "Tooltip when no successful poll has happened yet." },
+  "@detailsLastSyncJustNow": { "description": "Relative-time bucket: < 5 seconds." },
+  "@detailsLastSyncSeconds": {
+    "description": "Relative-time bucket: 5–59 seconds.",
+    "placeholders": { "seconds": { "type": "int" } }
+  },
+  "@detailsLastSyncOneMinute": { "description": "Relative-time bucket: exactly 1 minute." },
+  "@detailsLastSyncMinutes": {
+    "description": "Relative-time bucket: 2–59 minutes.",
+    "placeholders": { "minutes": { "type": "int" } }
+  },
+  "@detailsLastSyncOneHour": { "description": "Relative-time bucket: exactly 1 hour." },
+  "@detailsLastSyncHours": {
+    "description": "Relative-time bucket: 2–23 hours.",
+    "placeholders": { "hours": { "type": "int" } }
+  },
+  "@detailsLastSyncOneDay": { "description": "Relative-time bucket: exactly 1 day." },
+  "@detailsLastSyncDays": {
+    "description": "Relative-time bucket: 2+ days.",
+    "placeholders": { "days": { "type": "int" } }
+  },
+
+  "logsTitle": "Diagnostic logs",
+  "logsCopyTooltip": "Copy to clipboard",
+  "logsShareTooltip": "Share",
+  "logsClearTooltip": "Clear",
+  "logsCopiedSnack": "Logs copied to clipboard.",
+  "logsClearDialogTitle": "Clear logs?",
+  "logsClearDialogBody": "This removes all in-memory log entries. The buffer will start fresh from the next event.",
+  "logsClearConfirm": "Clear",
+  "logsCancel": "Cancel",
+  "logsEmpty": "No log entries yet.",
+  "@logsTitle": { "description": "AppBar title on the diagnostic logs screen." },
+  "@logsCopyTooltip": { "description": "Tooltip for the Copy IconButton in the logs AppBar." },
+  "@logsShareTooltip": { "description": "Tooltip for the Share IconButton in the logs AppBar." },
+  "@logsClearTooltip": { "description": "Tooltip for the Clear IconButton in the logs AppBar." },
+  "@logsCopiedSnack": { "description": "Snackbar shown after copying logs to clipboard succeeds." },
+  "@logsClearDialogTitle": { "description": "Title of the confirm-clear-logs dialog." },
+  "@logsClearDialogBody": { "description": "Body of the confirm-clear-logs dialog." },
+  "@logsClearConfirm": { "description": "Destructive action label inside the confirm-clear-logs dialog." },
+  "@logsCancel": { "description": "Cancel button in the clear-logs dialog." },
+  "@logsEmpty": { "description": "Center placeholder when the log buffer is empty." }
+}

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../models/device.dart';
 import '../services/nle_error.dart';
 import '../state/auth_failure_coordinator.dart';
@@ -85,7 +86,7 @@ class _InteractiveModePillsState extends ConsumerState<InteractiveModePills> {
       return;
     } catch (_) {
       if (!mounted) return;
-      _revert('Couldn\'t change mode');
+      _revert(AppLocalizations.of(context).modeChangeFailed);
       return;
     }
 
@@ -108,9 +109,10 @@ class _InteractiveModePillsState extends ConsumerState<InteractiveModePills> {
     if (e.serverMessage != null && e.serverMessage!.isNotEmpty) {
       return e.serverMessage!;
     }
+    final l = AppLocalizations.of(context);
     return switch (e) {
-      NleClientError() => 'Server rejected mode change',
-      _ => "Couldn't change mode",
+      NleClientError() => l.modeChangeServerRejected,
+      _ => l.modeChangeFailed,
     };
   }
 

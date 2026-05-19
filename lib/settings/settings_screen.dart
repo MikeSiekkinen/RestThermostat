@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../models/auth_config.dart';
 import '../models/device.dart';
 import '../screens/logs/logs_screen.dart';
@@ -186,6 +187,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     final factory = ref.read(clientFactoryProvider);
     final client = factory(url, auth);
+    final l = AppLocalizations.of(context);
     try {
       final response = await client.getDevices();
       if (!mounted) return;
@@ -194,24 +196,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _testPassed = true;
         _gatedUrl = url;
         _gatedAuth = auth;
-        final count = response.devices.length;
-        _testSuccessMsg = count == 1
-            ? 'Connected — 1 device found.'
-            : 'Connected — $count devices found.';
+        _testSuccessMsg = l.settingsTestSuccess(response.devices.length);
       });
     } on NleAuthError catch (_) {
       if (!mounted) return;
       setState(() {
         _testing = false;
         _testPassed = false;
-        _testError = 'Authentication failed.';
+        _testError = l.connectFailedAuth;
       });
     } on NleError catch (_) {
       if (!mounted) return;
       setState(() {
         _testing = false;
         _testPassed = false;
-        _testError = "Couldn't reach server.";
+        _testError = l.connectFailedUnreachable;
       });
     }
   }
@@ -232,9 +231,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ref.read(activeServerProvider.notifier).set((url: url, auth: auth));
 
     if (!mounted) return;
+    final l = AppLocalizations.of(context);
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Connection settings saved.')));
+    ).showSnackBar(SnackBar(content: Text(l.settingsConnectionSaved)));
   }
 
   Future<void> _onRenameDevice(Device device, String currentDisplay) async {
@@ -260,26 +260,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _onDisconnect() async {
+    final l = AppLocalizations.of(context);
     final confirmed =
         await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
-            title: const Text('Disconnect from server?'),
-            content: const Text(
-              'This will remove your server settings and saved credentials. '
-              'Continue?',
-            ),
+            title: Text(l.settingsDisconnectDialogTitle),
+            content: Text(l.settingsDisconnectDialogBody),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
+                child: Text(l.settingsCancel),
               ),
               TextButton(
                 style: TextButton.styleFrom(
                   foregroundColor: Theme.of(context).colorScheme.error,
                 ),
                 onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Disconnect'),
+                child: Text(l.settingsDisconnectConfirm),
               ),
             ],
           ),
@@ -307,7 +305,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           );
         }
         return Scaffold(
-          appBar: AppBar(title: const Text('Settings')),
+          appBar: AppBar(
+            title: Text(AppLocalizations.of(context).settingsTitle),
+          ),
           body: SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -337,24 +337,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildConnectionSection(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SectionHeader(text: 'Connection'),
+          _SectionHeader(text: l.settingsConnectionSection),
           TextFormField(
             controller: _urlCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Server address',
-              hintText: 'nest.home or 192.168.1.42',
+            decoration: InputDecoration(
+              labelText: l.serverAddressLabel,
+              hintText: l.serverAddressHint,
             ),
             keyboardType: TextInputType.url,
             autocorrect: false,
             enableSuggestions: false,
             validator: (v) {
               final raw = v ?? '';
-              if (raw.trim().isEmpty) return 'Server address is required.';
+              if (raw.trim().isEmpty) return l.serverAddressRequired;
               try {
                 normalizeServerUrl(raw);
                 return null;
@@ -365,26 +366,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const SizedBox(height: 12),
           ExpansionTile(
-            title: const Text('Advanced'),
+            title: Text(l.advancedSectionTitle),
             initiallyExpanded: _advancedExpanded,
             onExpansionChanged: (v) => setState(() => _advancedExpanded = v),
             childrenPadding: const EdgeInsets.symmetric(vertical: 8),
             children: [
               DropdownButtonFormField<_AuthChoice>(
                 initialValue: _authChoice,
-                decoration: const InputDecoration(labelText: 'Authentication'),
-                items: const [
+                decoration: InputDecoration(labelText: l.authChoiceLabel),
+                items: [
                   DropdownMenuItem(
                     value: _AuthChoice.none,
-                    child: Text('None'),
+                    child: Text(l.authChoiceNone),
                   ),
                   DropdownMenuItem(
                     value: _AuthChoice.basic,
-                    child: Text('Basic'),
+                    child: Text(l.authChoiceBasic),
                   ),
                   DropdownMenuItem(
                     value: _AuthChoice.bearer,
-                    child: Text('Bearer'),
+                    child: Text(l.authChoiceBearer),
                   ),
                 ],
                 onChanged: (v) {
@@ -398,7 +399,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _userCtrl,
-                  decoration: const InputDecoration(labelText: 'Username'),
+                  decoration: InputDecoration(labelText: l.authUsernameLabel),
                   autocorrect: false,
                   enableSuggestions: false,
                 ),
@@ -406,7 +407,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 TextFormField(
                   controller: _passCtrl,
                   decoration: InputDecoration(
-                    labelText: 'Password',
+                    labelText: l.authPasswordLabel,
                     suffixIcon: IconButton(
                       icon: Icon(
                         _passwordVisible
@@ -416,8 +417,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       onPressed: () =>
                           setState(() => _passwordVisible = !_passwordVisible),
                       tooltip: _passwordVisible
-                          ? 'Hide password'
-                          : 'Show password',
+                          ? l.authPasswordHide
+                          : l.authPasswordShow,
                     ),
                   ),
                   obscureText: !_passwordVisible,
@@ -429,14 +430,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 TextFormField(
                   controller: _tokenCtrl,
                   decoration: InputDecoration(
-                    labelText: 'Token',
+                    labelText: l.authTokenLabel,
                     suffixIcon: IconButton(
                       icon: Icon(
                         _tokenVisible ? Icons.visibility_off : Icons.visibility,
                       ),
                       onPressed: () =>
                           setState(() => _tokenVisible = !_tokenVisible),
-                      tooltip: _tokenVisible ? 'Hide token' : 'Show token',
+                      tooltip: _tokenVisible
+                          ? l.authTokenHide
+                          : l.authTokenShow,
                     ),
                   ),
                   obscureText: !_tokenVisible,
@@ -472,14 +475,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           width: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Test connection'),
+                      : Text(l.settingsTestConnection),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: FilledButton(
                   onPressed: _testPassed ? _onSave : null,
-                  child: const Text('Save'),
+                  child: Text(l.settingsSave),
                 ),
               ),
             ],
@@ -500,26 +503,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Widget _buildDevicesSection(BuildContext context) {
     final async = ref.watch(devicesSnapshotProvider);
+    final l = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SectionHeader(text: 'Devices'),
+          _SectionHeader(text: l.settingsDevicesSection),
           async.when(
             loading: () => const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Center(child: CircularProgressIndicator()),
             ),
             error: (e, _) => Text(
-              "Couldn't load devices: $e",
+              l.settingsDevicesLoadError(e),
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
             data: (snapshot) {
               if (snapshot.devices.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text('No devices.'),
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(l.settingsNoDevices),
                 );
               }
               return Column(
@@ -533,18 +537,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildDiagnosticsSection(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SectionHeader(text: 'Diagnostics'),
+          _SectionHeader(text: l.settingsDiagnosticsSection),
           ListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('View logs'),
-            subtitle: const Text(
-              'In-memory diagnostic log of recent app activity.',
-            ),
+            title: Text(l.settingsViewLogs),
+            subtitle: Text(l.settingsViewLogsSubtitle),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               Navigator.of(
@@ -559,18 +562,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Widget _buildAboutSection(BuildContext context) {
     final info = ref.watch(appInfoProvider);
+    final l = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionHeader(text: 'About'),
-          Text('Rest Thermostat ${info.version} (build ${info.buildNumber})'),
+          _SectionHeader(text: l.settingsAboutSection),
+          Text(l.settingsAboutVersion(info.version, info.buildNumber)),
           const SizedBox(height: 8),
-          const Text(settingsNleCredit),
+          Text(l.settingsAboutCredit),
           const SizedBox(height: 8),
-          const SelectableText('NLE docs: $settingsNleDocsUrl'),
-          const SelectableText('Source: $settingsRepoUrl'),
+          SelectableText(l.settingsAboutDocsLink(settingsNleDocsUrl)),
+          SelectableText(l.settingsAboutSourceLink(settingsRepoUrl)),
         ],
       ),
     );
@@ -578,16 +582,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Widget _buildDangerZone(BuildContext context) {
     final errorColor = Theme.of(context).colorScheme.error;
+    final l = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SectionHeader(text: 'Danger zone'),
+          _SectionHeader(text: l.settingsDangerZoneSection),
           TextButton(
             onPressed: _onDisconnect,
             style: TextButton.styleFrom(foregroundColor: errorColor),
-            child: const Text('Disconnect from server'),
+            child: Text(l.settingsDisconnect),
           ),
         ],
       ),
@@ -671,8 +676,9 @@ class _RenameDeviceDialogState extends State<_RenameDeviceDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return AlertDialog(
-      title: const Text('Rename thermostat'),
+      title: Text(l.settingsRenameDialogTitle),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -687,9 +693,9 @@ class _RenameDeviceDialogState extends State<_RenameDeviceDialog> {
           const SizedBox(height: 8),
           TextField(
             controller: _ctrl,
-            decoration: const InputDecoration(
-              labelText: 'Display name',
-              helperText: 'Leave empty to use the server name',
+            decoration: InputDecoration(
+              labelText: l.settingsRenameDisplayLabel,
+              helperText: l.settingsRenameHelp,
             ),
             autofocus: true,
           ),
@@ -698,11 +704,11 @@ class _RenameDeviceDialogState extends State<_RenameDeviceDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(null),
-          child: const Text('Cancel'),
+          child: Text(l.settingsCancel),
         ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(_ctrl.text.trim()),
-          child: const Text('Save'),
+          child: Text(l.settingsSave),
         ),
       ],
     );

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:rest_thermostat/l10n/gen/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:rest_thermostat/models/device.dart';
@@ -56,6 +57,8 @@ void main() {
     Device? picked;
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: DevicePickerScreen(devices: devices, onPick: (d) => picked = d),
       ),
     );
@@ -73,7 +76,11 @@ void main() {
   ) async {
     var backTapped = false;
     await tester.pumpWidget(
-      MaterialApp(home: NoDevicesScreen(onBack: () => backTapped = true)),
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: NoDevicesScreen(onBack: () => backTapped = true),
+      ),
     );
 
     expect(find.text('No thermostats registered.'), findsOneWidget);

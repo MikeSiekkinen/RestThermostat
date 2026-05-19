@@ -135,7 +135,7 @@ class _StatusRowState extends State<StatusRow>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                status.label,
+                status.label(context),
                 style: EmberTypography.labelSmall(
                   color: EmberColors.textPrimary,
                 ),

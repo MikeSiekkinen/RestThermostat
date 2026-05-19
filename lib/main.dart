@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'l10n/gen/app_localizations.dart';
 import 'models/device.dart';
 import 'onboarding/onboarding_flow.dart';
 import 'screens/home/home_body.dart';
@@ -61,9 +62,11 @@ class RestThermostatApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Rest Thermostat',
+      onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
       themeMode: ThemeMode.dark,
       darkTheme: emberTheme,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: _Bootstrap(store: store ?? FlutterOnboardingStore()),
     );
   }
@@ -196,12 +199,13 @@ class _HomeState extends ConsumerState<_Home> {
   void _showAuthFailureSnackbar() {
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
+    final l = AppLocalizations.of(context);
     messenger.clearSnackBars();
     messenger.showSnackBar(
       SnackBar(
-        content: const Text('Authentication failed.'),
+        content: Text(l.homeAuthFailed),
         action: SnackBarAction(
-          label: 'OPEN SETTINGS',
+          label: l.homeAuthOpenSettingsAction,
           onPressed: () {
             ref.read(authFailureCoordinatorProvider).reset();
             Navigator.of(context).push(
@@ -243,9 +247,9 @@ class _HomeState extends ConsumerState<_Home> {
       if (wasMismatch && !_fallbackSnackbarShown) {
         _fallbackSnackbarShown = true;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              "Active device changed — it wasn't in the latest device list.",
+              AppLocalizations.of(context).homeActiveDeviceFallback,
             ),
           ),
         );
@@ -323,10 +327,10 @@ class _HomeState extends ConsumerState<_Home> {
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
-          title: const Text('Rest Thermostat'),
+          title: Text(AppLocalizations.of(context).homeAppBarTitle),
           actions: [
             IconButton(
-              tooltip: 'Settings',
+              tooltip: AppLocalizations.of(context).homeSettingsTooltip,
               icon: const Icon(Icons.settings),
               onPressed: () {
                 Navigator.of(context).push(
@@ -347,7 +351,9 @@ class _HomeState extends ConsumerState<_Home> {
           child: async.when(
             data: (snapshot) {
               if (snapshot.devices.isEmpty) {
-                return const Center(child: Text('No devices'));
+                return Center(
+                  child: Text(AppLocalizations.of(context).homeNoDevices),
+                );
               }
               return Column(
                 children: [
@@ -369,7 +375,9 @@ class _HomeState extends ConsumerState<_Home> {
               );
             },
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('Error: $e')),
+            error: (e, _) => Center(
+              child: Text(AppLocalizations.of(context).homeErrorPrefix(e)),
+            ),
           ),
         ),
       ),

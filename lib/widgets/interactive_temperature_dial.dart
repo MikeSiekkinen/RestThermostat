@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../models/device.dart';
 import '../services/nle_error.dart';
 import '../state/auth_failure_coordinator.dart';
@@ -141,7 +142,10 @@ class _InteractiveTemperatureDialState
       return;
     } catch (_) {
       if (!mounted) return;
-      _showSnack('Couldn\'t update temperature', retryC: clamped);
+      _showSnack(
+        AppLocalizations.of(context).dialTemperatureFailed,
+        retryC: clamped,
+      );
       setState(() {
         _optimisticC = null;
         _pendingConfirmC = null;
@@ -200,7 +204,10 @@ class _InteractiveTemperatureDialState
     );
     _confirmTimer = Timer(const Duration(seconds: 7), () {
       if (!mounted) return;
-      _showSnack('Couldn\'t confirm new temperature', retryC: expectedC);
+      _showSnack(
+        AppLocalizations.of(context).dialTemperatureNotConfirmed,
+        retryC: expectedC,
+      );
       _confirmSub?.close();
       _confirmSub = null;
       _pendingConfirmC = null;
@@ -215,7 +222,7 @@ class _InteractiveTemperatureDialState
       SnackBar(
         content: Text(message),
         action: SnackBarAction(
-          label: 'Retry',
+          label: AppLocalizations.of(context).dialRetry,
           onPressed: () => _commit(retryC),
         ),
       ),

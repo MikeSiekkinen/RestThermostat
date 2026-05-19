@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../theme/colors.dart';
 import '../theme/typography.dart';
 
@@ -43,7 +44,7 @@ class DeviceOfflineOverlay extends StatelessWidget {
                 border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
               ),
               child: Text(
-                'DEVICE OFFLINE',
+                AppLocalizations.of(context).deviceOfflineLabel,
                 style: EmberTypography.labelSmall(
                   color: EmberColors.textPrimary,
                 ),

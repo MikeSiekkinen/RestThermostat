@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../models/device.dart';
 import '../services/device_display_name.dart';
 import '../services/state_derivation.dart';
@@ -70,7 +71,7 @@ class DevicePickerSheet extends StatelessWidget {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Devices',
+                  AppLocalizations.of(context).devicePickerSheetHeader,
                   style: EmberTypography.labelSmall(
                     color: EmberColors.textSecondary,
                   ),

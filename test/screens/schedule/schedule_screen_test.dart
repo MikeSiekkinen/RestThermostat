@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:rest_thermostat/l10n/gen/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
@@ -42,19 +43,13 @@ _Harness _setup({
     ],
     child: MaterialApp(
       locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: const [Locale('en', 'GB'), Locale('en', 'US')],
-      home: Localizations(
-        locale: locale,
-        delegates: const [
-          DefaultMaterialLocalizations.delegate,
-          DefaultWidgetsLocalizations.delegate,
-        ],
-        child: MediaQuery(
-          data: MediaQueryData(alwaysUse24HourFormat: use24Hour),
-          child: ScheduleScreen(
-            serial: serial,
-            temperatureScale: temperatureScale,
-          ),
+      home: MediaQuery(
+        data: MediaQueryData(alwaysUse24HourFormat: use24Hour),
+        child: ScheduleScreen(
+          serial: serial,
+          temperatureScale: temperatureScale,
         ),
       ),
     ),

@@ -1,6 +1,8 @@
+import 'package:flutter/material.dart';
+
+import '../l10n/gen/app_localizations.dart';
 import '../models/device.dart';
 import '../theme/colors.dart';
-import 'package:flutter/material.dart' show Color;
 
 /// Derived single-glance device status per `docs/DESIGN.md` §9.2.
 ///
@@ -14,14 +16,19 @@ enum DeviceStatus {
   idle,
   off;
 
-  /// Display label rendered next to the pulsing dot.
-  String get label => switch (this) {
-    heating => 'Heating',
-    cooling => 'Cooling',
-    fanOnly => 'Fan only',
-    idle => 'Idle',
-    off => 'Off',
-  };
+  /// Display label rendered next to the pulsing dot. Pulls from
+  /// AppLocalizations so the screen reader + visible text stays in the
+  /// configured locale.
+  String label(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return switch (this) {
+      heating => l.statusHeating,
+      cooling => l.statusCooling,
+      fanOnly => l.statusFanOnly,
+      idle => l.statusIdle,
+      off => l.statusOff,
+    };
+  }
 
   /// Color of the pulsing dot in the status row.
   ///

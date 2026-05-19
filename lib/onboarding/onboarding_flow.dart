@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../models/auth_config.dart';
 import '../models/device.dart';
 import '../services/nle_api_client.dart';
@@ -76,9 +77,13 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       });
       return const ConnectSuccess();
     } on NleAuthError catch (_) {
-      return const ConnectInlineError('Authentication failed.');
+      if (!mounted) return const ConnectInlineError('');
+      final l = AppLocalizations.of(context);
+      return ConnectInlineError(l.connectFailedAuth);
     } on NleError catch (_) {
-      return const ConnectInlineError("Couldn't reach server.");
+      if (!mounted) return const ConnectInlineError('');
+      final l = AppLocalizations.of(context);
+      return ConnectInlineError(l.connectFailedUnreachable);
     }
   }
 

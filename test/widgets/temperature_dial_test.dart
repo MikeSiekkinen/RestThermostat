@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:rest_thermostat/l10n/gen/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rest_thermostat/models/device.dart';
 import 'package:rest_thermostat/theme/colors.dart';
@@ -17,6 +18,8 @@ Widget _host(Widget child, {bool disableAnimations = false}) {
   // Wrap in MaterialApp so Theme + Directionality + MediaQuery are present,
   // and force a known size so CustomPaint has stable bounds.
   return MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(
       body: MediaQuery(
         data: MediaQueryData(disableAnimations: disableAnimations),

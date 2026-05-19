@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../models/device.dart';
 import '../services/nle_error.dart';
 import '../state/auth_failure_coordinator.dart';
@@ -14,6 +15,10 @@ import '../theme/typography.dart';
 /// clamped to NLE's `[4.5, 32]` setpoint range.
 const _defaultEcoLowC = 15.5;
 const _defaultEcoHighC = 29.5;
+
+/// Discriminator passed to [_messageFor] so the localized rejected/failed copy
+/// can branch between the toggle and the eco-temperatures save paths.
+enum _AwayAction { away, ecoTemps }
 
 /// Tappable "AWAY" chip per `docs/DESIGN.md` §9.4.
 ///
@@ -89,11 +94,11 @@ class _InteractiveAwayChipState extends ConsumerState<InteractiveAwayChip> {
       return;
     } on NleError catch (e) {
       if (!mounted) return;
-      _revert(_messageFor(e, action: 'away'));
+      _revert(_messageFor(e, action: _AwayAction.away));
       return;
     } catch (_) {
       if (!mounted) return;
-      _revert('Couldn\'t toggle away');
+      _revert(AppLocalizations.of(context).awayToggleFailed);
       return;
     }
     if (!mounted) return;
@@ -146,11 +151,11 @@ class _InteractiveAwayChipState extends ConsumerState<InteractiveAwayChip> {
       return;
     } on NleError catch (e) {
       if (!mounted) return;
-      _showSnack(_messageFor(e, action: 'eco temps'));
+      _showSnack(_messageFor(e, action: _AwayAction.ecoTemps));
       return;
     } catch (_) {
       if (!mounted) return;
-      _showSnack('Couldn\'t save eco temperatures');
+      _showSnack(AppLocalizations.of(context).awayEcoSaveFailed);
       return;
     }
     if (!mounted) return;
@@ -167,13 +172,20 @@ class _InteractiveAwayChipState extends ConsumerState<InteractiveAwayChip> {
     messenger?.showSnackBar(SnackBar(content: Text(message)));
   }
 
-  String _messageFor(NleError e, {required String action}) {
+  String _messageFor(NleError e, {required _AwayAction action}) {
     if (e.serverMessage != null && e.serverMessage!.isNotEmpty) {
       return e.serverMessage!;
     }
+    final l = AppLocalizations.of(context);
+    final rejected = action == _AwayAction.away
+        ? l.awayToggleServerRejected
+        : l.awayEcoSaveServerRejected;
+    final failed = action == _AwayAction.away
+        ? l.awayToggleFailed
+        : l.awayEcoSaveFailed;
     return switch (e) {
-      NleClientError() => 'Server rejected $action change',
-      _ => "Couldn't change $action",
+      NleClientError() => rejected,
+      _ => failed,
     };
   }
 
@@ -183,15 +195,14 @@ class _InteractiveAwayChipState extends ConsumerState<InteractiveAwayChip> {
     // shown") but the hit target stays at 48dp so a long-press in the area
     // can still toggle away on. This matches §10.5 (text-only, no icon).
     final away = _displayedAway;
+    final l = AppLocalizations.of(context);
     return Semantics(
       // A toggle role (`toggled: ...`) is the cleanest screen-reader mapping
       // for a binary state with a tap action and a long-press for the eco
       // temperatures menu. The full label spells out both gestures so blind
       // users discover the long-press affordance — the visible UI has no
       // analogue for it.
-      label: away
-          ? 'Away mode on, tap to disable. Long press to edit eco temperatures.'
-          : 'Away mode off, tap to enable. Long press to edit eco temperatures.',
+      label: away ? l.awaySemanticOn : l.awaySemanticOff,
       toggled: away,
       button: true,
       child: ExcludeSemantics(
@@ -207,7 +218,7 @@ class _InteractiveAwayChipState extends ConsumerState<InteractiveAwayChip> {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 child: away
                     ? Text(
-                        'AWAY',
+                        l.awayChipLabel,
                         style: EmberTypography.labelSmall(
                           color: EmberColors.eco,
                         ),
@@ -301,12 +312,12 @@ class _EcoTempsSheetState extends State<_EcoTempsSheet> {
               ),
             ),
             Text(
-              'ECO TEMPERATURES',
+              AppLocalizations.of(context).ecoSheetTitle,
               style: EmberTypography.labelSmall(color: EmberColors.textPrimary),
             ),
             const SizedBox(height: 16),
             _SliderRow(
-              label: 'LOW (HEAT)',
+              label: AppLocalizations.of(context).ecoSheetLowLabel,
               valueC: _lowC,
               minC: _minC,
               maxC: _maxC,
@@ -316,7 +327,7 @@ class _EcoTempsSheetState extends State<_EcoTempsSheet> {
             ),
             const SizedBox(height: 16),
             _SliderRow(
-              label: 'HIGH (COOL)',
+              label: AppLocalizations.of(context).ecoSheetHighLabel,
               valueC: _highC,
               minC: _minC,
               maxC: _maxC,
@@ -327,7 +338,7 @@ class _EcoTempsSheetState extends State<_EcoTempsSheet> {
             const SizedBox(height: 12),
             if (!_canSave)
               Text(
-                'Low must be lower than high.',
+                AppLocalizations.of(context).ecoSheetValidationLowHigh,
                 style: EmberTypography.bodyMedium(color: EmberColors.eco),
               ),
             const SizedBox(height: 12),
@@ -336,7 +347,10 @@ class _EcoTempsSheetState extends State<_EcoTempsSheet> {
               children: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: Text('CANCEL', style: EmberTypography.labelSmall()),
+                  child: Text(
+                    AppLocalizations.of(context).ecoSheetCancel,
+                    style: EmberTypography.labelSmall(),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 TextButton(
@@ -346,7 +360,7 @@ class _EcoTempsSheetState extends State<_EcoTempsSheet> {
                         ).pop(EcoTemperaturesChoice(lowC: _lowC, highC: _highC))
                       : null,
                   child: Text(
-                    'SAVE',
+                    AppLocalizations.of(context).ecoSheetSave,
                     style: EmberTypography.labelSmall(
                       color: _canSave
                           ? EmberColors.eco

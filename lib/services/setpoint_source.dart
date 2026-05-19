@@ -1,3 +1,6 @@
+import 'package:flutter/widgets.dart';
+
+import '../l10n/gen/app_localizations.dart';
 import '../models/device.dart';
 import '../models/schedule.dart';
 import '../widgets/temperature_dial.dart';
@@ -21,11 +24,15 @@ enum SetpointSource {
   scheduled,
   manual;
 
-  String get label => switch (this) {
-    away => 'Away',
-    scheduled => 'Scheduled',
-    manual => 'Manual',
-  };
+  /// Localized subtitle rendered under the Setpoint stat tile on Details.
+  String label(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return switch (this) {
+      away => l.detailsSetpointSourceAway,
+      scheduled => l.detailsSetpointSourceScheduled,
+      manual => l.detailsSetpointSourceManual,
+    };
+  }
 }
 
 /// Half-a-tick on the temperature dial, used as the comparison epsilon for

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/gen/app_localizations.dart';
 import '../../models/device.dart';
 import '../../services/setpoint_source.dart';
 import '../../state/providers.dart';
@@ -48,44 +49,50 @@ class DetailsScreen extends ConsumerWidget {
       now: now(),
     );
     final activeServer = ref.watch(activeServerProvider);
+    final l = AppLocalizations.of(context);
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       children: [
-        _SectionHeading('CURRENT'),
+        _SectionHeading(l.detailsSectionCurrent),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: _StatTile(
-                label: 'HUMIDITY',
+                label: l.detailsHumidity,
                 value: '${device.humidity}%',
-                sub: _comfortLabel(device.humidity),
+                sub: _comfortLabel(context, device.humidity),
               ),
             ),
             const SizedBox(width: 16),
             Expanded(
               child: _StatTile(
-                label: 'SETPOINT',
+                label: l.detailsSetpoint,
                 value: _setpointDisplay(device),
-                sub: source.label,
-                subTooltip:
-                    'Source is derived locally from schedule + away state. '
-                    '(Derived)',
+                sub: source.label(context),
+                subTooltip: l.detailsSetpointSourceTooltip,
               ),
             ),
           ],
         ),
         const SizedBox(height: 24),
-        _SectionHeading('SYSTEM'),
+        _SectionHeading(l.detailsSectionSystem),
         _InfoRow(
-          label: 'STATUS',
-          value: device.isAvailable ? 'Connected' : 'Offline',
+          label: l.detailsStatus,
+          value: device.isAvailable
+              ? l.detailsStatusConnected
+              : l.detailsStatusOffline,
         ),
-        _InfoRow(label: 'SERVER', value: activeServer?.url ?? '—'),
         _InfoRow(
-          label: 'FIRMWARE',
-          value: device.softwareVersion.isEmpty ? '—' : device.softwareVersion,
+          label: l.detailsServer,
+          value: activeServer?.url ?? l.detailsLastSyncEmpty,
+        ),
+        _InfoRow(
+          label: l.detailsFirmware,
+          value: device.softwareVersion.isEmpty
+              ? l.detailsLastSyncEmpty
+              : device.softwareVersion,
         ),
         _LastSyncRow(lastSyncAt: lastSyncAt, now: now),
       ],
@@ -107,10 +114,11 @@ class DetailsScreen extends ConsumerWidget {
   String _format(double c, String unit) =>
       '${TemperatureDial.celsiusToDisplay(c, unit).round()}°';
 
-  String _comfortLabel(int humidity) {
-    if (humidity < 30) return 'Dry';
-    if (humidity <= 50) return 'Comfortable';
-    return 'Humid';
+  String _comfortLabel(BuildContext context, int humidity) {
+    final l = AppLocalizations.of(context);
+    if (humidity < 30) return l.detailsComfortDry;
+    if (humidity <= 50) return l.detailsComfortComfortable;
+    return l.detailsComfortHumid;
   }
 }
 
@@ -216,15 +224,16 @@ class _LastSyncRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final relative = lastSyncAt == null
-        ? '—'
-        : _formatRelative(now().difference(lastSyncAt!));
+        ? l.detailsLastSyncEmpty
+        : _formatRelative(context, now().difference(lastSyncAt!));
     final absolute = lastSyncAt == null
-        ? 'No successful poll yet'
+        ? l.detailsLastSyncNoPoll
         : lastSyncAt!.toLocal().toString();
 
     return _InfoRow(
-      label: 'LAST SYNC',
+      label: l.detailsLastSync,
       value: relative,
       trailing: Tooltip(
         message: absolute,
@@ -237,18 +246,19 @@ class _LastSyncRow extends StatelessWidget {
     );
   }
 
-  String _formatRelative(Duration d) {
-    if (d.inSeconds < 5) return 'just now';
-    if (d.inSeconds < 60) return '${d.inSeconds} seconds ago';
+  String _formatRelative(BuildContext context, Duration d) {
+    final l = AppLocalizations.of(context);
+    if (d.inSeconds < 5) return l.detailsLastSyncJustNow;
+    if (d.inSeconds < 60) return l.detailsLastSyncSeconds(d.inSeconds);
     if (d.inMinutes < 60) {
       final m = d.inMinutes;
-      return m == 1 ? '1 minute ago' : '$m minutes ago';
+      return m == 1 ? l.detailsLastSyncOneMinute : l.detailsLastSyncMinutes(m);
     }
     if (d.inHours < 24) {
       final h = d.inHours;
-      return h == 1 ? '1 hour ago' : '$h hours ago';
+      return h == 1 ? l.detailsLastSyncOneHour : l.detailsLastSyncHours(h);
     }
     final days = d.inDays;
-    return days == 1 ? '1 day ago' : '$days days ago';
+    return days == 1 ? l.detailsLastSyncOneDay : l.detailsLastSyncDays(days);
   }
 }

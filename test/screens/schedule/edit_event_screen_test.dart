@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:rest_thermostat/l10n/gen/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -78,6 +79,7 @@ _Harness _setup({
     ],
     child: MaterialApp(
       locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: const [Locale('en', 'GB'), Locale('en', 'US')],
       home: Builder(
         builder: (context) => Scaffold(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:rest_thermostat/l10n/gen/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rest_thermostat/models/device.dart';
 import 'package:rest_thermostat/theme/colors.dart';
@@ -8,6 +9,8 @@ void main() {
   testWidgets('renders nothing when count < 2', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: DeviceIndicatorDots(
             count: 1,
@@ -24,6 +27,8 @@ void main() {
   testWidgets('renders one dot per device when count >= 2', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: DeviceIndicatorDots(
             count: 3,
@@ -39,6 +44,8 @@ void main() {
   testWidgets('active dot uses mode-colored fill', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: DeviceIndicatorDots(
             count: 2,

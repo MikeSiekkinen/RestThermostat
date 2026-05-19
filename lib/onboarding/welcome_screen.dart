@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
+
 class WelcomeScreen extends StatelessWidget {
   final VoidCallback onStart;
   static const nleDocsUrl = 'https://docs.nolongerevil.com';
@@ -8,6 +10,7 @@ class WelcomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -17,25 +20,21 @@ class WelcomeScreen extends StatelessWidget {
             children: [
               const Spacer(),
               Text(
-                'Rest Thermostat',
+                l.welcomeTitle,
                 style: Theme.of(context).textTheme.headlineMedium,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Connect to your NoLongerEvil server to control your '
-                'Gen 1/2 Nest thermostats.',
-                textAlign: TextAlign.center,
-              ),
+              Text(l.welcomeBody, textAlign: TextAlign.center),
               const SizedBox(height: 8),
-              const SelectableText(
-                'Docs: $nleDocsUrl',
+              SelectableText(
+                l.welcomeDocsLink(nleDocsUrl),
                 textAlign: TextAlign.center,
               ),
               const Spacer(),
               FilledButton(
                 onPressed: onStart,
-                child: const Text('Get started'),
+                child: Text(l.welcomeStartButton),
               ),
             ],
           ),

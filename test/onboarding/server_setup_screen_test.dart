@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:rest_thermostat/l10n/gen/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:rest_thermostat/models/auth_config.dart';
@@ -12,6 +13,8 @@ void main() {
     AuthConfig initialAuth = const AuthNone(),
   }) {
     return MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: ServerSetupScreen(
         initialUrl: initialUrl,
         initialAuth: initialAuth,

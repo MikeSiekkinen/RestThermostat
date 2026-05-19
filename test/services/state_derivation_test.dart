@@ -163,13 +163,8 @@ void main() {
     );
   });
 
-  group('DeviceStatus labels', () {
-    test('match DESIGN §9.2 wording', () {
-      expect(DeviceStatus.heating.label, 'Heating');
-      expect(DeviceStatus.cooling.label, 'Cooling');
-      expect(DeviceStatus.fanOnly.label, 'Fan only');
-      expect(DeviceStatus.idle.label, 'Idle');
-      expect(DeviceStatus.off.label, 'Off');
-    });
-  });
+  // DeviceStatus.label is now context-bound — see app_en.arb keys
+  // statusHeating / statusCooling / statusFanOnly / statusIdle / statusOff
+  // and the widget test in test/widgets/status_row_test.dart for the
+  // localized rendering.
 }

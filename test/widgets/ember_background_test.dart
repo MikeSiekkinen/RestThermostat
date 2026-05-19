@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:rest_thermostat/l10n/gen/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rest_thermostat/models/device.dart';
 import 'package:rest_thermostat/theme/colors.dart';
@@ -69,6 +70,8 @@ void main() {
     ) async {
       await tester.pumpWidget(
         const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: EmberBackground(
             mode: DeviceMode.heat,
             child: Text('hello', textDirection: TextDirection.ltr),
@@ -84,6 +87,8 @@ void main() {
     testWidgets('rebuilds with new mode without throwing', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: EmberBackground(
             mode: DeviceMode.heat,
             child: SizedBox.shrink(),
@@ -93,6 +98,8 @@ void main() {
 
       await tester.pumpWidget(
         const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: EmberBackground(
             mode: DeviceMode.cool,
             child: SizedBox.shrink(),
