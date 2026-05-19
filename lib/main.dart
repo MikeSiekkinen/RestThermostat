@@ -17,6 +17,7 @@ import 'theme/ember_theme.dart';
 import 'widgets/device_indicator_dots.dart';
 import 'widgets/device_picker_sheet.dart';
 import 'widgets/ember_background.dart';
+import 'widgets/stale_state_pill.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -301,16 +302,23 @@ class _HomeState extends ConsumerState<_Home> {
               if (snapshot.devices.isEmpty) {
                 return const Center(child: Text('No devices'));
               }
-              return MainShell(
-                device: activeDevice!,
-                overrides: widget.overrides,
-                lastSyncAt: lastSyncAt,
-                homeTab: _buildHomeTab(
-                  context,
-                  snapshot.devices,
-                  activeDevice,
-                  activeSerial,
-                ),
+              return Column(
+                children: [
+                  const StaleStatePill(),
+                  Expanded(
+                    child: MainShell(
+                      device: activeDevice!,
+                      overrides: widget.overrides,
+                      lastSyncAt: lastSyncAt,
+                      homeTab: _buildHomeTab(
+                        context,
+                        snapshot.devices,
+                        activeDevice,
+                        activeSerial,
+                      ),
+                    ),
+                  ),
+                ],
               );
             },
             loading: () => const Center(child: CircularProgressIndicator()),

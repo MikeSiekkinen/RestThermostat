@@ -43,9 +43,18 @@ class ConnectionStatus {
     lastSuccessAt: null,
   );
 
-  /// True when the pill should render at all. Hidden when the data is fresh
-  /// AND we're not in any of the failure states.
-  bool get shouldShowPill => !isFresh || isRateLimited;
+  /// True when the pill should render at all. The pill stays hidden in the
+  /// quiescent "no signal yet" state (cold start before the first poll
+  /// completes) so it doesn't flash "Not connected" on every launch — the
+  /// pill is for *recovering* from a known-bad state, not announcing the
+  /// initial boot. Visible whenever there's an active failure/recovery
+  /// signal (rate-limited, reconnecting, or stale-with-history).
+  bool get shouldShowPill {
+    if (isRateLimited || isReconnecting) return true;
+    if (isFresh) return false;
+    // Stale but with a prior success → show the "Last updated…" pill.
+    return lastSuccessAt != null;
+  }
 
   @override
   bool operator ==(Object other) {
