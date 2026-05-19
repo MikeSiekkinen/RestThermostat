@@ -60,6 +60,76 @@ void main() {
     });
   });
 
+  group('TemperatureDial.celsiusForTickIndex', () {
+    test('inverts tickIndexForCelsius at the endpoints', () {
+      expect(TemperatureDial.celsiusForTickIndex(0), 4.5);
+      expect(
+        TemperatureDial.celsiusForTickIndex(TemperatureDial.tickCount - 1),
+        32.0,
+      );
+    });
+
+    test('clamps out-of-range indexes', () {
+      expect(TemperatureDial.celsiusForTickIndex(-5), 4.5);
+      expect(TemperatureDial.celsiusForTickIndex(9999), 32.0);
+    });
+
+    test('round-trips for a sample tick', () {
+      // tick 36 → roughly the midpoint. Round-tripping through
+      // tickIndexForCelsius should return the same tick.
+      final c = TemperatureDial.celsiusForTickIndex(36);
+      expect(TemperatureDial.tickIndexForCelsius(c), 36);
+    });
+  });
+
+  group('TemperatureDial.tickIndexForLocalPoint', () {
+    const size = Size(240, 240);
+    final cx = size.width / 2, cy = size.height / 2;
+
+    test('center returns null (no angle)', () {
+      expect(
+        TemperatureDial.tickIndexForLocalPoint(Offset(cx, cy), size),
+        isNull,
+      );
+    });
+
+    test('south-west (tick 0) returns tick 0', () {
+      // 135° in screen coords (y-down): cos=−√2/2, sin=+√2/2.
+      const r = 100.0;
+      final p = Offset(cx + r * -0.7071, cy + r * 0.7071);
+      expect(TemperatureDial.tickIndexForLocalPoint(p, size), 0);
+    });
+
+    test('north (top) returns mid-arc tick (~tick 35)', () {
+      // -π/2 in atan2 is straight up. From arcStart=3π/4, sweeping to
+      // -π/2+2π = 3π/2, position = 3π/2 - 3π/4 = 3π/4. Step = 3π/2 / 71.
+      // 3π/4 / step = (3π/4) / (3π/142) = 35.5 → rounds to 36 (or 35 by
+      // tiebreak). We just assert it lands in mid-range.
+      final p = Offset(cx, cy - 100);
+      final tick = TemperatureDial.tickIndexForLocalPoint(p, size);
+      expect(tick, isNotNull);
+      expect(tick, inInclusiveRange(33, 38));
+    });
+
+    test('south-east (tick 71) returns final tick', () {
+      // 45° in screen coords.
+      const r = 100.0;
+      final p = Offset(cx + r * 0.7071, cy + r * 0.7071);
+      expect(
+        TemperatureDial.tickIndexForLocalPoint(p, size),
+        TemperatureDial.tickCount - 1,
+      );
+    });
+
+    test('south (bottom-gap mid) snaps to one of the endpoints', () {
+      // Straight down at angle +π/2. Falls in the bottom 90° gap; expect
+      // a clamp to either 0 or tickCount-1.
+      final p = Offset(cx, cy + 100);
+      final tick = TemperatureDial.tickIndexForLocalPoint(p, size);
+      expect(tick, anyOf(0, TemperatureDial.tickCount - 1));
+    });
+  });
+
   group('TemperatureDial.celsiusToDisplay', () {
     test('returns Celsius unchanged when unit is C', () {
       expect(TemperatureDial.celsiusToDisplay(20.0, 'C'), 20.0);

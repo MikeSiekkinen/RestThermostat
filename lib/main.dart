@@ -15,6 +15,7 @@ import 'state/providers.dart';
 import 'theme/ember_theme.dart';
 import 'widgets/ember_background.dart';
 import 'widgets/fan_widget.dart';
+import 'widgets/interactive_temperature_dial.dart';
 import 'widgets/mode_pills.dart';
 import 'widgets/status_row.dart';
 import 'widgets/temperature_dial.dart';
@@ -288,12 +289,9 @@ class _Home extends ConsumerWidget {
                     maxWidth: TemperatureDial.preferredDiameter,
                     maxHeight: TemperatureDial.preferredDiameter,
                   ),
-                  child: TemperatureDial(
-                    currentTemperatureCelsius: d.currentTemperature,
-                    targetTemperatureCelsius: d.targetTemperature,
-                    mode: d.mode,
+                  child: InteractiveTemperatureDial(
+                    device: d,
                     displayUnit: d.temperatureScale,
-                    capabilities: d.capabilities,
                   ),
                 ),
                 const SizedBox(height: 24),

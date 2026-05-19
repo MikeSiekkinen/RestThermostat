@@ -71,17 +71,45 @@ class NleApiClient {
   /// (never any credential). HTTP-level metadata is also captured by the dio
   /// interceptor automatically.
   ///
-  /// Errors propagate as [DioException] for the caller to surface in UI.
+  /// Retries once with a 2s backoff on transient failures (network errors and
+  /// 5xx responses) per DESIGN §2.3. 4xx responses (validation/auth) are
+  /// returned to the caller immediately — retrying won't help and the user
+  /// needs the snackbar surface. Errors propagate as [DioException].
+  ///
+  /// [retryDelay] is provided as an override for tests so they can run
+  /// without waiting on real wall-clock time.
   Future<void> sendCommand({
     required String serial,
     required String command,
     required Object? value,
+    Duration retryDelay = const Duration(seconds: 2),
   }) async {
     AppLogger.instance.commandIssued(command, value);
-    await dio.post<dynamic>(
-      '/command',
-      data: {'serial': serial, 'command': command, 'value': value},
-    );
+    final data = {'serial': serial, 'command': command, 'value': value};
+    try {
+      await dio.post<dynamic>('/command', data: data);
+    } on DioException catch (e) {
+      if (!_isTransient(e)) rethrow;
+      await Future<void>.delayed(retryDelay);
+      await dio.post<dynamic>('/command', data: data);
+    }
+  }
+
+  static bool _isTransient(DioException e) {
+    switch (e.type) {
+      case DioExceptionType.connectionError:
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.sendTimeout:
+        return true;
+      case DioExceptionType.badResponse:
+        final code = e.response?.statusCode ?? 0;
+        return code >= 500 && code < 600;
+      case DioExceptionType.cancel:
+      case DioExceptionType.badCertificate:
+      case DioExceptionType.unknown:
+        return false;
+    }
   }
 
   /// Thin wrapper over [sendCommand] that posts a full schedule object as the
