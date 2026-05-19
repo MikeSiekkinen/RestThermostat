@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'models/device.dart';
 import 'onboarding/onboarding_flow.dart';
+import 'screens/schedule/schedule_screen.dart';
 import 'services/app_info.dart';
 import 'services/device_display_name.dart';
 import 'services/onboarding_store.dart';
@@ -125,6 +126,7 @@ class _BootstrapState extends ConsumerState<_Bootstrap> {
           return LifecycleBridge(
             child: _Home(
               overrides: config.deviceNameOverrides,
+              activeSerial: config.activeSerial,
               onDisconnect: _onDisconnect,
             ),
           );
@@ -142,9 +144,14 @@ class _BootstrapState extends ConsumerState<_Bootstrap> {
 
 class _Home extends ConsumerWidget {
   final Map<String, String> overrides;
+  final String? activeSerial;
   final VoidCallback onDisconnect;
 
-  const _Home({required this.overrides, required this.onDisconnect});
+  const _Home({
+    required this.overrides,
+    required this.activeSerial,
+    required this.onDisconnect,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -160,6 +167,30 @@ class _Home extends ConsumerWidget {
       orElse: () => DeviceMode.off,
     );
 
+    // Active serial for the Schedule entry-point. Prefer the persisted
+    // active-device value; fall back to the first device in the snapshot when
+    // onboarding hasn't recorded one yet. Temporary wiring — #16 will replace
+    // this with a proper `activeSerial` provider.
+    final scheduleSerial =
+        activeSerial ??
+        async.maybeWhen(
+          data: (snapshot) =>
+              snapshot.devices.isEmpty ? null : snapshot.devices.first.serial,
+          orElse: () => null,
+        );
+    final scheduleDevice = async.maybeWhen<Device?>(
+      data: (snapshot) {
+        if (snapshot.devices.isEmpty) return null;
+        return snapshot.devices.firstWhere(
+          (d) => d.serial == scheduleSerial,
+          orElse: () => snapshot.devices.first,
+        );
+      },
+      orElse: () => null,
+    );
+    final scheduleScale = scheduleDevice?.temperatureScale ?? 'F';
+    final scheduleMode = scheduleDevice?.mode ?? DeviceMode.heat;
+
     return EmberBackground(
       mode: mode,
       child: Scaffold(
@@ -169,6 +200,22 @@ class _Home extends ConsumerWidget {
           elevation: 0,
           title: const Text('Rest Thermostat'),
           actions: [
+            if (scheduleSerial != null)
+              IconButton(
+                tooltip: 'Schedule',
+                icon: const Icon(Icons.calendar_month),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ScheduleScreen(
+                        serial: scheduleSerial,
+                        temperatureScale: scheduleScale,
+                        deviceMode: scheduleMode,
+                      ),
+                    ),
+                  );
+                },
+              ),
             IconButton(
               tooltip: 'Settings',
               icon: const Icon(Icons.settings),
