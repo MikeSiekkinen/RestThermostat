@@ -182,6 +182,11 @@ class _ModePill extends StatelessWidget {
     // stays at its natural ~32dp height so the row reads as designed; the
     // invisible ConstrainedBox + Center extends the gesture region to 48dp
     // above/below the pill without changing the visual.
+    //
+    // ExcludeSemantics around the visible pill suppresses the inner `Text`'s
+    // implicit semantics; otherwise TalkBack reads the label twice — once
+    // from the outer Semantics(label: ...) and again from the merged inner
+    // Text node ("Cool. Cool. Button. Double tap to activate").
     return Semantics(
       button: onTap != null,
       selected: isActive,
@@ -191,7 +196,7 @@ class _ModePill extends StatelessWidget {
         onTap: onTap,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 48),
-          child: Center(widthFactor: 1, child: pill),
+          child: Center(widthFactor: 1, child: ExcludeSemantics(child: pill)),
         ),
       ),
     );

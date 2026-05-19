@@ -259,10 +259,10 @@ void main() {
       );
 
       // Look up the Semantics annotation for the HEAT pill — the framework
-      // hoists onTap into a button role and merges the inner Text's
-      // implicit Semantics into our explicit label.
+      // hoists onTap into a button role. The inner Text is ExcludeSemantics'd
+      // so TalkBack hears the label exactly once.
       final semantics = tester.getSemantics(find.text('HEAT'));
-      expect(semantics.label, contains('HEAT'));
+      expect(semantics.label, 'HEAT');
       // The currently-active pill carries `selected`. `flagsCollection`
       // returns a Tristate (true/false/unset) so we compare via `toString()`
       // rather than the deprecated `hasFlag`.
