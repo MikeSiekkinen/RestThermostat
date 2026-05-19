@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/device.dart';
 import '../theme/colors.dart';
@@ -8,10 +9,15 @@ import '../theme/typography.dart';
 
 /// Segmented-ring temperature dial per `docs/DESIGN.md` §10.3.
 ///
-/// Presentational only — no gesture handling. Gestures land in issue #11.
 /// All temperatures flow through this widget in Celsius (the server's native
 /// unit per DESIGN §8.1); display-time conversion to Fahrenheit happens here
 /// based on [displayUnit] without ever changing the tick mapping.
+///
+/// When [onTargetDragUpdate] / [onTargetDragEnd] / [onTargetTap] are supplied,
+/// the dial becomes interactive per DESIGN §11.3: tap-to-jump, drag-anywhere,
+/// and a throttled tick-snap haptic. The widget never POSTs anything itself —
+/// the parent (see `InteractiveTemperatureDial`) owns optimistic state and
+/// the `set_temperature` write.
 ///
 /// Visual contract:
 /// - 72 discrete radial tick marks span 270° of arc (3.75° per tick), leaving
@@ -25,7 +31,7 @@ import '../theme/typography.dart';
 ///   current temperature, on top of whichever band it falls in.
 /// - Center text: target temp in Fraunces (`displayLarge`) above the current
 ///   temp readout in italic Instrument Serif (`bodyMediumItalic`).
-class TemperatureDial extends StatelessWidget {
+class TemperatureDial extends StatefulWidget {
   /// Total tick count. Mid-range of the §10.3 60-80 spec. 60 ticks per 5° of
   /// arc + 12 trailing makes the math clean (3.75° per tick).
   static const int tickCount = 72;
@@ -40,11 +46,11 @@ class TemperatureDial extends StatelessWidget {
   /// Arc start angle (radians). Tick 0 sits at the south-west, then ticks
   /// sweep clockwise across the top. Using Flutter's canvas convention where
   /// 0 rad points east and positive angles rotate clockwise.
-  static const double _arcStart = 3 * math.pi / 4; // 135°.
+  static const double arcStart = 3 * math.pi / 4; // 135°.
 
   /// Total arc swept by the tick band, in radians. 270° leaves a 90° gap at
   /// the bottom of the dial.
-  static const double _arcSweep = 3 * math.pi / 2;
+  static const double arcSweep = 3 * math.pi / 2;
 
   /// Diameter target in logical pixels (§10.3 "~240dp"). Provided so callers
   /// can wrap the widget in a `SizedBox`/`ConstrainedBox` with a known size;
@@ -76,6 +82,21 @@ class TemperatureDial extends StatelessWidget {
   /// Animation curve for the target-temp tween. Defaults to `easeInOutCubic`.
   final Curve animationCurve;
 
+  /// Called continuously while the user drags or taps the dial, with the new
+  /// celsius target derived from the touch point. The parent uses this for
+  /// the optimistic UI update during interaction. When this is `null`, the
+  /// dial does not install a [GestureDetector] and stays purely presentational.
+  final ValueChanged<double>? onTargetDragUpdate;
+
+  /// Called once at the end of a pan gesture, with the final celsius target.
+  /// The parent uses this to debounce + POST `set_temperature`. When `null`,
+  /// drag-end is ignored.
+  final ValueChanged<double>? onTargetDragEnd;
+
+  /// Called for a tap-to-jump gesture. Behaves like an end-of-pan write: the
+  /// parent should treat it as both an optimistic update AND a commit point.
+  final ValueChanged<double>? onTargetTap;
+
   const TemperatureDial({
     super.key,
     required this.currentTemperatureCelsius,
@@ -85,7 +106,18 @@ class TemperatureDial extends StatelessWidget {
     required this.capabilities,
     this.animationDuration = const Duration(milliseconds: 400),
     this.animationCurve = Curves.easeInOutCubic,
+    this.onTargetDragUpdate,
+    this.onTargetDragEnd,
+    this.onTargetTap,
   });
+
+  bool get _interactive =>
+      onTargetDragUpdate != null ||
+      onTargetDragEnd != null ||
+      onTargetTap != null;
+
+  @override
+  State<TemperatureDial> createState() => _TemperatureDialState();
 
   /// Map a Celsius temperature to a discrete tick index in `[0, tickCount)`.
   /// Clamps out-of-range values; never throws.
@@ -95,6 +127,40 @@ class TemperatureDial extends StatelessWidget {
     final ratio = (clamped - minCelsius) / (maxCelsius - minCelsius);
     final raw = (ratio * (tickCount - 1)).round();
     return raw.clamp(0, tickCount - 1);
+  }
+
+  /// Inverse of [tickIndexForCelsius]. Maps a tick index to the celsius
+  /// value at that position on the ring. Out-of-range indexes are clamped.
+  @visibleForTesting
+  static double celsiusForTickIndex(int index) {
+    final clamped = index.clamp(0, tickCount - 1);
+    final ratio = clamped / (tickCount - 1);
+    return minCelsius + ratio * (maxCelsius - minCelsius);
+  }
+
+  /// Map a local touch point inside a square widget [size] to a tick index,
+  /// or `null` if the touch falls in the bottom-90° gap that the ring doesn't
+  /// cover. Beyond-arc but still-meaningful angles are clamped to the
+  /// nearest end-tick (so the user can drag past the top edge without losing
+  /// the target).
+  @visibleForTesting
+  static int? tickIndexForLocalPoint(Offset local, Size size) {
+    final dx = local.dx - size.width / 2;
+    final dy = local.dy - size.height / 2;
+    if (dx == 0 && dy == 0) return null;
+
+    var theta = math.atan2(dy, dx); // [-π, π], east=0, south=+π/2.
+    if (theta < arcStart)
+      theta += 2 * math.pi; // normalize into [arcStart, arcStart + 2π).
+    final pos = theta - arcStart; // arc-local angle, 0 at tick 0.
+    if (pos > arcSweep) {
+      // Touch landed in the bottom-90° gap. Snap to whichever end is closer
+      // so a drag past the bottom doesn't suddenly drop tracking.
+      final gapMid = arcSweep + (2 * math.pi - arcSweep) / 2;
+      return pos < gapMid ? tickCount - 1 : 0;
+    }
+    final step = arcSweep / (tickCount - 1);
+    return (pos / step).round().clamp(0, tickCount - 1);
   }
 
   /// Convert a Celsius value to the chosen display unit. The temperature
@@ -123,20 +189,82 @@ class TemperatureDial extends StatelessWidget {
         return const [Color(0xFFA0A0A0), Color(0xFF606060)];
     }
   }
+}
+
+class _TemperatureDialState extends State<TemperatureDial> {
+  /// Last tick index for which a selection-click haptic fired. Used to throttle
+  /// haptics to once per tick crossed (DESIGN §11.3 + §11.5).
+  int? _lastHapticTick;
+
+  /// Monotonic wall time of the last haptic. Caps the rate at ≤30/s per
+  /// DESIGN §11.3.
+  Duration _lastHapticAt = Duration.zero;
+  final Stopwatch _stopwatch = Stopwatch()..start();
+
+  /// Last celsius value observed during a drag — used as the commit value on
+  /// `onPanEnd` since [DragEndDetails] doesn't carry a position.
+  double? _lastDragCelsius;
+
+  static const Duration _minHapticGap = Duration(milliseconds: 33); // ~30/s.
+
+  void _dispatchPan(Offset local, Size size) {
+    final tick = TemperatureDial.tickIndexForLocalPoint(local, size);
+    if (tick == null) return;
+    final celsius = TemperatureDial.celsiusForTickIndex(tick);
+    _lastDragCelsius = celsius;
+    _maybeHaptic(tick);
+    widget.onTargetDragUpdate?.call(celsius);
+  }
+
+  void _dispatchPanEnd() {
+    final celsius = _lastDragCelsius;
+    _lastDragCelsius = null;
+    if (celsius == null) return;
+    widget.onTargetDragEnd?.call(celsius);
+  }
+
+  void _dispatchTap(Offset local, Size size) {
+    final tick = TemperatureDial.tickIndexForLocalPoint(local, size);
+    if (tick == null) return;
+    final celsius = TemperatureDial.celsiusForTickIndex(tick);
+    _maybeHaptic(tick);
+    // A tap pushes the optimistic value AND commits — parent treats both
+    // callbacks as a single user intent.
+    widget.onTargetDragUpdate?.call(celsius);
+    widget.onTargetTap?.call(celsius);
+  }
+
+  void _maybeHaptic(int tick) {
+    if (_lastHapticTick == tick) return;
+    final now = _stopwatch.elapsed;
+    if (now - _lastHapticAt < _minHapticGap) {
+      // Too fast — record the tick so the next slower crossing still fires,
+      // but skip the haptic to honor the 30/s ceiling.
+      _lastHapticTick = tick;
+      return;
+    }
+    _lastHapticTick = tick;
+    _lastHapticAt = now;
+    HapticFeedback.selectionClick();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final targetIndex = tickIndexForCelsius(targetTemperatureCelsius);
-    final currentIndex = tickIndexForCelsius(currentTemperatureCelsius);
+    final targetIndex = TemperatureDial.tickIndexForCelsius(
+      widget.targetTemperatureCelsius,
+    );
+    final currentIndex = TemperatureDial.tickIndexForCelsius(
+      widget.currentTemperatureCelsius,
+    );
 
     // Format center text up-front so we don't recompute on every paint.
-    final targetDisplay = celsiusToDisplay(
-      targetTemperatureCelsius,
-      displayUnit,
+    final targetDisplay = TemperatureDial.celsiusToDisplay(
+      widget.targetTemperatureCelsius,
+      widget.displayUnit,
     );
-    final currentDisplay = celsiusToDisplay(
-      currentTemperatureCelsius,
-      displayUnit,
+    final currentDisplay = TemperatureDial.celsiusToDisplay(
+      widget.currentTemperatureCelsius,
+      widget.displayUnit,
     );
 
     final targetLabel = '${targetDisplay.round()}°';
@@ -152,29 +280,49 @@ class TemperatureDial extends StatelessWidget {
         begin: targetIndex.toDouble(),
         end: targetIndex.toDouble(),
       ),
-      duration: animationDuration,
-      curve: animationCurve,
+      duration: widget.animationDuration,
+      curve: widget.animationCurve,
       builder: (context, animatedIndex, _) {
-        return AspectRatio(
+        final paint = AspectRatio(
           aspectRatio: 1.0,
-          child: CustomPaint(
-            painter: _TemperatureDialPainter(
-              animatedActiveIndex: animatedIndex,
-              currentIndex: currentIndex,
-              gradientColors: gradientColorsFor(mode),
-            ),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(targetLabel, style: EmberTypography.displayLarge()),
-                  const SizedBox(height: 8),
-                  Text(currentLabel, style: EmberTypography.bodyMediumItalic()),
-                ],
-              ),
-            ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final size = Size(constraints.maxWidth, constraints.maxHeight);
+              final canvas = CustomPaint(
+                painter: _TemperatureDialPainter(
+                  animatedActiveIndex: animatedIndex,
+                  currentIndex: currentIndex,
+                  gradientColors: TemperatureDial.gradientColorsFor(
+                    widget.mode,
+                  ),
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(targetLabel, style: EmberTypography.displayLarge()),
+                      const SizedBox(height: 8),
+                      Text(
+                        currentLabel,
+                        style: EmberTypography.bodyMediumItalic(),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+              if (!widget._interactive) return canvas;
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onPanStart: (d) => _dispatchPan(d.localPosition, size),
+                onPanUpdate: (d) => _dispatchPan(d.localPosition, size),
+                onPanEnd: (_) => _dispatchPanEnd(),
+                onTapUp: (d) => _dispatchTap(d.localPosition, size),
+                child: canvas,
+              );
+            },
           ),
         );
+        return paint;
       },
     );
   }
@@ -212,11 +360,11 @@ class _TemperatureDialPainter extends CustomPainter {
     final tickInner = tickOuter - radius * _tickLengthRatio;
 
     final stepRadians =
-        TemperatureDial._arcSweep / (TemperatureDial.tickCount - 1);
+        TemperatureDial.arcSweep / (TemperatureDial.tickCount - 1);
     final lastIndex = TemperatureDial.tickCount - 1;
 
     for (int i = 0; i < TemperatureDial.tickCount; i++) {
-      final theta = TemperatureDial._arcStart + i * stepRadians;
+      final theta = TemperatureDial.arcStart + i * stepRadians;
       final cosTheta = math.cos(theta);
       final sinTheta = math.sin(theta);
       final outer = Offset(
