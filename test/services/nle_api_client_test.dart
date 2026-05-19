@@ -127,20 +127,104 @@ void main() {
       expect(capturedBody!['value'], 'heat');
     });
 
-    test('throws DioException on 500', () async {
+    test('throws DioException on persistent 500 (after one retry)', () async {
+      // Reply 500 to every POST; the retry should also see 500 and the call
+      // should ultimately throw. retryDelay overridden to zero so the test
+      // doesn't spend 2 real seconds waiting.
+      var calls = 0;
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            calls++;
+            handler.next(options);
+          },
+        ),
+      );
       dioAdapter.onPost(
         '/command',
         (server) => server.reply(500, {'error': 'server error'}),
         data: Matchers.any,
       );
-      expect(
+      await expectLater(
         () => client.sendCommand(
           serial: 'abc',
           command: 'set_mode',
           value: 'heat',
+          retryDelay: Duration.zero,
         ),
         throwsA(isA<DioException>()),
       );
+      // Initial attempt + 1 retry = 2 calls.
+      expect(calls, 2);
+    });
+
+    test('does NOT retry on 4xx (auth/validation)', () async {
+      var calls = 0;
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            calls++;
+            handler.next(options);
+          },
+        ),
+      );
+      dioAdapter.onPost(
+        '/command',
+        (server) => server.reply(401, {'error': 'unauthorized'}),
+        data: Matchers.any,
+      );
+      await expectLater(
+        () => client.sendCommand(
+          serial: 'abc',
+          command: 'set_mode',
+          value: 'heat',
+          retryDelay: Duration.zero,
+        ),
+        throwsA(isA<DioException>()),
+      );
+      expect(calls, 1);
+    });
+
+    test('retry succeeds on second attempt (transient 503)', () async {
+      // First call → 503 (via an interceptor that throws), second call → real
+      // 200 from the mock adapter. http_mock_adapter doesn't queue responses,
+      // so we use an interceptor to inject the first-call failure.
+      var calls = 0;
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            calls++;
+            if (calls == 1) {
+              handler.reject(
+                DioException(
+                  requestOptions: options,
+                  type: DioExceptionType.badResponse,
+                  response: Response(
+                    requestOptions: options,
+                    statusCode: 503,
+                    data: {'error': 'unavailable'},
+                  ),
+                ),
+              );
+              return;
+            }
+            handler.next(options);
+          },
+        ),
+      );
+      dioAdapter.onPost(
+        '/command',
+        (server) => server.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+
+      await client.sendCommand(
+        serial: 'abc',
+        command: 'set_mode',
+        value: 'heat',
+        retryDelay: Duration.zero,
+      );
+      expect(calls, 2);
     });
   });
 
