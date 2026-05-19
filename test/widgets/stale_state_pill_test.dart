@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:rest_thermostat/l10n/gen/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -41,6 +42,8 @@ Future<_StubSource> _pump(
     ProviderScope(
       overrides: [deviceStateSourceProvider.overrideWith((_) => source)],
       child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(body: StaleStatePill(now: now ?? DateTime.now)),
       ),
     ),

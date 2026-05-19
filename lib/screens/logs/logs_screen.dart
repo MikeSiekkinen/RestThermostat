@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../l10n/gen/app_localizations.dart';
 import '../../services/app_logger.dart';
 import '../../theme/typography.dart';
 
@@ -59,9 +60,10 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
     final text = _formatEntries(entries);
     await Clipboard.setData(ClipboardData(text: text));
     if (!context.mounted) return;
+    final l = AppLocalizations.of(context);
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Logs copied to clipboard.')));
+    ).showSnackBar(SnackBar(content: Text(l.logsCopiedSnack)));
   }
 
   Future<void> _onShare(List<LogEntry> entries) async {
@@ -70,26 +72,24 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
   }
 
   Future<void> _onClear(BuildContext context) async {
+    final l = AppLocalizations.of(context);
     final confirmed =
         await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
-            title: const Text('Clear logs?'),
-            content: const Text(
-              'This removes all in-memory log entries. The buffer will start '
-              'fresh from the next event.',
-            ),
+            title: Text(l.logsClearDialogTitle),
+            content: Text(l.logsClearDialogBody),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
+                child: Text(l.logsCancel),
               ),
               TextButton(
                 style: TextButton.styleFrom(
                   foregroundColor: Theme.of(context).colorScheme.error,
                 ),
                 onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Clear'),
+                child: Text(l.logsClearConfirm),
               ),
             ],
           ),
@@ -102,9 +102,10 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
   @override
   Widget build(BuildContext context) {
     final logger = ref.watch(appLoggerProvider);
+    final l = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Diagnostic logs'),
+        title: Text(l.logsTitle),
         actions: [
           ValueListenableBuilder<List<LogEntry>>(
             valueListenable: logger.notifier,
@@ -113,19 +114,19 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    tooltip: 'Copy to clipboard',
+                    tooltip: l.logsCopyTooltip,
                     icon: const Icon(Icons.copy),
                     onPressed: entries.isEmpty
                         ? null
                         : () => _onCopy(context, entries),
                   ),
                   IconButton(
-                    tooltip: 'Share',
+                    tooltip: l.logsShareTooltip,
                     icon: const Icon(Icons.share),
                     onPressed: entries.isEmpty ? null : () => _onShare(entries),
                   ),
                   IconButton(
-                    tooltip: 'Clear',
+                    tooltip: l.logsClearTooltip,
                     icon: const Icon(Icons.delete_outline),
                     onPressed: entries.isEmpty ? null : () => _onClear(context),
                   ),
@@ -140,7 +141,7 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
           valueListenable: logger.notifier,
           builder: (context, entries, _) {
             if (entries.isEmpty) {
-              return const Center(child: Text('No log entries yet.'));
+              return Center(child: Text(l.logsEmpty));
             }
             return ListView.builder(
               controller: _scrollController,

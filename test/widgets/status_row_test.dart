@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:rest_thermostat/l10n/gen/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rest_thermostat/models/device.dart';
 import 'package:rest_thermostat/theme/colors.dart';
@@ -39,6 +40,8 @@ Future<void> _pump(
 }) {
   return tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: MediaQuery(
           data: MediaQueryData(disableAnimations: disableAnimations),
@@ -177,6 +180,8 @@ void main() {
       var tapped = 0;
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: StatusRow(device: device, onNameTap: () => tapped++),
           ),

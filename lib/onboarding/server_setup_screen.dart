@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../models/auth_config.dart';
 import '../services/url_normalizer.dart';
 import 'connect_outcome.dart';
@@ -106,8 +107,9 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Server Setup')),
+      appBar: AppBar(title: Text(l.serverSetupTitle)),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -118,9 +120,9 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
               children: [
                 TextFormField(
                   controller: _urlCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Server address',
-                    hintText: 'nest.home or 192.168.1.42',
+                  decoration: InputDecoration(
+                    labelText: l.serverAddressLabel,
+                    hintText: l.serverAddressHint,
                   ),
                   keyboardType: TextInputType.url,
                   autocorrect: false,
@@ -128,7 +130,7 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                   validator: (v) {
                     final raw = v ?? '';
                     if (raw.trim().isEmpty) {
-                      return 'Server address is required.';
+                      return l.serverAddressRequired;
                     }
                     try {
                       normalizeServerUrl(raw);
@@ -140,7 +142,7 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                 ),
                 const SizedBox(height: 16),
                 ExpansionTile(
-                  title: const Text('Advanced'),
+                  title: Text(l.advancedSectionTitle),
                   initiallyExpanded: _advancedExpanded,
                   onExpansionChanged: (v) =>
                       setState(() => _advancedExpanded = v),
@@ -148,21 +150,19 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                   children: [
                     DropdownButtonFormField<_AuthChoice>(
                       initialValue: _authChoice,
-                      decoration: const InputDecoration(
-                        labelText: 'Authentication',
-                      ),
-                      items: const [
+                      decoration: InputDecoration(labelText: l.authChoiceLabel),
+                      items: [
                         DropdownMenuItem(
                           value: _AuthChoice.none,
-                          child: Text('None'),
+                          child: Text(l.authChoiceNone),
                         ),
                         DropdownMenuItem(
                           value: _AuthChoice.basic,
-                          child: Text('Basic'),
+                          child: Text(l.authChoiceBasic),
                         ),
                         DropdownMenuItem(
                           value: _AuthChoice.bearer,
-                          child: Text('Bearer'),
+                          child: Text(l.authChoiceBearer),
                         ),
                       ],
                       onChanged: (v) {
@@ -173,8 +173,8 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _userCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Username',
+                        decoration: InputDecoration(
+                          labelText: l.authUsernameLabel,
                         ),
                         autocorrect: false,
                         enableSuggestions: false,
@@ -182,8 +182,8 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _passCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Password',
+                        decoration: InputDecoration(
+                          labelText: l.authPasswordLabel,
                         ),
                         obscureText: true,
                         autocorrect: false,
@@ -193,7 +193,9 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _tokenCtrl,
-                        decoration: const InputDecoration(labelText: 'Token'),
+                        decoration: InputDecoration(
+                          labelText: l.authTokenLabel,
+                        ),
                         obscureText: true,
                         autocorrect: false,
                         enableSuggestions: false,
@@ -219,7 +221,7 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                           width: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Connect'),
+                      : Text(l.connectButton),
                 ),
               ],
             ),

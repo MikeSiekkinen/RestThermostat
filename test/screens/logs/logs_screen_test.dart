@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:rest_thermostat/l10n/gen/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,7 +10,11 @@ import 'package:rest_thermostat/services/app_logger.dart';
 Widget _harness(AppLogger logger) {
   return ProviderScope(
     overrides: [appLoggerProvider.overrideWithValue(logger)],
-    child: const MaterialApp(home: LogsScreen()),
+    child: MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: const LogsScreen(),
+    ),
   );
 }
 

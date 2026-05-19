@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:rest_thermostat/l10n/gen/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rest_thermostat/models/device.dart';
 import 'package:rest_thermostat/models/devices_response.dart';
@@ -53,6 +54,8 @@ void main() {
     final devices = _fixture();
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: DevicePickerSheet(
             devices: devices,
@@ -71,6 +74,8 @@ void main() {
     String? picked;
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Builder(
           builder: (context) => Scaffold(
             body: Center(
@@ -105,6 +110,8 @@ void main() {
     final devices = _fixture();
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: DevicePickerSheet(
             devices: devices,

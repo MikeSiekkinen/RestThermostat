@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:rest_thermostat/l10n/gen/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:rest_thermostat/onboarding/welcome_screen.dart';
@@ -7,7 +8,13 @@ void main() {
   testWidgets('renders title, NLE docs URL, and Get started button', (
     tester,
   ) async {
-    await tester.pumpWidget(MaterialApp(home: WelcomeScreen(onStart: () {})));
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: WelcomeScreen(onStart: () {}),
+      ),
+    );
 
     expect(find.text('Rest Thermostat'), findsOneWidget);
     expect(find.text('Get started'), findsOneWidget);
@@ -17,7 +24,11 @@ void main() {
   testWidgets('Get started triggers onStart', (tester) async {
     var tapped = false;
     await tester.pumpWidget(
-      MaterialApp(home: WelcomeScreen(onStart: () => tapped = true)),
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: WelcomeScreen(onStart: () => tapped = true),
+      ),
     );
 
     await tester.tap(find.text('Get started'));

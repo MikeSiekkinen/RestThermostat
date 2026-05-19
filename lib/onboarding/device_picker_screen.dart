@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../models/device.dart';
 
 class DevicePickerScreen extends StatelessWidget {
@@ -14,8 +15,9 @@ class DevicePickerScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Choose a thermostat')),
+      appBar: AppBar(title: Text(l.devicePickerTitle)),
       body: SafeArea(
         child: ListView.separated(
           itemCount: devices.length,
@@ -23,7 +25,7 @@ class DevicePickerScreen extends StatelessWidget {
           itemBuilder: (context, i) {
             final d = devices[i];
             return ListTile(
-              title: Text(d.name ?? 'unnamed'),
+              title: Text(d.name ?? l.deviceUnnamedFallback),
               subtitle: Text(d.serial),
               onTap: () => onPick(d),
             );
@@ -41,6 +43,7 @@ class NoDevicesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -49,19 +52,18 @@ class NoDevicesScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
-                'No thermostats registered.',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+              Text(
+                l.noDevicesTitle,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
-              const Text(
-                'Pair your Nest Gen 1/2 with your NoLongerEvil server before '
-                'continuing.',
-                textAlign: TextAlign.center,
-              ),
+              Text(l.noDevicesBody, textAlign: TextAlign.center),
               const SizedBox(height: 32),
-              OutlinedButton(onPressed: onBack, child: const Text('Go back')),
+              OutlinedButton(onPressed: onBack, child: Text(l.noDevicesGoBack)),
             ],
           ),
         ),

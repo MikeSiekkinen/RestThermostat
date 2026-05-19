@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:rest_thermostat/l10n/gen/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rest_thermostat/widgets/ember_time_picker.dart';
 
@@ -31,6 +32,8 @@ void main() {
   testWidgets('renders hour and minute wheels in 24h mode', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: EmberTimePicker(
             initialHour: 9,
@@ -56,6 +59,8 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: EmberTimePicker(
             initialHour: 14,
@@ -78,6 +83,8 @@ void main() {
     int? capturedMinute;
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: EmberTimePicker(
             initialHour: 9, // AM

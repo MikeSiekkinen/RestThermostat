@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:rest_thermostat/l10n/gen/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rest_thermostat/models/device.dart';
 import 'package:rest_thermostat/widgets/mode_pills.dart';
@@ -103,6 +104,8 @@ void main() {
     }) {
       return tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: ModePills(
               currentMode: currentMode,
@@ -248,6 +251,8 @@ void main() {
     ) async {
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: ModePills(
               currentMode: DeviceMode.heat,
@@ -278,6 +283,8 @@ void main() {
     ) async {
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: ModePills(
               currentMode: DeviceMode.off,
