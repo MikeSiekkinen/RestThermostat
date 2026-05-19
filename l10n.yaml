@@ -1,0 +1,9 @@
+arb-dir: lib/l10n
+template-arb-file: app_en.arb
+output-localization-file: app_localizations.dart
+output-class: AppLocalizations
+# Generated AppLocalizations API is the public consumption surface — code in
+# `lib/` imports it through the synthetic `flutter gen-l10n` package, so we do
+# NOT need to declare a per-file output path here. See DESIGN §15.4.
+nullable-getter: false
+output-dir: lib/l10n/gen

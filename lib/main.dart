@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'l10n/gen/app_localizations.dart';
 import 'models/device.dart';
 import 'onboarding/onboarding_flow.dart';
 import 'screens/home/home_body.dart';
@@ -61,9 +62,11 @@ class RestThermostatApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Rest Thermostat',
+      onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
       themeMode: ThemeMode.dark,
       darkTheme: emberTheme,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: _Bootstrap(store: store ?? FlutterOnboardingStore()),
     );
   }
