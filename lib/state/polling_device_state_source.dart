@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../services/app_logger.dart';
 import 'device_state_source.dart';
 import 'devices_snapshot.dart';
 import 'state_cache.dart';
@@ -23,6 +24,7 @@ class PollingDeviceStateSource implements DeviceStateSource {
   final Duration interval;
   final Duration freshness;
   final DateTime Function() clock;
+  final AppLogger? logger;
 
   final _controller = StreamController<DevicesSnapshot>.broadcast();
   DevicesSnapshot? _latest;
@@ -39,6 +41,7 @@ class PollingDeviceStateSource implements DeviceStateSource {
     this.interval = const Duration(seconds: 20),
     this.freshness = const Duration(seconds: 60),
     DateTime Function()? clock,
+    this.logger,
   }) : clock = clock ?? DateTime.now;
 
   /// Reads cache (emits it if present), then begins the live polling loop.
@@ -102,15 +105,19 @@ class PollingDeviceStateSource implements DeviceStateSource {
   }
 
   void pause() {
+    final wasActive = _periodic != null;
     _periodic?.cancel();
     _periodic = null;
     _cancelReconciliations();
+    if (wasActive) logger?.info('polling paused');
   }
 
   void resume() {
     if (_disposed) return;
+    final wasIdle = _periodic == null;
     _scheduleCadence();
     unawaited(_poll());
+    if (wasIdle) logger?.info('polling resumed');
   }
 
   @override

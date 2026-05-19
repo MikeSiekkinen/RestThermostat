@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/auth_config.dart';
 import '../onboarding/onboarding_flow.dart';
 import '../services/app_info.dart';
+import '../services/app_logger.dart';
 import '../services/nle_api_client.dart';
 import '../services/onboarding_store.dart';
 import 'device_state_source.dart';
@@ -32,6 +33,7 @@ NleApiClient _defaultClientFactory(String url, AuthConfig auth) =>
     NleApiClient.create(
       baseUrl: url,
       authorizationHeader: auth.authorizationHeader,
+      logger: AppLogger.instance,
     );
 
 /// Default production factory. Tests override this provider to inject a
@@ -82,6 +84,7 @@ final deviceStateSourceProvider = Provider.autoDispose<DeviceStateSource>((
   final source = PollingDeviceStateSource(
     fetchJson: client.fetchDevicesJson,
     cache: ref.watch(stateCacheProvider),
+    logger: ref.watch(appLoggerProvider),
   );
   source.start();
   ref.onDispose(source.dispose);
