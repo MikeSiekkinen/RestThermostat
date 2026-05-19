@@ -15,8 +15,8 @@ import 'state/providers.dart';
 import 'theme/ember_theme.dart';
 import 'widgets/ember_background.dart';
 import 'widgets/fan_widget.dart';
+import 'widgets/interactive_mode_pills.dart';
 import 'widgets/interactive_temperature_dial.dart';
-import 'widgets/mode_pills.dart';
 import 'widgets/status_row.dart';
 import 'widgets/temperature_dial.dart';
 
@@ -295,14 +295,7 @@ class _Home extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 24),
-                // Mode pills are read-only in this ticket; #12 will wire taps
-                // to `POST /command set_mode`. Pass a no-op so the row stays
-                // tappable-looking while the action is plumbed in a follow-up.
-                ModePills(
-                  currentMode: d.mode,
-                  capabilities: d.capabilities,
-                  onModeTap: (_) {},
-                ),
+                InteractiveModePills(device: d),
               ],
             ),
           ),
