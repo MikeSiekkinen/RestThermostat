@@ -1,0 +1,66 @@
+{
+  "devices": [
+    {
+      "serial": "02AA01AC041403JM",
+      "api_key": "a.SCRUBBED_FOR_PUBLIC_REPO",
+      "is_available": true,
+      "last_seen": "2026-05-19T01:16:11.339520",
+      "name": "Upstairs",
+      "current_temperature": 24.76999,
+      "target_temperature": 24.444444444444443,
+      "target_temperature_high": 24.0,
+      "target_temperature_low": 20.0,
+      "humidity": 60,
+      "target_humidity": 35.0,
+      "target_humidity_enabled": false,
+      "mode": "cool",
+      "hvac": {
+        "heater": false,
+        "heat_x2": false,
+        "heat_x3": false,
+        "ac": true,
+        "cool_x2": false,
+        "cool_x3": false,
+        "fan": true,
+        "aux_heat": false,
+        "emer_heat": false,
+        "alt_heat": false,
+        "humidifier": false,
+        "dehumidifier": false,
+        "auto_dehum": false,
+        "fan_cooling": false
+      },
+      "fan_timer_active": false,
+      "fan_timer_timeout": 0,
+      "eco_temperatures": {
+        "high": 25.43195,
+        "low": 21.11098
+      },
+      "is_online": false,
+      "has_leaf": false,
+      "software_version": "5.9.4-5",
+      "temperature_scale": "F",
+      "capabilities": {
+        "can_heat": true,
+        "can_cool": true,
+        "has_fan": true,
+        "has_emer_heat": false,
+        "has_humidifier": false,
+        "has_dehumidifier": false
+      },
+      "eco_mode": "schedule",
+      "time_to_target": 0,
+      "time_to_target_training_status": null,
+      "safety_state": "none",
+      "safety_temp_activating_hvac": false,
+      "learning_mode": false,
+      "preconditioning_enabled": false,
+      "backplate_temperature": 24.76999,
+      "structure_id": null,
+      "away": false,
+      "schedule_mode": null,
+      "subscription_count": 2
+    }
+  ],
+  "total": 1
+}
