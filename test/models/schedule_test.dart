@@ -20,7 +20,7 @@ void main() {
     test('parses top-level metadata', () {
       final schedule = Schedule.fromJson(fixture);
       expect(schedule.version, 2);
-      expect(schedule.name, 'Weekday/Weekend');
+      expect(schedule.name, 'Current Schedule');
       expect(schedule.mode, 'HEAT');
     });
 
@@ -90,6 +90,64 @@ void main() {
       };
       final schedule = Schedule.fromJson(json);
       expect(schedule.eventsForDay(0).first.type, 'HEAT');
+    });
+
+    test('drops entry_type=continuation entries from the read shape', () {
+      final json = {
+        'ver': 2,
+        'schedule_mode': 'HEAT',
+        'days': {
+          '0': {
+            '0': {
+              'type': 'HEAT',
+              'time': 0,
+              'temp': 16.5,
+              'entry_type': 'continuation',
+              'touched_by': 1,
+              'touched_at': 1748928957,
+              'touched_tzo': -18000,
+            },
+            '1': {
+              'type': 'HEAT',
+              'time': 28800,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+          },
+        },
+      };
+      final schedule = Schedule.fromJson(json);
+      // The continuation is dropped; only the user-set setpoint survives.
+      expect(schedule.eventsForDay(0), hasLength(1));
+      expect(schedule.eventsForDay(0).first.targetTemp, 20.0);
+      expect(schedule.eventsForDay(0).first.hour, 8);
+    });
+
+    test('parses the live read shape (days[N] as map keyed by index)', () {
+      final json = {
+        'ver': 2,
+        'schedule_mode': 'COOL',
+        'days': {
+          '0': {
+            '0': {
+              'type': 'HEAT',
+              'time': 21600,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+            '1': {
+              'type': 'HEAT',
+              'time': 28800,
+              'temp': 17.0,
+              'entry_type': 'setpoint',
+            },
+          },
+        },
+      };
+      final schedule = Schedule.fromJson(json);
+      expect(schedule.eventsForDay(0), hasLength(2));
+      expect(schedule.eventsForDay(0).first.hour, 6);
+      expect(schedule.eventsForDay(0).last.hour, 8);
     });
 
     test('handles list-of-lists day form', () {

@@ -168,12 +168,14 @@ class Schedule {
   /// }
   /// ```
   ///
-  /// Accepts the day map under `days` and falls back to a list-of-lists form
-  /// for resilience against odd server responses. (Earlier code also accepted
-  /// `schedule` as the day-map key, but that conflicted with the GET-schedule
-  /// envelope where `schedule` wraps the entire inner object — the call site
-  /// in `NleApiClient.getSchedule` now unwraps the envelope before invoking
-  /// this constructor, so there's no ambiguity.)
+  /// Tolerant of the asymmetric NLE wire shapes. The `set_schedule` WRITE
+  /// payload's docs example shows each day's value as an array of events,
+  /// but the live `GET /api/schedule` READ wraps each day's events in a
+  /// map keyed by string index (`{"0": event, "1": event, …}`). We accept
+  /// both. We also drop `entry_type: "continuation"` entries — those are
+  /// server-generated carry-overs from the previous day's last setpoint,
+  /// not user-authored events; they re-appear automatically server-side
+  /// after a `set_schedule` write.
   factory Schedule.fromJson(Map<String, dynamic> json) {
     // NLE wire key is `ver`; accept legacy `version` for resilience.
     final version =
@@ -185,34 +187,37 @@ class Schedule {
     final raw = json['days'] as Object?;
     final events = <int, List<ScheduleEvent>>{};
 
+    List<ScheduleEvent> parseDay(Object? value, int dayIndex) {
+      final Iterable<dynamic> rawEvents;
+      if (value is List) {
+        rawEvents = value;
+      } else if (value is Map) {
+        // Live read shape: map keyed by string indexes. Sort by key
+        // order to give insertion-order parsing a deterministic seed
+        // before we re-sort by time.
+        final keys = value.keys.toList()..sort();
+        rawEvents = [for (final k in keys) value[k]];
+      } else {
+        return const [];
+      }
+      final out = <ScheduleEvent>[];
+      for (final e in rawEvents) {
+        if (e is! Map<String, dynamic>) continue;
+        if (e['entry_type'] == 'continuation') continue;
+        out.add(ScheduleEvent.fromJson(e, dayIndex: dayIndex));
+      }
+      out.sort((a, b) => a.minutesOfDay.compareTo(b.minutesOfDay));
+      return out;
+    }
+
     if (raw is Map) {
       for (final entry in raw.entries) {
         final dayIndex = int.parse(entry.key.toString());
-        final list = (entry.value as List<dynamic>?) ?? const [];
-        events[dayIndex] =
-            list
-                .map(
-                  (e) => ScheduleEvent.fromJson(
-                    e as Map<String, dynamic>,
-                    dayIndex: dayIndex,
-                  ),
-                )
-                .toList()
-              ..sort((a, b) => a.minutesOfDay.compareTo(b.minutesOfDay));
+        events[dayIndex] = parseDay(entry.value, dayIndex);
       }
     } else if (raw is List) {
       for (var dayIndex = 0; dayIndex < raw.length; dayIndex++) {
-        final list = (raw[dayIndex] as List<dynamic>?) ?? const [];
-        events[dayIndex] =
-            list
-                .map(
-                  (e) => ScheduleEvent.fromJson(
-                    e as Map<String, dynamic>,
-                    dayIndex: dayIndex,
-                  ),
-                )
-                .toList()
-              ..sort((a, b) => a.minutesOfDay.compareTo(b.minutesOfDay));
+        events[dayIndex] = parseDay(raw[dayIndex], dayIndex);
       }
     }
 
