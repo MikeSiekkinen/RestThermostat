@@ -7,7 +7,6 @@ import 'models/device.dart';
 import 'onboarding/onboarding_flow.dart';
 import 'screens/schedule/schedule_screen.dart';
 import 'services/app_info.dart';
-import 'services/device_display_name.dart';
 import 'services/onboarding_store.dart';
 import 'settings/settings_screen.dart';
 import 'state/devices_snapshot.dart';
@@ -16,6 +15,7 @@ import 'state/providers.dart';
 import 'theme/ember_theme.dart';
 import 'widgets/ember_background.dart';
 import 'widgets/mode_pills.dart';
+import 'widgets/status_row.dart';
 import 'widgets/temperature_dial.dart';
 
 Future<void> main() async {
@@ -277,12 +277,8 @@ class _Home extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(
-            displayNameFor(d, overrides),
-            style: Theme.of(context).textTheme.headlineLarge,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
+          StatusRow(device: d, nameOverrides: overrides),
+          const SizedBox(height: 24),
           // Cap the dial at the §10.3 ~240dp diameter, but let it shrink on
           // narrower viewports rather than overflowing.
           ConstrainedBox(
