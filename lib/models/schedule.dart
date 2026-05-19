@@ -168,8 +168,12 @@ class Schedule {
   /// }
   /// ```
   ///
-  /// We accept either `days` or `schedule` as the day-map key, and either
-  /// string-int keys (`"0".."6"`) or list-of-lists form for resilience.
+  /// Accepts the day map under `days` and falls back to a list-of-lists form
+  /// for resilience against odd server responses. (Earlier code also accepted
+  /// `schedule` as the day-map key, but that conflicted with the GET-schedule
+  /// envelope where `schedule` wraps the entire inner object — the call site
+  /// in `NleApiClient.getSchedule` now unwraps the envelope before invoking
+  /// this constructor, so there's no ambiguity.)
   factory Schedule.fromJson(Map<String, dynamic> json) {
     // NLE wire key is `ver`; accept legacy `version` for resilience.
     final version =
@@ -178,7 +182,7 @@ class Schedule {
     // NLE wire key is `schedule_mode`; accept legacy `mode` for resilience.
     final mode = (json['schedule_mode'] ?? json['mode']) as String?;
 
-    final raw = (json['days'] ?? json['schedule']) as Object?;
+    final raw = json['days'] as Object?;
     final events = <int, List<ScheduleEvent>>{};
 
     if (raw is Map) {

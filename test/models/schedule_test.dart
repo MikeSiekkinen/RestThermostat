@@ -9,8 +9,12 @@ void main() {
     late Map<String, dynamic> fixture;
 
     setUp(() {
+      // schedule_one.json mirrors the live GET /api/schedule response —
+      // a {serial, schedule, object_revision, object_timestamp} envelope.
+      // The `schedule` field is the inner object that Schedule.fromJson eats.
       final raw = File('test/fixtures/schedule_one.json').readAsStringSync();
-      fixture = jsonDecode(raw) as Map<String, dynamic>;
+      final envelope = jsonDecode(raw) as Map<String, dynamic>;
+      fixture = envelope['schedule'] as Map<String, dynamic>;
     });
 
     test('parses top-level metadata', () {

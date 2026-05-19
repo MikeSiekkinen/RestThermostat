@@ -49,18 +49,18 @@ class NleApiClient {
   }
 
   /// Fetch the active schedule for [serial], or `null` if the server has none
-  /// stored for that device (404). Other status codes still throw — the caller
-  /// surfaces them through the standard error UI.
+  /// stored for that device. Per the Control API spec the endpoint always
+  /// returns 200 with the response wrapped as
+  /// `{serial, schedule, object_revision, object_timestamp}`; `schedule` is
+  /// `null` when no schedule is stored.
   Future<Schedule?> getSchedule(String serial) async {
-    try {
-      final response = await dio.get<Map<String, dynamic>>(
-        '/api/devices/$serial/schedule',
-      );
-      return Schedule.fromJson(response.data!);
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 404) return null;
-      rethrow;
-    }
+    final response = await dio.get<Map<String, dynamic>>(
+      '/api/schedule',
+      queryParameters: {'serial': serial},
+    );
+    final inner = response.data?['schedule'];
+    if (inner is! Map<String, dynamic>) return null;
+    return Schedule.fromJson(inner);
   }
 
   /// Issue a write command per DESIGN §16.4. Body shape is
