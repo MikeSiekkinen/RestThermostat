@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +5,7 @@ import '../models/auth_config.dart';
 import '../models/device.dart';
 import '../screens/logs/logs_screen.dart';
 import '../services/device_display_name.dart';
+import '../services/nle_error.dart';
 import '../services/onboarding_store.dart';
 import '../services/url_normalizer.dart';
 import '../state/providers.dart';
@@ -187,15 +187,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ? 'Connected — 1 device found.'
             : 'Connected — $count devices found.';
       });
-    } on DioException catch (e) {
+    } on NleAuthError catch (_) {
       if (!mounted) return;
-      final status = e.response?.statusCode;
       setState(() {
         _testing = false;
         _testPassed = false;
-        _testError = (status == 401 || status == 403)
-            ? 'Authentication failed.'
-            : "Couldn't reach server.";
+        _testError = 'Authentication failed.';
+      });
+    } on NleError catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _testing = false;
+        _testPassed = false;
+        _testError = "Couldn't reach server.";
       });
     }
   }

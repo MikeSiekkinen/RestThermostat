@@ -1,9 +1,9 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/device.dart';
+import '../services/nle_error.dart';
 import '../state/providers.dart';
 import '../theme/colors.dart';
 import '../theme/typography.dart';
@@ -81,7 +81,7 @@ class _InteractiveAwayChipState extends ConsumerState<InteractiveAwayChip> {
         command: 'set_away',
         value: newAway,
       );
-    } on DioException catch (e) {
+    } on NleError catch (e) {
       if (!mounted) return;
       _revert(_messageFor(e, action: 'away'));
       return;
@@ -134,7 +134,7 @@ class _InteractiveAwayChipState extends ConsumerState<InteractiveAwayChip> {
         command: 'set_eco_temperatures',
         value: {'low': choice.lowC, 'high': choice.highC},
       );
-    } on DioException catch (e) {
+    } on NleError catch (e) {
       if (!mounted) return;
       _showSnack(_messageFor(e, action: 'eco temps'));
       return;
@@ -157,17 +157,14 @@ class _InteractiveAwayChipState extends ConsumerState<InteractiveAwayChip> {
     messenger?.showSnackBar(SnackBar(content: Text(message)));
   }
 
-  String _messageFor(DioException e, {required String action}) {
-    final body = e.response?.data;
-    if (body is Map) {
-      final candidate = body['error'] ?? body['message'];
-      if (candidate is String && candidate.isNotEmpty) return candidate;
-    } else if (body is String && body.isNotEmpty) {
-      return body;
+  String _messageFor(NleError e, {required String action}) {
+    if (e.serverMessage != null && e.serverMessage!.isNotEmpty) {
+      return e.serverMessage!;
     }
-    final code = e.response?.statusCode ?? 0;
-    if (code >= 400 && code < 500) return 'Server rejected $action change';
-    return 'Couldn\'t change $action';
+    return switch (e) {
+      NleClientError() => 'Server rejected $action change',
+      _ => "Couldn't change $action",
+    };
   }
 
   @override

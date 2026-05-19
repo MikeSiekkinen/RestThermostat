@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
 import 'package:rest_thermostat/models/schedule.dart';
 import 'package:rest_thermostat/services/nle_api_client.dart';
+import 'package:rest_thermostat/services/nle_error.dart';
 
 void main() {
   late Dio dio;
@@ -31,22 +32,63 @@ void main() {
       expect(response.devices.first.serial, '02AA01AC041403JM');
     });
 
-    test('throws DioException on 500', () async {
+    test('throws NleServerError on 500', () async {
       dioAdapter.onGet(
         '/api/devices',
         (server) => server.reply(500, {'error': 'server error'}),
       );
 
-      expect(client.getDevices, throwsA(isA<DioException>()));
+      expect(client.getDevices, throwsA(isA<NleServerError>()));
     });
 
-    test('throws DioException on 401', () async {
+    test('throws NleAuthError on 401', () async {
       dioAdapter.onGet(
         '/api/devices',
         (server) => server.reply(401, {'error': 'unauthorized'}),
       );
 
-      expect(client.getDevices, throwsA(isA<DioException>()));
+      expect(client.getDevices, throwsA(isA<NleAuthError>()));
+    });
+
+    test('throws NleAuthError on 403', () async {
+      dioAdapter.onGet(
+        '/api/devices',
+        (server) => server.reply(403, {'error': 'forbidden'}),
+      );
+
+      expect(client.getDevices, throwsA(isA<NleAuthError>()));
+    });
+
+    test('throws NleRateLimitError on 429 with parsed Retry-After', () async {
+      dioAdapter.onGet(
+        '/api/devices',
+        (server) => server.reply(
+          429,
+          {'error': 'too many requests'},
+          headers: const {
+            Headers.contentTypeHeader: [Headers.jsonContentType],
+            'retry-after': ['45'],
+          },
+        ),
+      );
+
+      try {
+        await client.getDevices();
+        fail('expected throw');
+      } on NleRateLimitError catch (e) {
+        expect(e.retryAfter, const Duration(seconds: 45));
+      }
+    });
+
+    test('throws NleParseError on malformed JSON shape', () async {
+      // /api/devices is expected to return a Map; sending an array instead
+      // forces the parse path to throw.
+      dioAdapter.onGet(
+        '/api/devices',
+        (server) => server.reply(200, {'devices': 'not-a-list'}),
+      );
+
+      expect(client.getDevices, throwsA(isA<NleParseError>()));
     });
   });
 
@@ -84,14 +126,14 @@ void main() {
       expect(schedule, isNull);
     });
 
-    test('rethrows DioException on 500', () async {
+    test('throws NleServerError on 500', () async {
       dioAdapter.onGet(
         '/api/schedule',
         (server) => server.reply(500, {'error': 'server error'}),
         queryParameters: {'serial': 'abc'},
       );
 
-      expect(() => client.getSchedule('abc'), throwsA(isA<DioException>()));
+      expect(() => client.getSchedule('abc'), throwsA(isA<NleServerError>()));
     });
   });
 
@@ -127,7 +169,7 @@ void main() {
       expect(capturedBody!['value'], 'heat');
     });
 
-    test('throws DioException on persistent 500 (after one retry)', () async {
+    test('throws NleServerError on persistent 500 (after one retry)', () async {
       // Reply 500 to every POST; the retry should also see 500 and the call
       // should ultimately throw. retryDelay overridden to zero so the test
       // doesn't spend 2 real seconds waiting.
@@ -152,7 +194,7 @@ void main() {
           value: 'heat',
           retryDelay: Duration.zero,
         ),
-        throwsA(isA<DioException>()),
+        throwsA(isA<NleServerError>()),
       );
       // Initial attempt + 1 retry = 2 calls.
       expect(calls, 2);
@@ -180,7 +222,7 @@ void main() {
           value: 'heat',
           retryDelay: Duration.zero,
         ),
-        throwsA(isA<DioException>()),
+        throwsA(isA<NleAuthError>()),
       );
       expect(calls, 1);
     });
