@@ -1,0 +1,25 @@
+# Configuration for flutter_native_splash.
+#
+# Generates platform splash-screen resources (Android drawables + iOS
+# LaunchScreen.storyboard) backed by an Ember-deep background and the
+# centered concentric-arcs logo.
+#
+# Run:  dart run flutter_native_splash:create --path=flutter_native_splash.yaml
+flutter_native_splash:
+  # Solid Ember dark background (the deepest gradient color from DESIGN §10).
+  color: "#000000"
+  image: "assets/splash/splash.png"
+
+  # Android 12+ uses its own splash API (a circular icon on a single color).
+  # Keep the same color and image; Android 12 will clip into the rounded
+  # window-shape automatically.
+  android_12:
+    color: "#000000"
+    image: "assets/splash/splash.png"
+
+  # Belt-and-suspenders flags — make sure the dark color appears in the
+  # status / nav bars during launch so there is no white flash.
+  android: true
+  ios: true
+  web: false
+  fullscreen: false
