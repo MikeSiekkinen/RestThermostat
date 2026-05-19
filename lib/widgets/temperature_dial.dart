@@ -341,16 +341,32 @@ class _TemperatureDialState extends State<TemperatureDial> {
                   ),
                 ),
                 child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(targetLabel, style: EmberTypography.displayLarge()),
-                      const SizedBox(height: 8),
-                      Text(
-                        currentLabel,
-                        style: EmberTypography.bodyMediumItalic(),
+                  // DESIGN §14.5: clamp the display-text scale so extreme
+                  // accessibility text sizes don't blow the dial center out
+                  // of its 240dp circle. Tighter than the 0.85–1.4 range the
+                  // spec suggests for body text — the giant target temp would
+                  // overflow the ring at 1.4×.
+                  child: MediaQuery(
+                    data: MediaQuery.of(context).copyWith(
+                      textScaler: MediaQuery.of(context).textScaler.clamp(
+                        minScaleFactor: 0.85,
+                        maxScaleFactor: 1.4,
                       ),
-                    ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          targetLabel,
+                          style: EmberTypography.displayLarge(),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          currentLabel,
+                          style: EmberTypography.bodyMediumItalic(),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               );

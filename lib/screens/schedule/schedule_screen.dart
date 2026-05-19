@@ -335,44 +335,58 @@ class _EventRow extends StatelessWidget {
     );
     final tempLabel = _formatTemp(event, temperatureScale);
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: tint.withValues(alpha: 0.10),
+    // Screen-reader announcement: one merged label combining time + temp +
+    // mode so TalkBack/VoiceOver reads "Event at 6:00 AM, 68 degrees Heat,
+    // tap to edit." instead of three separate `Text` nodes whose color
+    // tinting carries the mode signal visually.
+    final semanticLabel =
+        'Event at $timeLabel, $tempLabel ${event.type.toLowerCase()}, '
+        'tap to edit.';
+
+    return Semantics(
+      label: semanticLabel,
+      button: true,
+      child: ExcludeSemantics(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: tint.withValues(alpha: 0.35)),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  timeLabel,
-                  style: Theme.of(context).textTheme.headlineLarge,
-                ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: tint.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: tint.withValues(alpha: 0.35)),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              child: Row(
                 children: [
-                  Text(
-                    tempLabel,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: tint,
-                      fontWeight: FontWeight.w600,
+                  Expanded(
+                    child: Text(
+                      timeLabel,
+                      style: Theme.of(context).textTheme.headlineLarge,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    event.type,
-                    style: Theme.of(context).textTheme.labelSmall,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        tempLabel,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: tint,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        event.type,
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
