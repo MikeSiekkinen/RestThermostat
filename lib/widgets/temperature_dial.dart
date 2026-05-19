@@ -168,8 +168,8 @@ class TemperatureDial extends StatefulWidget {
 
   /// Convert a Celsius value to the chosen display unit. The temperature
   /// mapping that drives the ring is always in Celsius — this affects only
-  /// the center-text rendering.
-  @visibleForTesting
+  /// the center-text rendering. Also reused by Details / Schedule callers
+  /// that need to render the same conversion.
   static double celsiusToDisplay(double celsius, String unit) {
     if (unit.toUpperCase() == 'F') return celsius * 9 / 5 + 32;
     return celsius;
