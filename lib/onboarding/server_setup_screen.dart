@@ -1,0 +1,231 @@
+import 'package:flutter/material.dart';
+
+import '../models/auth_config.dart';
+import '../services/url_normalizer.dart';
+import 'connect_outcome.dart';
+
+typedef ConnectFn =
+    Future<ConnectOutcome> Function(String normalizedUrl, AuthConfig auth);
+
+enum _AuthChoice { none, basic, bearer }
+
+class ServerSetupScreen extends StatefulWidget {
+  final String? initialUrl;
+  final AuthConfig initialAuth;
+  final ConnectFn onConnect;
+
+  const ServerSetupScreen({
+    super.key,
+    required this.initialUrl,
+    required this.initialAuth,
+    required this.onConnect,
+  });
+
+  @override
+  State<ServerSetupScreen> createState() => _ServerSetupScreenState();
+}
+
+class _ServerSetupScreenState extends State<ServerSetupScreen> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _urlCtrl;
+  late final TextEditingController _userCtrl;
+  late final TextEditingController _passCtrl;
+  late final TextEditingController _tokenCtrl;
+  late _AuthChoice _authChoice;
+  bool _advancedExpanded = false;
+  bool _busy = false;
+  String? _inlineError;
+
+  @override
+  void initState() {
+    super.initState();
+    _urlCtrl = TextEditingController(text: widget.initialUrl ?? '');
+    _userCtrl = TextEditingController();
+    _passCtrl = TextEditingController();
+    _tokenCtrl = TextEditingController();
+    switch (widget.initialAuth) {
+      case AuthNone():
+        _authChoice = _AuthChoice.none;
+      case AuthBasic(:final username, :final password):
+        _authChoice = _AuthChoice.basic;
+        _userCtrl.text = username;
+        _passCtrl.text = password;
+        _advancedExpanded = true;
+      case AuthBearer(:final token):
+        _authChoice = _AuthChoice.bearer;
+        _tokenCtrl.text = token;
+        _advancedExpanded = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    _urlCtrl.dispose();
+    _userCtrl.dispose();
+    _passCtrl.dispose();
+    _tokenCtrl.dispose();
+    super.dispose();
+  }
+
+  AuthConfig _buildAuth() => switch (_authChoice) {
+    _AuthChoice.none => const AuthNone(),
+    _AuthChoice.basic => AuthBasic(
+      username: _userCtrl.text,
+      password: _passCtrl.text,
+    ),
+    _AuthChoice.bearer => AuthBearer(token: _tokenCtrl.text),
+  };
+
+  Future<void> _submit() async {
+    if (_busy) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    final String url;
+    try {
+      url = normalizeServerUrl(_urlCtrl.text);
+    } on UrlNormalizationException catch (e) {
+      setState(() => _inlineError = e.message);
+      return;
+    }
+
+    setState(() {
+      _busy = true;
+      _inlineError = null;
+    });
+
+    final outcome = await widget.onConnect(url, _buildAuth());
+    if (!mounted) return;
+
+    setState(() {
+      _busy = false;
+      if (outcome is ConnectInlineError) {
+        _inlineError = outcome.message;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Server Setup')),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextFormField(
+                  controller: _urlCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Server address',
+                    hintText: 'nest.home or 192.168.1.42',
+                  ),
+                  keyboardType: TextInputType.url,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  validator: (v) {
+                    final raw = v ?? '';
+                    if (raw.trim().isEmpty) {
+                      return 'Server address is required.';
+                    }
+                    try {
+                      normalizeServerUrl(raw);
+                      return null;
+                    } on UrlNormalizationException catch (e) {
+                      return e.message;
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                ExpansionTile(
+                  title: const Text('Advanced'),
+                  initiallyExpanded: _advancedExpanded,
+                  onExpansionChanged: (v) =>
+                      setState(() => _advancedExpanded = v),
+                  childrenPadding: const EdgeInsets.symmetric(vertical: 8),
+                  children: [
+                    DropdownButtonFormField<_AuthChoice>(
+                      initialValue: _authChoice,
+                      decoration: const InputDecoration(
+                        labelText: 'Authentication',
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: _AuthChoice.none,
+                          child: Text('None'),
+                        ),
+                        DropdownMenuItem(
+                          value: _AuthChoice.basic,
+                          child: Text('Basic'),
+                        ),
+                        DropdownMenuItem(
+                          value: _AuthChoice.bearer,
+                          child: Text('Bearer'),
+                        ),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) setState(() => _authChoice = v);
+                      },
+                    ),
+                    if (_authChoice == _AuthChoice.basic) ...[
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _userCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Username',
+                        ),
+                        autocorrect: false,
+                        enableSuggestions: false,
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _passCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Password',
+                        ),
+                        obscureText: true,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                      ),
+                    ] else if (_authChoice == _AuthChoice.bearer) ...[
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _tokenCtrl,
+                        decoration: const InputDecoration(labelText: 'Token'),
+                        obscureText: true,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 24),
+                if (_inlineError != null) ...[
+                  Text(
+                    _inlineError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                FilledButton(
+                  onPressed: _busy ? null : _submit,
+                  child: _busy
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Connect'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
