@@ -241,4 +241,69 @@ void main() {
       }
     });
   });
+
+  group('a11y', () {
+    testWidgets('each pill exposes a Semantics node with button + label', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ModePills(
+              currentMode: DeviceMode.heat,
+              capabilities: _allCapabilities,
+              onModeTap: (_) {},
+            ),
+          ),
+        ),
+      );
+
+      // Look up the Semantics annotation for the HEAT pill — the framework
+      // hoists onTap into a button role and merges the inner Text's
+      // implicit Semantics into our explicit label.
+      final semantics = tester.getSemantics(find.text('HEAT'));
+      expect(semantics.label, contains('HEAT'));
+      // The currently-active pill carries `selected`. `flagsCollection`
+      // returns a Tristate (true/false/unset) so we compare via `toString()`
+      // rather than the deprecated `hasFlag`.
+      expect(
+        semantics.flagsCollection.isSelected.toString(),
+        contains('isTrue'),
+        reason: 'active pill should expose selected=true to assistive tech',
+      );
+    });
+
+    testWidgets('hit target reaches at least 48dp tall per Material guidance', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ModePills(
+              currentMode: DeviceMode.off,
+              capabilities: _allCapabilities,
+              onModeTap: (_) {},
+            ),
+          ),
+        ),
+      );
+
+      // The gesture-bearing ConstrainedBox is the inner Container with
+      // minHeight: 48 inside the per-pill Semantics. Find its size via the
+      // RenderBox of the GestureDetector child.
+      final detector = find.descendant(
+        of: find.byType(ModePills),
+        matching: find.byType(GestureDetector),
+      );
+      expect(detector, findsWidgets);
+      for (final element in detector.evaluate()) {
+        final size = (element.renderObject as RenderBox).size;
+        expect(
+          size.height,
+          greaterThanOrEqualTo(48),
+          reason: 'mode pill tap target must be ≥48dp',
+        );
+      }
+    });
+  });
 }

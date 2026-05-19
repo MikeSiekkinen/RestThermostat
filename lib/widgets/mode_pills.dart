@@ -178,6 +178,10 @@ class _ModePill extends StatelessWidget {
       ),
     );
 
+    // DESIGN §14.5 + Material guidelines: tap target ≥ 48dp. The pill itself
+    // stays at its natural ~32dp height so the row reads as designed; the
+    // invisible ConstrainedBox + Center extends the gesture region to 48dp
+    // above/below the pill without changing the visual.
     return Semantics(
       button: onTap != null,
       selected: isActive,
@@ -185,7 +189,10 @@ class _ModePill extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: pill,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Center(widthFactor: 1, child: pill),
+        ),
       ),
     );
   }
