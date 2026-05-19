@@ -1,0 +1,666 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../models/auth_config.dart';
+import '../models/device.dart';
+import '../services/device_display_name.dart';
+import '../services/onboarding_store.dart';
+import '../services/url_normalizer.dart';
+import '../state/providers.dart';
+
+/// GitHub repo link shown in the About section. Centralized so tests can
+/// assert against it without re-typing the URL.
+const String settingsRepoUrl =
+    'https://github.com/MikeSiekkinen/RestThermostat';
+const String settingsNleDocsUrl = 'https://docs.nolongerevil.com';
+const String settingsNleCredit = "For Cody Kociemba's NoLongerEvil project";
+
+/// Settings screen per DESIGN §7.6 + §12.7. Sections, top-to-bottom:
+/// Connection (URL + auth re-edit, gated by a successful re-test), Devices
+/// (per-row rename), About (version + credits + repo link), Danger zone
+/// (Disconnect, wipes everything).
+class SettingsScreen extends ConsumerStatefulWidget {
+  /// Invoked after Disconnect completes its wipe. The host wires this to
+  /// re-route back to Welcome (see `lib/main.dart`).
+  final VoidCallback onDisconnect;
+
+  const SettingsScreen({super.key, required this.onDisconnect});
+
+  @override
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _urlCtrl;
+  late final TextEditingController _userCtrl;
+  late final TextEditingController _passCtrl;
+  late final TextEditingController _tokenCtrl;
+  late _AuthChoice _authChoice;
+  bool _advancedExpanded = false;
+  bool _passwordVisible = false;
+  bool _tokenVisible = false;
+  bool _testing = false;
+  bool _testPassed = false;
+  String? _testError;
+  String? _testSuccessMsg;
+  Map<String, String> _latestOverrides = const {};
+
+  // The URL+auth combination that produced the most recent successful test;
+  // Save is only enabled when the *current* form values match these. Any edit
+  // after a successful test invalidates the gate and re-disables Save, per the
+  // issue spec.
+  String? _gatedUrl;
+  AuthConfig? _gatedAuth;
+
+  Future<OnboardingConfig>? _initialLoadFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _urlCtrl = TextEditingController();
+    _userCtrl = TextEditingController();
+    _passCtrl = TextEditingController();
+    _tokenCtrl = TextEditingController();
+    _authChoice = _AuthChoice.none;
+
+    _urlCtrl.addListener(_invalidateGate);
+    _userCtrl.addListener(_invalidateGate);
+    _passCtrl.addListener(_invalidateGate);
+    _tokenCtrl.addListener(_invalidateGate);
+
+    _initialLoadFuture = _loadInitial();
+  }
+
+  Future<OnboardingConfig> _loadInitial() async {
+    final store = ref.read(onboardingStoreProvider);
+    final config = await store.read();
+    if (!mounted) return config;
+    setState(() {
+      _urlCtrl.text = config.serverUrl ?? '';
+      switch (config.auth) {
+        case AuthNone():
+          _authChoice = _AuthChoice.none;
+        case AuthBasic(:final username, :final password):
+          _authChoice = _AuthChoice.basic;
+          _userCtrl.text = username;
+          _passCtrl.text = password;
+          _advancedExpanded = true;
+        case AuthBearer(:final token):
+          _authChoice = _AuthChoice.bearer;
+          _tokenCtrl.text = token;
+          _advancedExpanded = true;
+      }
+      _latestOverrides = config.deviceNameOverrides;
+    });
+    return config;
+  }
+
+  @override
+  void dispose() {
+    _urlCtrl.removeListener(_invalidateGate);
+    _userCtrl.removeListener(_invalidateGate);
+    _passCtrl.removeListener(_invalidateGate);
+    _tokenCtrl.removeListener(_invalidateGate);
+    _urlCtrl.dispose();
+    _userCtrl.dispose();
+    _passCtrl.dispose();
+    _tokenCtrl.dispose();
+    super.dispose();
+  }
+
+  void _invalidateGate() {
+    // Any edit to URL/auth fields invalidates the prior test pass — the user
+    // must re-test before Save re-enables.
+    if (_gatedUrl == null) return;
+    final currentNormalized = _tryNormalize(_urlCtrl.text);
+    if (currentNormalized == _gatedUrl && _matchesGatedAuth(_buildAuth())) {
+      return;
+    }
+    setState(() {
+      _testPassed = false;
+      _testSuccessMsg = null;
+    });
+  }
+
+  String? _tryNormalize(String raw) {
+    try {
+      return normalizeServerUrl(raw);
+    } on UrlNormalizationException {
+      return null;
+    }
+  }
+
+  bool _matchesGatedAuth(AuthConfig current) {
+    final gated = _gatedAuth;
+    if (gated == null) return false;
+    if (current.tag != gated.tag) return false;
+    return current.authorizationHeader == gated.authorizationHeader;
+  }
+
+  AuthConfig _buildAuth() => switch (_authChoice) {
+    _AuthChoice.none => const AuthNone(),
+    _AuthChoice.basic => AuthBasic(
+      username: _userCtrl.text,
+      password: _passCtrl.text,
+    ),
+    _AuthChoice.bearer => AuthBearer(token: _tokenCtrl.text),
+  };
+
+  Future<void> _onTestConnection() async {
+    if (_testing) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    final String url;
+    try {
+      url = normalizeServerUrl(_urlCtrl.text);
+    } on UrlNormalizationException catch (e) {
+      setState(() {
+        _testError = e.message;
+        _testSuccessMsg = null;
+        _testPassed = false;
+      });
+      return;
+    }
+
+    final auth = _buildAuth();
+    setState(() {
+      _testing = true;
+      _testError = null;
+      _testSuccessMsg = null;
+    });
+
+    final factory = ref.read(clientFactoryProvider);
+    final client = factory(url, auth);
+    try {
+      final response = await client.getDevices();
+      if (!mounted) return;
+      setState(() {
+        _testing = false;
+        _testPassed = true;
+        _gatedUrl = url;
+        _gatedAuth = auth;
+        final count = response.devices.length;
+        _testSuccessMsg = count == 1
+            ? 'Connected — 1 device found.'
+            : 'Connected — $count devices found.';
+      });
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final status = e.response?.statusCode;
+      setState(() {
+        _testing = false;
+        _testPassed = false;
+        _testError = (status == 401 || status == 403)
+            ? 'Authentication failed.'
+            : "Couldn't reach server.";
+      });
+    }
+  }
+
+  Future<void> _onSave() async {
+    if (!_testPassed || _gatedUrl == null) return;
+    final url = _gatedUrl!;
+    final auth = _gatedAuth!;
+    final store = ref.read(onboardingStoreProvider);
+
+    // Persist new config first, then clear cache, then push into the active
+    // server provider — this order matches DESIGN §12.6 (clear cache before
+    // the new URL takes effect on the polling source) and ensures the next
+    // poll uses the fresh credentials.
+    await store.saveServerUrl(url);
+    await store.saveAuth(auth);
+    await ref.read(stateCacheProvider).clear();
+    ref.read(activeServerProvider.notifier).set((url: url, auth: auth));
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Connection settings saved.')));
+  }
+
+  Future<void> _onRenameDevice(Device device, String currentDisplay) async {
+    // Dialog pops `null` on Cancel, or a trimmed string on Save. An empty
+    // string means "clear the override" per the issue spec; setDeviceNameOverride
+    // collapses that to a removal.
+    final result = await showDialog<String>(
+      context: context,
+      builder: (_) =>
+          _RenameDeviceDialog(serial: device.serial, initial: currentDisplay),
+    );
+    if (result == null) return;
+    final store = ref.read(onboardingStoreProvider);
+    await store.setDeviceNameOverride(
+      device.serial,
+      result.isEmpty ? null : result,
+    );
+    final config = await store.read();
+    if (!mounted) return;
+    setState(() {
+      _latestOverrides = config.deviceNameOverrides;
+    });
+  }
+
+  Future<void> _onDisconnect() async {
+    final confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Disconnect from server?'),
+            content: const Text(
+              'This will remove your server settings and saved credentials. '
+              'Continue?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Disconnect'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed) return;
+
+    final store = ref.read(onboardingStoreProvider);
+    await store.clear();
+    await ref.read(stateCacheProvider).clear();
+    ref.read(activeServerProvider.notifier).clear();
+
+    if (!mounted) return;
+    widget.onDisconnect();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<OnboardingConfig>(
+      future: _initialLoadFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        return Scaffold(
+          appBar: AppBar(title: const Text('Settings')),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildConnectionSection(context),
+                    const Divider(),
+                    _buildDevicesSection(context),
+                    const Divider(),
+                    _buildAboutSection(context),
+                    const Divider(),
+                    _buildDangerZone(context),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildConnectionSection(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SectionHeader(text: 'Connection'),
+          TextFormField(
+            controller: _urlCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Server address',
+              hintText: 'nest.home or 192.168.1.42',
+            ),
+            keyboardType: TextInputType.url,
+            autocorrect: false,
+            enableSuggestions: false,
+            validator: (v) {
+              final raw = v ?? '';
+              if (raw.trim().isEmpty) return 'Server address is required.';
+              try {
+                normalizeServerUrl(raw);
+                return null;
+              } on UrlNormalizationException catch (e) {
+                return e.message;
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+          ExpansionTile(
+            title: const Text('Advanced'),
+            initiallyExpanded: _advancedExpanded,
+            onExpansionChanged: (v) => setState(() => _advancedExpanded = v),
+            childrenPadding: const EdgeInsets.symmetric(vertical: 8),
+            children: [
+              DropdownButtonFormField<_AuthChoice>(
+                initialValue: _authChoice,
+                decoration: const InputDecoration(labelText: 'Authentication'),
+                items: const [
+                  DropdownMenuItem(
+                    value: _AuthChoice.none,
+                    child: Text('None'),
+                  ),
+                  DropdownMenuItem(
+                    value: _AuthChoice.basic,
+                    child: Text('Basic'),
+                  ),
+                  DropdownMenuItem(
+                    value: _AuthChoice.bearer,
+                    child: Text('Bearer'),
+                  ),
+                ],
+                onChanged: (v) {
+                  if (v != null) {
+                    setState(() => _authChoice = v);
+                    _invalidateGate();
+                  }
+                },
+              ),
+              if (_authChoice == _AuthChoice.basic) ...[
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _userCtrl,
+                  decoration: const InputDecoration(labelText: 'Username'),
+                  autocorrect: false,
+                  enableSuggestions: false,
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _passCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _passwordVisible
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
+                      onPressed: () =>
+                          setState(() => _passwordVisible = !_passwordVisible),
+                      tooltip: _passwordVisible
+                          ? 'Hide password'
+                          : 'Show password',
+                    ),
+                  ),
+                  obscureText: !_passwordVisible,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                ),
+              ] else if (_authChoice == _AuthChoice.bearer) ...[
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _tokenCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Token',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _tokenVisible ? Icons.visibility_off : Icons.visibility,
+                      ),
+                      onPressed: () =>
+                          setState(() => _tokenVisible = !_tokenVisible),
+                      tooltip: _tokenVisible ? 'Hide token' : 'Show token',
+                    ),
+                  ),
+                  obscureText: !_tokenVisible,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_testError != null) ...[
+            Text(
+              _testError!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (_testSuccessMsg != null) ...[
+            Text(
+              _testSuccessMsg!,
+              style: TextStyle(color: Theme.of(context).colorScheme.primary),
+            ),
+            const SizedBox(height: 8),
+          ],
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _testing ? null : _onTestConnection,
+                  child: _testing
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Test connection'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton(
+                  onPressed: _testPassed ? _onSave : null,
+                  child: const Text('Save'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeviceRow(Device d) {
+    final name = displayNameFor(d, _latestOverrides);
+    return _DeviceRow(
+      device: d,
+      displayName: name,
+      onTap: () => _onRenameDevice(d, name),
+    );
+  }
+
+  Widget _buildDevicesSection(BuildContext context) {
+    final async = ref.watch(devicesSnapshotProvider);
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SectionHeader(text: 'Devices'),
+          async.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, _) => Text(
+              "Couldn't load devices: $e",
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+            data: (snapshot) {
+              if (snapshot.devices.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text('No devices.'),
+                );
+              }
+              return Column(
+                children: snapshot.devices.map(_buildDeviceRow).toList(),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAboutSection(BuildContext context) {
+    final info = ref.watch(appInfoProvider);
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader(text: 'About'),
+          Text('Rest Thermostat ${info.version} (build ${info.buildNumber})'),
+          const SizedBox(height: 8),
+          const Text(settingsNleCredit),
+          const SizedBox(height: 8),
+          const SelectableText('NLE docs: $settingsNleDocsUrl'),
+          const SelectableText('Source: $settingsRepoUrl'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDangerZone(BuildContext context) {
+    final errorColor = Theme.of(context).colorScheme.error;
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SectionHeader(text: 'Danger zone'),
+          TextButton(
+            onPressed: _onDisconnect,
+            style: TextButton.styleFrom(foregroundColor: errorColor),
+            child: const Text('Disconnect from server'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String text;
+  const _SectionHeader({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        text,
+        style: Theme.of(
+          context,
+        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+}
+
+class _DeviceRow extends StatelessWidget {
+  final Device device;
+  final String displayName;
+  final VoidCallback onTap;
+
+  const _DeviceRow({
+    required this.device,
+    required this.displayName,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(displayName),
+      subtitle: Text(
+        device.serial,
+        style: TextStyle(
+          fontSize: 12,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
+      trailing: const Icon(Icons.edit, size: 18),
+      onTap: onTap,
+    );
+  }
+}
+
+enum _AuthChoice { none, basic, bearer }
+
+class _RenameDeviceDialog extends StatefulWidget {
+  final String serial;
+  final String initial;
+
+  const _RenameDeviceDialog({required this.serial, required this.initial});
+
+  @override
+  State<_RenameDeviceDialog> createState() => _RenameDeviceDialogState();
+}
+
+class _RenameDeviceDialogState extends State<_RenameDeviceDialog> {
+  late final TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.initial);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Rename thermostat'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            widget.serial,
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _ctrl,
+            decoration: const InputDecoration(
+              labelText: 'Display name',
+              helperText: 'Leave empty to use the server name',
+            ),
+            autofocus: true,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(_ctrl.text.trim()),
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
