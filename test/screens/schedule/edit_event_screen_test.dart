@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
@@ -289,6 +290,76 @@ void main() {
     expect(updated.targetTemp, greaterThan(20.0));
     // No event leaked into other days.
     expect(saved.eventsForDay(0), isEmpty);
+  });
+
+  testWidgets(
+    'successful save fires HapticFeedback.mediumImpact per DESIGN §11.5',
+    (tester) async {
+      final haptics = <String>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+            if (call.method == 'HapticFeedback.vibrate') {
+              haptics.add(call.arguments as String);
+            }
+            return null;
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, null);
+      });
+
+      final h = _setup(schedule: _emptyWeek(), defaultDayIndex: 0);
+      h.adapter.onPost(
+        '/command',
+        (s) => s.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(
+        haptics,
+        contains('HapticFeedbackType.mediumImpact'),
+        reason:
+            'schedule save success should fire medium-impact haptic per §11.5',
+      );
+    },
+  );
+
+  testWidgets('save failure does NOT fire the success haptic', (tester) async {
+    final haptics = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'HapticFeedback.vibrate') {
+            haptics.add(call.arguments as String);
+          }
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    final h = _setup(schedule: _emptyWeek(), defaultDayIndex: 0);
+    h.adapter.onPost(
+      '/command',
+      (s) => s.reply(500, {'error': 'server down'}),
+      data: Matchers.any,
+    );
+
+    await tester.pumpWidget(h.widget);
+    await _openEditor(tester);
+
+    await tester.tap(find.text('Save'));
+    // sendCommand retries with a 2s delay on 5xx — wait it out, then settle.
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+
+    expect(haptics, isEmpty);
   });
 
   testWidgets('delete confirms with a dialog and then removes the event', (
