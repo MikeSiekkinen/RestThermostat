@@ -1,9 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../models/device.dart';
+import '../services/haptics.dart';
 import '../theme/colors.dart';
 import '../theme/typography.dart';
 
@@ -199,16 +199,13 @@ class _TemperatureDialState extends State<TemperatureDial> {
   /// haptics to once per tick crossed (DESIGN §11.3 + §11.5).
   int? _lastHapticTick;
 
-  /// Monotonic wall time of the last haptic. Caps the rate at ≤30/s per
-  /// DESIGN §11.3.
-  Duration _lastHapticAt = Duration.zero;
-  final Stopwatch _stopwatch = Stopwatch()..start();
+  /// ~30/sec rate-limiter for `selectionClick`. Lives in
+  /// `lib/services/haptics.dart` so the throttle is unit-testable in isolation.
+  final ThrottledSelectionClick _hapticThrottle = ThrottledSelectionClick();
 
   /// Last celsius value observed during a drag — used as the commit value on
   /// `onPanEnd` since [DragEndDetails] doesn't carry a position.
   double? _lastDragCelsius;
-
-  static const Duration _minHapticGap = Duration(milliseconds: 33); // ~30/s.
 
   void _dispatchPan(Offset local, Size size) {
     final tick = TemperatureDial.tickIndexForLocalPoint(local, size);
@@ -238,17 +235,14 @@ class _TemperatureDialState extends State<TemperatureDial> {
   }
 
   void _maybeHaptic(int tick) {
-    if (_lastHapticTick == tick) return;
-    final now = _stopwatch.elapsed;
-    if (now - _lastHapticAt < _minHapticGap) {
-      // Too fast — record the tick so the next slower crossing still fires,
-      // but skip the haptic to honor the 30/s ceiling.
-      _lastHapticTick = tick;
+    if (_lastHapticTick == tick) {
       return;
     }
     _lastHapticTick = tick;
-    _lastHapticAt = now;
-    HapticFeedback.selectionClick();
+    // The throttler silently drops the click if it's within minGap of the last
+    // one; the tick-tracking above is what ensures we don't spam the throttler
+    // with the same tick repeatedly across drag updates.
+    _hapticThrottle.tryClick();
   }
 
   @override
@@ -259,6 +253,15 @@ class _TemperatureDialState extends State<TemperatureDial> {
     final currentIndex = TemperatureDial.tickIndexForCelsius(
       widget.currentTemperatureCelsius,
     );
+
+    // Reduced motion (§11.7): snap the target-tween to a 0ms duration so the
+    // dial jumps instead of animating. Keep the curve identity — for zero
+    // duration the curve doesn't matter, but we don't want to special-case
+    // the builder.
+    final reducedMotion = MediaQuery.of(context).disableAnimations;
+    final tweenDuration = reducedMotion
+        ? Duration.zero
+        : widget.animationDuration;
 
     // Format center text up-front so we don't recompute on every paint.
     final targetDisplay = TemperatureDial.celsiusToDisplay(
@@ -283,7 +286,7 @@ class _TemperatureDialState extends State<TemperatureDial> {
         begin: targetIndex.toDouble(),
         end: targetIndex.toDouble(),
       ),
-      duration: widget.animationDuration,
+      duration: tweenDuration,
       curve: widget.animationCurve,
       builder: (context, animatedIndex, _) {
         final paint = AspectRatio(
