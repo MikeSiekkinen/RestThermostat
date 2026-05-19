@@ -8,9 +8,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
 
 import 'package:rest_thermostat/main.dart';
+import 'package:rest_thermostat/models/device.dart';
 import 'package:rest_thermostat/services/nle_api_client.dart';
 import 'package:rest_thermostat/state/providers.dart';
 import 'package:rest_thermostat/widgets/device_picker_sheet.dart';
+import 'package:rest_thermostat/widgets/ember_background.dart';
 
 import 'onboarding/fake_onboarding_store.dart';
 import 'state/fake_state_cache.dart';
@@ -140,6 +142,46 @@ void main() {
 
     expect(store.activeSerial, '02BB02BD041404KL');
   });
+
+  testWidgets(
+    'EmberBackground mode swaps when the active device changes via swipe',
+    (tester) async {
+      // First device is cool; second device is heat. The home background
+      // wraps the whole MainShell — after the swipe, its `mode` should
+      // reflect the new active device. The 300ms `easeInOutCubic`
+      // AnimatedContainer inside EmberBackground handles the visual
+      // crossfade automatically; this test just confirms the wiring.
+      final store = FakeOnboardingStore()
+        ..serverUrl = 'http://test.local:8082'
+        ..activeSerial = '02AA01AC041403JM'
+        ..complete = true;
+
+      final firstAsCool = _oneDeviceBody();
+      (firstAsCool['devices'] as List).first['mode'] = 'cool';
+      final body = _twoDeviceBody(secondMode: 'heat');
+      (body['devices'] as List)[0] = (firstAsCool['devices'] as List).first;
+
+      final dio = Dio(BaseOptions(baseUrl: 'http://test.local:8082'));
+      DioAdapter(dio: dio).onGet('/api/devices', (s) => s.reply(200, body));
+
+      await tester.pumpWidget(_wrap(store: store, dio: dio));
+      await _pumpUntilStable(tester);
+
+      // Find the home-level EmberBackground (the bootstrap loading splash
+      // also uses one, but it's gone by now). When ambiguous we pick the
+      // last match — that's the home wrapper.
+      EmberBackground topLevel() =>
+          tester.widgetList<EmberBackground>(find.byType(EmberBackground)).last;
+
+      expect(topLevel().mode, DeviceMode.cool);
+
+      // Swipe to advance to the heat-mode device.
+      await tester.fling(find.byType(PageView), const Offset(-400, 0), 1200);
+      await _pumpUntilStable(tester);
+
+      expect(topLevel().mode, DeviceMode.heat);
+    },
+  );
 
   testWidgets(
     'persisted serial not in latest snapshot falls back and snackbars once',
