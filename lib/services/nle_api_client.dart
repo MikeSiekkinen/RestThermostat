@@ -23,7 +23,14 @@ class NleApiClient {
   }
 
   Future<DevicesResponse> getDevices() async {
+    return DevicesResponse.fromJson(await fetchDevicesJson());
+  }
+
+  /// Same call as [getDevices] but returns the raw JSON body so callers (e.g.
+  /// [PollingDeviceStateSource]) can cache it verbatim without re-serializing
+  /// the parsed object graph.
+  Future<Map<String, dynamic>> fetchDevicesJson() async {
     final response = await dio.get<Map<String, dynamic>>('/api/devices');
-    return DevicesResponse.fromJson(response.data!);
+    return response.data!;
   }
 }
