@@ -171,9 +171,12 @@ class Schedule {
   /// We accept either `days` or `schedule` as the day-map key, and either
   /// string-int keys (`"0".."6"`) or list-of-lists form for resilience.
   factory Schedule.fromJson(Map<String, dynamic> json) {
-    final version = (json['version'] as num?)?.toInt();
+    // NLE wire key is `ver`; accept legacy `version` for resilience.
+    final version =
+        (json['ver'] as num?)?.toInt() ?? (json['version'] as num?)?.toInt();
     final name = json['name'] as String?;
-    final mode = (json['mode'] ?? json['schedule_mode']) as String?;
+    // NLE wire key is `schedule_mode`; accept legacy `mode` for resilience.
+    final mode = (json['schedule_mode'] ?? json['mode']) as String?;
 
     final raw = (json['days'] ?? json['schedule']) as Object?;
     final events = <int, List<ScheduleEvent>>{};
@@ -228,19 +231,20 @@ class Schedule {
   }
 
   /// Serialize back to the NLE wire shape used by `POST /command set_schedule`.
-  /// All seven days are emitted, even empty ones (DESIGN §6.7 — empty list is
-  /// a valid day).
+  /// Per the Control API spec the value is `{ver, schedule_mode, days}` —
+  /// `version`/`name`/`mode` are NOT recognized by the server. All seven days
+  /// are emitted, even empty ones (DESIGN §6.7 — empty list is a valid day).
   Map<String, dynamic> toJson() {
     final days = <String, List<Map<String, dynamic>>>{};
     for (var i = 0; i < 7; i++) {
       final list = events[i] ?? const <ScheduleEvent>[];
       days['$i'] = [for (final e in list) e.toJson()];
     }
-    final json = <String, dynamic>{'days': days};
-    if (version != null) json['version'] = version;
-    if (name != null) json['name'] = name;
-    if (mode != null) json['mode'] = mode;
-    return json;
+    return <String, dynamic>{
+      'ver': version ?? 2,
+      'schedule_mode': mode ?? 'HEAT',
+      'days': days,
+    };
   }
 
   /// Add [event] to its `dayIndex`. Returns a new [Schedule]; sorts the

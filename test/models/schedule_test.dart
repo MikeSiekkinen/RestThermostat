@@ -301,17 +301,45 @@ void main() {
       }
     });
 
-    test('toJson preserves version, name, and mode', () {
+    test('toJson emits NLE wire keys: ver + schedule_mode + days', () {
       const schedule = Schedule(
         events: {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []},
         version: 2,
-        name: 'Weekday/Weekend',
+        name: 'Weekday/Weekend', // not on the wire — should be dropped
         mode: 'HEAT',
       );
       final json = schedule.toJson();
-      expect(json['version'], 2);
-      expect(json['name'], 'Weekday/Weekend');
-      expect(json['mode'], 'HEAT');
+      expect(json['ver'], 2);
+      expect(json['schedule_mode'], 'HEAT');
+      expect(json['days'], isA<Map<String, dynamic>>());
+      expect(json.containsKey('version'), isFalse);
+      expect(json.containsKey('mode'), isFalse);
+      expect(json.containsKey('name'), isFalse);
+    });
+
+    test('toJson defaults ver=2 and schedule_mode=HEAT for new schedules', () {
+      const schedule = Schedule(
+        events: {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []},
+      );
+      final json = schedule.toJson();
+      expect(json['ver'], 2);
+      expect(json['schedule_mode'], 'HEAT');
+    });
+
+    test('fromJson accepts ver+schedule_mode (current NLE shape)', () {
+      final schedule = Schedule.fromJson({
+        'ver': 3,
+        'schedule_mode': 'COOL',
+        'days': const {'0': []},
+      });
+      expect(schedule.version, 3);
+      expect(schedule.mode, 'COOL');
+    });
+
+    test('fromJson still accepts legacy version+mode keys', () {
+      final schedule = Schedule.fromJson({'version': 1, 'mode': 'HEAT'});
+      expect(schedule.version, 1);
+      expect(schedule.mode, 'HEAT');
     });
   });
 }
