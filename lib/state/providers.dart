@@ -7,6 +7,8 @@ import '../services/app_info.dart';
 import '../services/app_logger.dart';
 import '../services/nle_api_client.dart';
 import '../services/onboarding_store.dart';
+import 'auth_failure_coordinator.dart';
+import 'connection_status.dart';
 import 'device_state_source.dart';
 import 'devices_snapshot.dart';
 import 'polling_device_state_source.dart';
@@ -82,10 +84,12 @@ final deviceStateSourceProvider = Provider.autoDispose<DeviceStateSource>((
   ref,
 ) {
   final client = ref.watch(nleApiClientProvider);
+  final authCoordinator = ref.watch(authFailureCoordinatorProvider);
   final source = PollingDeviceStateSource(
     fetchJson: client.fetchDevicesJson,
     cache: ref.watch(stateCacheProvider),
     logger: ref.watch(appLoggerProvider),
+    onAuthFailure: authCoordinator.fire,
   );
   source.start();
   ref.onDispose(source.dispose);
@@ -96,6 +100,14 @@ final devicesSnapshotProvider = StreamProvider.autoDispose<DevicesSnapshot>((
   ref,
 ) {
   return ref.watch(deviceStateSourceProvider).watch();
+});
+
+/// Connection-status stream driving the home-screen stale-state pill per
+/// DESIGN §12.4 + §15.1. Auto-disposes alongside the source.
+final connectionStatusProvider = StreamProvider.autoDispose<ConnectionStatus>((
+  ref,
+) {
+  return ref.watch(deviceStateSourceProvider).watchStatus();
 });
 
 /// Per-device schedule fetched lazily from `/api/devices/<serial>/schedule`.

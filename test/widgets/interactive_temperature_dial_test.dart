@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
 import 'package:rest_thermostat/models/device.dart';
 import 'package:rest_thermostat/services/nle_api_client.dart';
+import 'package:rest_thermostat/state/connection_status.dart';
 import 'package:rest_thermostat/state/device_state_source.dart';
 import 'package:rest_thermostat/state/devices_snapshot.dart';
 import 'package:rest_thermostat/state/providers.dart';
@@ -44,6 +45,9 @@ class _StubSource implements DeviceStateSource {
 
   @override
   bool get isStale => false;
+
+  @override
+  Stream<ConnectionStatus> watchStatus() => const Stream.empty();
 
   @override
   Future<void> dispose() async => _controller.close();

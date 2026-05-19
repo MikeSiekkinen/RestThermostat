@@ -38,6 +38,7 @@ _Harness _setup({
   AuthConfig initialAuth = const AuthNone(),
   Map<String, String> overrides = const {},
   VoidCallback? onDisconnect,
+  bool initiallyExpandAuth = false,
 }) {
   final store = FakeOnboardingStore()
     ..serverUrl = initialUrl
@@ -69,7 +70,10 @@ _Harness _setup({
       ),
     ],
     child: MaterialApp(
-      home: SettingsScreen(onDisconnect: onDisconnect ?? () {}),
+      home: SettingsScreen(
+        onDisconnect: onDisconnect ?? () {},
+        initiallyExpandAuth: initiallyExpandAuth,
+      ),
     ),
   );
 
@@ -344,6 +348,26 @@ void main() {
     expect(find.text(settingsNleCredit), findsOneWidget);
     expect(find.textContaining(settingsRepoUrl), findsOneWidget);
     expect(find.textContaining(settingsNleDocsUrl), findsOneWidget);
+
+    await _disposeTree(tester);
+  });
+
+  testWidgets('initiallyExpandAuth=true reveals auth section on first frame', (
+    tester,
+  ) async {
+    final h = _setup(
+      initialUrl: 'http://saved.local:8082',
+      initiallyExpandAuth: true,
+    );
+    h.adapter.onGet('/api/devices', (s) => s.reply(200, _devicesOne()));
+
+    await tester.pumpWidget(h.widget);
+    await _settleAndUnmount(tester);
+
+    // The Authentication dropdown only renders inside the expanded
+    // "Advanced" section. With initiallyExpandAuth=true it should be
+    // visible without the user tapping the expander first.
+    expect(find.text('Authentication'), findsOneWidget);
 
     await _disposeTree(tester);
   });

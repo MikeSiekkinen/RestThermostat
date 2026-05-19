@@ -1,9 +1,10 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/device.dart';
+import '../services/nle_error.dart';
+import '../state/auth_failure_coordinator.dart';
 import '../state/providers.dart';
 import '../theme/colors.dart';
 import '../theme/typography.dart';
@@ -149,7 +150,12 @@ class _InteractiveFanWidgetState extends ConsumerState<InteractiveFanWidget> {
         command: 'set_fan',
         value: value,
       );
-    } on DioException catch (e) {
+    } on NleAuthError catch (_) {
+      if (!mounted) return;
+      ref.read(authFailureCoordinatorProvider).fire();
+      if (onErrorRevert) _revertOptimistic();
+      return;
+    } on NleError catch (e) {
       if (!mounted) return;
       if (onErrorRevert) _revertOptimistic();
       _showSnack(_messageFor(e));
@@ -176,17 +182,14 @@ class _InteractiveFanWidgetState extends ConsumerState<InteractiveFanWidget> {
     messenger?.showSnackBar(SnackBar(content: Text(message)));
   }
 
-  String _messageFor(DioException e) {
-    final body = e.response?.data;
-    if (body is Map) {
-      final candidate = body['error'] ?? body['message'];
-      if (candidate is String && candidate.isNotEmpty) return candidate;
-    } else if (body is String && body.isNotEmpty) {
-      return body;
+  String _messageFor(NleError e) {
+    if (e.serverMessage != null && e.serverMessage!.isNotEmpty) {
+      return e.serverMessage!;
     }
-    final code = e.response?.statusCode ?? 0;
-    if (code >= 400 && code < 500) return 'Server rejected fan command';
-    return 'Couldn\'t change fan';
+    return switch (e) {
+      NleClientError() => 'Server rejected fan command',
+      _ => "Couldn't change fan",
+    };
   }
 
   @override

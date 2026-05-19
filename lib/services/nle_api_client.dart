@@ -4,11 +4,17 @@ import '../models/devices_response.dart';
 import '../models/schedule.dart';
 import 'app_logger.dart';
 import 'nle_api_logging_interceptor.dart';
+import 'nle_error.dart';
 
 class NleApiClient {
   final Dio dio;
+  final AppLogger? _logger;
 
-  const NleApiClient({required this.dio});
+  // Initializing-formal would require the constructor param to be named
+  // `_logger` (matching the field), which is awkward for a public API. The
+  // `:` form keeps the named arg `logger`.
+  // ignore: prefer_initializing_formals
+  const NleApiClient({required this.dio, AppLogger? logger}) : _logger = logger;
 
   /// Production factory. Installs the diagnostic-logging interceptor so every
   /// HTTP call appears in [AppLogger]; logs the configured auth presence once
@@ -33,19 +39,27 @@ class NleApiClient {
     );
     dio.interceptors.add(NleApiLoggingInterceptor(logger: effectiveLogger));
     effectiveLogger.info('auth: ${_authPresence(authorizationHeader)}');
-    return NleApiClient(dio: dio);
+    return NleApiClient(dio: dio, logger: effectiveLogger);
   }
 
+  AppLogger get _log => _logger ?? AppLogger.instance;
+
   Future<DevicesResponse> getDevices() async {
-    return DevicesResponse.fromJson(await fetchDevicesJson());
+    final raw = await fetchDevicesJson();
+    return _parse(raw, () => DevicesResponse.fromJson(raw));
   }
 
   /// Same call as [getDevices] but returns the raw JSON body so callers (e.g.
   /// [PollingDeviceStateSource]) can cache it verbatim without re-serializing
-  /// the parsed object graph.
+  /// the parsed object graph. Throws [NleError] subclasses on HTTP failure;
+  /// the body's shape isn't validated here (callers do that).
   Future<Map<String, dynamic>> fetchDevicesJson() async {
-    final response = await dio.get<Map<String, dynamic>>('/api/devices');
-    return response.data!;
+    try {
+      final response = await dio.get<Map<String, dynamic>>('/api/devices');
+      return response.data!;
+    } on DioException catch (e) {
+      throw NleError.fromDio(e);
+    }
   }
 
   /// Fetch the active schedule for [serial], or `null` if the server has none
@@ -54,13 +68,21 @@ class NleApiClient {
   /// `{serial, schedule, object_revision, object_timestamp}`; `schedule` is
   /// `null` when no schedule is stored.
   Future<Schedule?> getSchedule(String serial) async {
-    final response = await dio.get<Map<String, dynamic>>(
-      '/api/schedule',
-      queryParameters: {'serial': serial},
-    );
-    final inner = response.data?['schedule'];
-    if (inner is! Map<String, dynamic>) return null;
-    return Schedule.fromJson(inner);
+    final Response<Map<String, dynamic>> response;
+    try {
+      response = await dio.get<Map<String, dynamic>>(
+        '/api/schedule',
+        queryParameters: {'serial': serial},
+      );
+    } on DioException catch (e) {
+      throw NleError.fromDio(e);
+    }
+    final body = response.data;
+    return _parse(body, () {
+      final inner = body?['schedule'];
+      if (inner is! Map<String, dynamic>) return null;
+      return Schedule.fromJson(inner);
+    });
   }
 
   /// Issue a write command per DESIGN §16.4. Body shape is
@@ -74,7 +96,7 @@ class NleApiClient {
   /// Retries once with a 2s backoff on transient failures (network errors and
   /// 5xx responses) per DESIGN §2.3. 4xx responses (validation/auth) are
   /// returned to the caller immediately — retrying won't help and the user
-  /// needs the snackbar surface. Errors propagate as [DioException].
+  /// needs the snackbar surface. Errors propagate as [NleError] subclasses.
   ///
   /// [retryDelay] is provided as an override for tests so they can run
   /// without waiting on real wall-clock time.
@@ -84,14 +106,19 @@ class NleApiClient {
     required Object? value,
     Duration retryDelay = const Duration(seconds: 2),
   }) async {
-    AppLogger.instance.commandIssued(command, value);
+    _log.commandIssued(command, value);
     final data = {'serial': serial, 'command': command, 'value': value};
     try {
       await dio.post<dynamic>('/command', data: data);
+      return;
     } on DioException catch (e) {
-      if (!_isTransient(e)) rethrow;
+      if (!_isTransient(e)) throw NleError.fromDio(e);
       await Future<void>.delayed(retryDelay);
-      await dio.post<dynamic>('/command', data: data);
+      try {
+        await dio.post<dynamic>('/command', data: data);
+      } on DioException catch (e2) {
+        throw NleError.fromDio(e2);
+      }
     }
   }
 
@@ -120,6 +147,24 @@ class NleApiClient {
       command: 'set_schedule',
       value: schedule.toJson(),
     );
+  }
+
+  /// Wrap a synchronous JSON-shaping callback so any thrown
+  /// `FormatException`/`TypeError`/`NoSuchMethodError` becomes an
+  /// [NleParseError] with a short excerpt logged for postmortem.
+  T _parse<T>(Object? body, T Function() builder) {
+    try {
+      return builder();
+    } catch (e) {
+      final excerpt = _excerpt(body);
+      _log.error('parse failed', data: {'excerpt': excerpt});
+      throw NleParseError(responseExcerpt: excerpt, cause: e);
+    }
+  }
+
+  static String _excerpt(Object? body) {
+    final s = body?.toString() ?? '';
+    return s.length <= 200 ? s : '${s.substring(0, 200)}…';
   }
 
   /// Maps a raw `Authorization` header value to a presence label

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/device.dart';
+import '../services/nle_error.dart';
+import '../state/auth_failure_coordinator.dart';
 import '../state/devices_snapshot.dart';
 import '../state/providers.dart';
 import 'temperature_dial.dart';
@@ -129,6 +131,14 @@ class _InteractiveTemperatureDialState
         command: 'set_temperature',
         value: _buildValue(clamped),
       );
+    } on NleAuthError catch (_) {
+      if (!mounted) return;
+      ref.read(authFailureCoordinatorProvider).fire();
+      setState(() {
+        _optimisticC = null;
+        _pendingConfirmC = null;
+      });
+      return;
     } catch (_) {
       if (!mounted) return;
       _showSnack('Couldn\'t update temperature', retryC: clamped);

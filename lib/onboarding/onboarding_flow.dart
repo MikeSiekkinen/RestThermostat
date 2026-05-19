@@ -1,9 +1,9 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../models/auth_config.dart';
 import '../models/device.dart';
 import '../services/nle_api_client.dart';
+import '../services/nle_error.dart';
 import '../services/onboarding_store.dart';
 import 'connect_outcome.dart';
 import 'device_picker_screen.dart';
@@ -75,11 +75,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         _step = _Step.devicePicker;
       });
       return const ConnectSuccess();
-    } on DioException catch (e) {
-      final status = e.response?.statusCode;
-      if (status == 401 || status == 403) {
-        return const ConnectInlineError('Authentication failed.');
-      }
+    } on NleAuthError catch (_) {
+      return const ConnectInlineError('Authentication failed.');
+    } on NleError catch (_) {
       return const ConnectInlineError("Couldn't reach server.");
     }
   }

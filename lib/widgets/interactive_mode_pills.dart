@@ -1,9 +1,10 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/device.dart';
+import '../services/nle_error.dart';
+import '../state/auth_failure_coordinator.dart';
 import '../state/providers.dart';
 import 'mode_pills.dart';
 
@@ -71,7 +72,14 @@ class _InteractiveModePillsState extends ConsumerState<InteractiveModePills> {
         command: 'set_mode',
         value: newMode.toApi(),
       );
-    } on DioException catch (e) {
+    } on NleAuthError catch (_) {
+      if (!mounted) return;
+      // Don't double-show a snackbar — the home shell handles the auth
+      // failure surface (with the Open Settings deep-link). Just revert.
+      ref.read(authFailureCoordinatorProvider).fire();
+      setState(() => _optimisticMode = null);
+      return;
+    } on NleError catch (e) {
       if (!mounted) return;
       _revert(_messageFor(e));
       return;
@@ -93,20 +101,17 @@ class _InteractiveModePillsState extends ConsumerState<InteractiveModePills> {
     messenger?.showSnackBar(SnackBar(content: Text(message)));
   }
 
-  /// Pulls a human-readable message out of a [DioException] response body.
-  /// Server payloads aren't standardized — try `error`, then `message`, then
-  /// the raw decoded body. Fall back to mode-specific copy.
-  String _messageFor(DioException e) {
-    final body = e.response?.data;
-    if (body is Map) {
-      final candidate = body['error'] ?? body['message'];
-      if (candidate is String && candidate.isNotEmpty) return candidate;
-    } else if (body is String && body.isNotEmpty) {
-      return body;
+  /// Pull a human-readable message out of an [NleError]. Server payloads
+  /// aren't standardized; [NleError.serverMessage] already tried `error` and
+  /// `message`. Fall back to error-class-specific copy.
+  String _messageFor(NleError e) {
+    if (e.serverMessage != null && e.serverMessage!.isNotEmpty) {
+      return e.serverMessage!;
     }
-    final code = e.response?.statusCode ?? 0;
-    if (code >= 400 && code < 500) return 'Server rejected mode change';
-    return 'Couldn\'t change mode';
+    return switch (e) {
+      NleClientError() => 'Server rejected mode change',
+      _ => "Couldn't change mode",
+    };
   }
 
   @override
