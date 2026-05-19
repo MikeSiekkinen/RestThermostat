@@ -182,22 +182,39 @@ class _InteractiveAwayChipState extends ConsumerState<InteractiveAwayChip> {
     // The chip is invisible when inactive (per §9.4 spec: "Inactive: chip not
     // shown") but the hit target stays at 48dp so a long-press in the area
     // can still toggle away on. This matches §10.5 (text-only, no icon).
-    return SizedBox(
-      height: 48,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _onTap,
-          onLongPress: _onLongPress,
-          borderRadius: BorderRadius.circular(100),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: _displayedAway
-                ? Text(
-                    'AWAY',
-                    style: EmberTypography.labelSmall(color: EmberColors.eco),
-                  )
-                : const SizedBox(width: 32),
+    final away = _displayedAway;
+    return Semantics(
+      // A toggle role (`toggled: ...`) is the cleanest screen-reader mapping
+      // for a binary state with a tap action and a long-press for the eco
+      // temperatures menu. The full label spells out both gestures so blind
+      // users discover the long-press affordance — the visible UI has no
+      // analogue for it.
+      label: away
+          ? 'Away mode on, tap to disable. Long press to edit eco temperatures.'
+          : 'Away mode off, tap to enable. Long press to edit eco temperatures.',
+      toggled: away,
+      button: true,
+      child: ExcludeSemantics(
+        child: SizedBox(
+          height: 48,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _onTap,
+              onLongPress: _onLongPress,
+              borderRadius: BorderRadius.circular(100),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: away
+                    ? Text(
+                        'AWAY',
+                        style: EmberTypography.labelSmall(
+                          color: EmberColors.eco,
+                        ),
+                      )
+                    : const SizedBox(width: 32),
+              ),
+            ),
           ),
         ),
       ),

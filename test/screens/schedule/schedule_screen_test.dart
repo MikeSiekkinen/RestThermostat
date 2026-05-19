@@ -345,4 +345,35 @@ void main() {
 
     await _disposeTree(tester);
   });
+
+  testWidgets('event rows expose a merged Semantics label including '
+      'time, temp, and mode', (tester) async {
+    final h = _setup(serial: 'abc', locale: const Locale('en', 'GB'));
+    h.adapter.onGet(
+      '/api/schedule',
+      (s) => s.reply(200, _scheduleFixture()),
+      queryParameters: {'serial': 'abc'},
+    );
+
+    await tester.pumpWidget(h.widget);
+    await tester.pumpAndSettle();
+
+    // Switch to Monday (internal index 0) — fixture has 4 HEAT events at
+    // 06:00 / 08:00 / 18:00 / 22:00, in Fahrenheit display.
+    final mondayUnderline = find.byKey(const ValueKey('day-underline-0'));
+    await tester.tap(
+      find.ancestor(of: mondayUnderline, matching: find.byType(InkWell)),
+    );
+    await tester.pumpAndSettle();
+
+    // The event row's Semantics label is the merged "Event at … tap to edit."
+    // string. The presence of "tap to edit." is the load-bearing piece —
+    // confirms the row announces itself as actionable.
+    expect(
+      find.bySemanticsLabel(RegExp(r'^Event at .*, .* heat, tap to edit\.$')),
+      findsWidgets,
+    );
+
+    await _disposeTree(tester);
+  });
 }

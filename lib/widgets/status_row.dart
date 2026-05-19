@@ -122,7 +122,13 @@ class _StatusRowState extends State<StatusRow>
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _PulsingDot(color: status.dotColor, controller: _controller),
+          // The dot is purely decorative — the adjacent status label already
+          // announces "Heating" / "Idle" / "Off" etc., and we don't want
+          // TalkBack/VoiceOver to read a redundant "image" or to fall back
+          // to its color name.
+          ExcludeSemantics(
+            child: _PulsingDot(color: status.dotColor, controller: _controller),
+          ),
           const SizedBox(width: 12),
           Column(
             mainAxisSize: MainAxisSize.min,

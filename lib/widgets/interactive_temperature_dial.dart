@@ -222,6 +222,26 @@ class _InteractiveTemperatureDialState
     );
   }
 
+  /// Bump the target by one tick in the requested direction and commit it.
+  /// Used by the `Semantics(onIncrease/onDecrease, ...)` actions in the
+  /// inner dial — TalkBack swipe-up / VoiceOver flick reads land here so
+  /// the user can adjust the setpoint without touching the visual ring.
+  void _bump(int direction) {
+    final current = _optimisticC ?? widget.device.targetTemperature;
+    final currentIndex = TemperatureDial.tickIndexForCelsius(current);
+    final nextIndex = (currentIndex + direction).clamp(
+      0,
+      TemperatureDial.tickCount - 1,
+    );
+    final nextCelsius = TemperatureDial.celsiusForTickIndex(nextIndex);
+    if ((nextCelsius - current).abs() < 1e-9) return;
+    setState(() => _optimisticC = nextCelsius);
+    _commitTimer?.cancel();
+    _commitTimer = Timer(const Duration(milliseconds: 250), () {
+      _commit(nextCelsius);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final displayedC = _optimisticC ?? widget.device.targetTemperature;
@@ -234,6 +254,8 @@ class _InteractiveTemperatureDialState
       onTargetDragUpdate: _onDragUpdate,
       onTargetDragEnd: _onDragEnd,
       onTargetTap: _onTap,
+      onIncrease: () => _bump(1),
+      onDecrease: () => _bump(-1),
     );
   }
 }
