@@ -1,0 +1,20 @@
+# Configuration for flutter_launcher_icons.
+#
+# Generates platform launcher-icon assets from a single source PNG.
+# Run:  dart run flutter_launcher_icons -f flutter_launcher_icons.yaml
+#
+# Source assets are produced by `dart run tool/generate_icon.dart`.
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon/icon.png"
+  min_sdk_android: 24
+  # Android adaptive icon — foreground is the IP-safe concentric-arcs glyph
+  # rendered with safe-zone padding; background is Ember-deep (#1A0A1A) per
+  # the issue spec, picked to match the splash and onboarding gradients.
+  adaptive_icon_background: "#1A0A1A"
+  adaptive_icon_foreground: "assets/icon/icon_foreground.png"
+  # Remove alpha channel from the iOS 1024×1024 marketing icon (App Store
+  # requires opaque). flutter_launcher_icons composites against this color.
+  remove_alpha_ios: true
+  background_color_ios: "#050108"
