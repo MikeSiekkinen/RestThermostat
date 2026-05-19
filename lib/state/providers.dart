@@ -108,3 +108,21 @@ final scheduleProvider = FutureProvider.autoDispose.family<Schedule?, String>((
   final client = ref.watch(nleApiClientProvider);
   return client.getSchedule(serial);
 });
+
+/// Single source of truth for which device is currently shown across Home,
+/// Schedule, and Details (DESIGN §4). Initialized to `null`; Bootstrap pushes
+/// the persisted active serial from [OnboardingConfig.activeSerial] after the
+/// config future resolves, and the multi-device switcher (page swipe / picker
+/// sheet) updates it from the UI.
+class ActiveDeviceSerialNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  // ignore: use_setters_to_change_properties
+  void set(String? serial) => state = serial;
+}
+
+final activeDeviceSerialProvider =
+    NotifierProvider<ActiveDeviceSerialNotifier, String?>(
+      ActiveDeviceSerialNotifier.new,
+    );

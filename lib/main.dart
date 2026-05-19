@@ -10,9 +10,12 @@ import 'screens/main_shell.dart';
 import 'services/app_info.dart';
 import 'services/onboarding_store.dart';
 import 'settings/settings_screen.dart';
+import 'state/devices_snapshot.dart';
 import 'state/lifecycle_bridge.dart';
 import 'state/providers.dart';
 import 'theme/ember_theme.dart';
+import 'widgets/device_indicator_dots.dart';
+import 'widgets/device_picker_sheet.dart';
 import 'widgets/ember_background.dart';
 
 Future<void> main() async {
@@ -89,6 +92,10 @@ class _BootstrapState extends ConsumerState<_Bootstrap> {
         url: config.serverUrl!,
         auth: config.auth,
       ));
+      // Seed the active-serial provider from persisted state. The fallback
+      // path inside _Home reconciles this against the live snapshot once the
+      // first /api/devices fetch resolves (DESIGN §4.5).
+      ref.read(activeDeviceSerialProvider.notifier).set(config.activeSerial);
     }
     return config;
   }
@@ -125,7 +132,7 @@ class _BootstrapState extends ConsumerState<_Bootstrap> {
           return LifecycleBridge(
             child: _Home(
               overrides: config.deviceNameOverrides,
-              activeSerial: config.activeSerial,
+              store: widget.store,
               onDisconnect: _onDisconnect,
             ),
           );
@@ -141,45 +148,121 @@ class _BootstrapState extends ConsumerState<_Bootstrap> {
   }
 }
 
-class _Home extends ConsumerWidget {
+class _Home extends ConsumerStatefulWidget {
   final Map<String, String> overrides;
-  final String? activeSerial;
+  final OnboardingStore store;
   final VoidCallback onDisconnect;
 
   const _Home({
     required this.overrides,
-    required this.activeSerial,
+    required this.store,
     required this.onDisconnect,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(devicesSnapshotProvider);
+  ConsumerState<_Home> createState() => _HomeState();
+}
 
-    // Resolve the mode for the background gradient. Loading and error paths
-    // fall back to `off` (neutral gradient) — we don't want to flash a heat
-    // glow on a stale state before the first poll resolves.
-    final mode = async.maybeWhen(
-      data: (snapshot) => snapshot.devices.isEmpty
-          ? DeviceMode.off
-          : snapshot.devices.first.mode,
-      orElse: () => DeviceMode.off,
-    );
+class _HomeState extends ConsumerState<_Home> {
+  late final PageController _pageController = PageController();
+  bool _fallbackSnackbarShown = false;
 
-    // Resolve the active device from the snapshot. Prefer the persisted
-    // active-serial; fall back to the first device. DESIGN §4.5's one-time
-    // bounce to onboarding on a missing serial is deferred — for now we
-    // degrade to "first" rather than crashing.
-    final activeDevice = async.maybeWhen<Device?>(
-      data: (snapshot) {
-        if (snapshot.devices.isEmpty) return null;
-        return snapshot.devices.firstWhere(
-          (d) => d.serial == activeSerial,
-          orElse: () => snapshot.devices.first,
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  /// DESIGN §4.5: if the persisted serial isn't in the latest snapshot,
+  /// fall back to the first device and surface a one-time snackbar. Called
+  /// from build via a post-frame callback so we don't mutate provider state
+  /// during widget build.
+  void _reconcileActiveSerial(DevicesSnapshot snapshot) {
+    if (snapshot.devices.isEmpty) return;
+    final current = ref.read(activeDeviceSerialProvider);
+    final inSnapshot =
+        current != null && snapshot.devices.any((d) => d.serial == current);
+    if (inSnapshot) return;
+
+    final firstSerial = snapshot.devices.first.serial;
+    final wasMismatch = current != null && !inSnapshot;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(activeDeviceSerialProvider.notifier).set(firstSerial);
+      // Only surface the snackbar when the user actually had a persisted
+      // serial that's no longer present. The "no persisted serial yet"
+      // case (just-finished onboarding) silently seeds to first.
+      if (wasMismatch && !_fallbackSnackbarShown) {
+        _fallbackSnackbarShown = true;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Active device changed — it wasn't in the latest device list.",
+            ),
+          ),
         );
-      },
-      orElse: () => null,
+      }
+    });
+  }
+
+  Future<void> _openDevicePicker(
+    BuildContext context,
+    List<Device> devices,
+    String? activeSerial,
+  ) async {
+    final picked = await DevicePickerSheet.show(
+      context,
+      devices: devices,
+      activeSerial: activeSerial,
+      nameOverrides: widget.overrides,
     );
+    if (picked == null || picked == activeSerial) return;
+    await _setActiveSerial(picked, devices);
+  }
+
+  Future<void> _setActiveSerial(String serial, List<Device> devices) async {
+    ref.read(activeDeviceSerialProvider.notifier).set(serial);
+    // Best-effort persistence; failures here aren't user-facing — the next
+    // launch falls back to the §4.5 path.
+    try {
+      await widget.store.saveActiveSerial(serial);
+    } catch (_) {
+      // Swallow — the in-memory provider is authoritative for this session.
+    }
+    // Keep PageView in sync if the change came from the picker sheet.
+    final index = devices.indexWhere((d) => d.serial == serial);
+    if (index >= 0 && _pageController.hasClients) {
+      final currentPage = _pageController.page?.round() ?? 0;
+      if (currentPage != index) {
+        _pageController.animateToPage(
+          index,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOutCubic,
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(devicesSnapshotProvider);
+    final activeSerial = ref.watch(activeDeviceSerialProvider);
+
+    final devices = async.maybeWhen(
+      data: (snapshot) => snapshot.devices,
+      orElse: () => const <Device>[],
+    );
+    if (devices.isNotEmpty) {
+      _reconcileActiveSerial(async.requireValue);
+    }
+
+    final activeDevice = devices.isEmpty
+        ? null
+        : devices.firstWhere(
+            (d) => d.serial == activeSerial,
+            orElse: () => devices.first,
+          );
+    final mode = activeDevice?.mode ?? DeviceMode.off;
     final lastSyncAt = async.maybeWhen<DateTime?>(
       data: (snapshot) => snapshot.fetchedAt,
       orElse: () => null,
@@ -203,7 +286,7 @@ class _Home extends ConsumerWidget {
                     builder: (_) => SettingsScreen(
                       onDisconnect: () {
                         Navigator.of(context).pop();
-                        onDisconnect();
+                        widget.onDisconnect();
                       },
                     ),
                   ),
@@ -220,9 +303,14 @@ class _Home extends ConsumerWidget {
               }
               return MainShell(
                 device: activeDevice!,
-                overrides: overrides,
+                overrides: widget.overrides,
                 lastSyncAt: lastSyncAt,
-                homeTab: HomeBody(device: activeDevice, overrides: overrides),
+                homeTab: _buildHomeTab(
+                  context,
+                  snapshot.devices,
+                  activeDevice,
+                  activeSerial,
+                ),
               );
             },
             loading: () => const Center(child: CircularProgressIndicator()),
@@ -230,6 +318,61 @@ class _Home extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+
+  /// Builds the Home-tab body. Single-device: a plain `HomeBody`. Multi-
+  /// device: wraps `HomeBody` in a `PageView` that drives
+  /// `activeDeviceSerialProvider` on swipe, and threads the device-picker
+  /// trigger + indicator dots into the body. The PageController is reused
+  /// across rebuilds so picker-driven changes can animate to the right
+  /// page rather than resetting.
+  Widget _buildHomeTab(
+    BuildContext context,
+    List<Device> devices,
+    Device activeDevice,
+    String? activeSerial,
+  ) {
+    if (devices.length < 2) {
+      return HomeBody(device: activeDevice, overrides: widget.overrides);
+    }
+    final activeIndex = devices.indexWhere((d) => d.serial == activeSerial);
+    final resolvedIndex = activeIndex >= 0 ? activeIndex : 0;
+
+    // Keep the PageController in sync with provider-driven changes (e.g.
+    // picker-sheet selection). Without this jump, picking a row in the
+    // sheet wouldn't move the page.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!_pageController.hasClients) return;
+      final currentPage = _pageController.page?.round();
+      if (currentPage != resolvedIndex) {
+        _pageController.jumpToPage(resolvedIndex);
+      }
+    });
+
+    return PageView.builder(
+      controller: _pageController,
+      itemCount: devices.length,
+      onPageChanged: (index) {
+        final serial = devices[index].serial;
+        if (serial != activeSerial) {
+          _setActiveSerial(serial, devices);
+        }
+      },
+      itemBuilder: (_, index) {
+        final d = devices[index];
+        return HomeBody(
+          device: d,
+          overrides: widget.overrides,
+          onNameTap: () => _openDevicePicker(context, devices, activeSerial),
+          indicatorDots: DeviceIndicatorDots(
+            count: devices.length,
+            activeIndex: resolvedIndex,
+            activeMode: activeDevice.mode,
+          ),
+        );
+      },
     );
   }
 }

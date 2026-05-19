@@ -25,10 +25,16 @@ class StatusRow extends StatefulWidget {
   /// [displayNameFor] for §4.4 resolution.
   final Map<String, String> nameOverrides;
 
+  /// When non-null, the device name becomes tappable and a small caret icon
+  /// is rendered next to it (DESIGN §4.2). Used by the home screen to open
+  /// the device-picker bottom sheet when there are ≥2 devices.
+  final VoidCallback? onNameTap;
+
   const StatusRow({
     super.key,
     required this.device,
     this.nameOverrides = const {},
+    this.onNameTap,
   });
 
   @override
@@ -88,6 +94,26 @@ class _StatusRowState extends State<StatusRow>
   Widget build(BuildContext context) {
     final status = deriveStatus(widget.device);
     final name = displayNameFor(widget.device, widget.nameOverrides);
+    final tappable = widget.onNameTap != null;
+
+    final nameRow = Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          name,
+          style: EmberTypography.bodyMedium(color: EmberColors.textSecondary),
+        ),
+        if (tappable) ...[
+          const SizedBox(width: 4),
+          const Icon(
+            Icons.expand_more,
+            size: 16,
+            color: EmberColors.textSecondary,
+          ),
+        ],
+      ],
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -109,12 +135,20 @@ class _StatusRowState extends State<StatusRow>
                 ),
               ),
               const SizedBox(height: 2),
-              Text(
-                name,
-                style: EmberTypography.bodyMedium(
-                  color: EmberColors.textSecondary,
-                ),
-              ),
+              if (tappable)
+                InkWell(
+                  onTap: widget.onNameTap,
+                  borderRadius: BorderRadius.circular(4),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 2,
+                    ),
+                    child: nameRow,
+                  ),
+                )
+              else
+                nameRow,
             ],
           ),
         ],
