@@ -15,6 +15,7 @@ import 'state/lifecycle_bridge.dart';
 import 'state/providers.dart';
 import 'theme/ember_theme.dart';
 import 'widgets/ember_background.dart';
+import 'widgets/temperature_dial.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -237,7 +238,7 @@ class _Home extends ConsumerWidget {
         body: SafeArea(
           child: Center(
             child: async.when(
-              data: (snapshot) => _renderSnapshot(snapshot),
+              data: (snapshot) => _renderSnapshot(context, snapshot),
               loading: () => const CircularProgressIndicator(),
               error: (e, _) => Text('Error: $e'),
             ),
@@ -247,17 +248,46 @@ class _Home extends ConsumerWidget {
     );
   }
 
-  Widget _renderSnapshot(DevicesSnapshot snapshot) {
+  Widget _renderSnapshot(BuildContext context, DevicesSnapshot snapshot) {
     if (snapshot.devices.isEmpty) return const Text('No devices');
-    final d = snapshot.devices.first;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(displayNameFor(d, overrides)),
-        Text('Current: ${d.currentTemperature}'),
-        Text('Target: ${d.targetTemperature}'),
-        Text('Mode: ${d.mode.toApi()}'),
-      ],
+    // Resolve which device to show. Prefer the persisted active serial (set
+    // during onboarding); fall back to the first device in the snapshot.
+    // DESIGN §4.5 has a one-time bounce to onboarding when the persisted
+    // serial isn't in the snapshot — deferred to a later ticket. For now
+    // we just degrade gracefully to "first" rather than blowing up.
+    final d = snapshot.devices.firstWhere(
+      (device) => device.serial == activeSerial,
+      orElse: () => snapshot.devices.first,
+    );
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            displayNameFor(d, overrides),
+            style: Theme.of(context).textTheme.headlineLarge,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          // Cap the dial at the §10.3 ~240dp diameter, but let it shrink on
+          // narrower viewports rather than overflowing.
+          ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: TemperatureDial.preferredDiameter,
+              maxHeight: TemperatureDial.preferredDiameter,
+            ),
+            child: TemperatureDial(
+              currentTemperatureCelsius: d.currentTemperature,
+              targetTemperatureCelsius: d.targetTemperature,
+              mode: d.mode,
+              displayUnit: d.temperatureScale,
+              capabilities: d.capabilities,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

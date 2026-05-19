@@ -10,6 +10,7 @@ import 'package:http_mock_adapter/http_mock_adapter.dart';
 import 'package:rest_thermostat/main.dart';
 import 'package:rest_thermostat/services/nle_api_client.dart';
 import 'package:rest_thermostat/state/providers.dart';
+import 'package:rest_thermostat/widgets/temperature_dial.dart';
 
 import 'onboarding/fake_onboarding_store.dart';
 import 'state/fake_state_cache.dart';
@@ -47,8 +48,14 @@ void main() {
     await tester.runAsync(() => Future<void>.delayed(Duration.zero));
     await tester.pumpAndSettle();
 
+    // Device name renders above the dial; the dial widget itself is mounted
+    // and shows the converted target temperature in its center label. The
+    // fixture serves °F (`temperature_scale: "F"`), target 24.44°C → 76°F,
+    // current 24.77°C → 77°F.
     expect(find.text('Upstairs'), findsOneWidget);
-    expect(find.text('Mode: cool'), findsOneWidget);
+    expect(find.byType(TemperatureDial), findsOneWidget);
+    expect(find.text('76°'), findsOneWidget);
+    expect(find.text('Currently 77°'), findsOneWidget);
   });
 
   testWidgets('incomplete onboarding lands on Welcome screen', (tester) async {
