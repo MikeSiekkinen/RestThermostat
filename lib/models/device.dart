@@ -9,7 +9,11 @@ enum DeviceMode {
     'off' => off,
     'heat' => heat,
     'cool' => cool,
-    'heat-cool' => heatCool,
+    // The NLE Control API normalizes the write value `"heat-cool"` to
+    // `"range"` on read (verified against the live server 2026-05-19 against
+    // `192.168.1.216:8082`). Both labels map to the same logical mode in the
+    // app; `toApi()` always emits `"heat-cool"` on write.
+    'heat-cool' || 'range' => heatCool,
     'emergency' => emergency,
     _ => throw FormatException('Unknown device mode: $value'),
   };

@@ -15,6 +15,12 @@ void main() {
       expect(DeviceMode.fromApi('emergency'), DeviceMode.emergency);
     });
 
+    test('fromApi accepts "range" as an alias for heat-cool', () {
+      // The live NLE server normalizes the write value `"heat-cool"` to
+      // `"range"` on read; both must parse back to the same logical mode.
+      expect(DeviceMode.fromApi('range'), DeviceMode.heatCool);
+    });
+
     test('toApi roundtrips', () {
       for (final mode in DeviceMode.values) {
         expect(DeviceMode.fromApi(mode.toApi()), mode);
