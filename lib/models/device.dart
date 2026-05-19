@@ -181,6 +181,20 @@ class Device {
     required this.subscriptionCount,
   });
 
+  /// Whether the device is currently in manual-away (a.k.a. eco) mode.
+  ///
+  /// The `device.away` boolean is NOT what `POST /command set_away` toggles —
+  /// `away` is the legacy auto-away (motion-detection) flag, which NLE
+  /// doesn't implement and which stays `false` forever. The field that
+  /// actually reflects "currently away" is `eco_mode`:
+  ///
+  /// - `"schedule"` — normal operation, following the schedule
+  /// - `"manual-eco"` — user toggled away on (via `set_away true`)
+  ///
+  /// Verified against the live server 2026-05-19; see the `nle-api-reference`
+  /// memory for the wire-shape details.
+  bool get isAway => ecoMode == 'manual-eco';
+
   factory Device.fromJson(Map<String, dynamic> json) => Device(
     serial: json['serial'] as String,
     apiKey: json['api_key'] as String,
