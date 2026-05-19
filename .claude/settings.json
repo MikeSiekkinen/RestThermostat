@@ -1,0 +1,70 @@
+{
+  "$comment": "Project-level Claude Code permissions. Committed to the repo so sub-agents (via /batch, Agent tool, /loop) inherit a consistent allowlist. Do NOT put runtime/per-user overrides here — those go in .claude/settings.local.json (harness-managed). See docs/agents/triage-labels.md and memory/claude-code-permission-quirks for context.",
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.nolongerevil.com)",
+      "WebFetch(domain:docs.flutter.dev)",
+      "WebFetch(domain:api.flutter.dev)",
+      "WebFetch(domain:flutter.dev)",
+      "WebFetch(domain:dart.dev)",
+      "WebFetch(domain:pub.dev)",
+      "WebFetch(domain:pub.dartlang.org)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:docs.github.com)",
+
+      "Bash(git *)",
+      "Bash(gh *)",
+
+      "Bash(flutter *)",
+      "Bash(dart *)",
+      "Bash(pod *)",
+      "Bash(keytool *)",
+
+      "Bash(ls)",
+      "Bash(ls *)",
+      "Bash(find *)",
+      "Bash(pwd)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(grep *)",
+      "Bash(rg *)",
+      "Bash(wc *)",
+      "Bash(echo *)",
+      "Bash(which *)",
+      "Bash(test *)",
+      "Bash(file *)",
+      "Bash(stat *)",
+      "Bash(diff *)",
+
+      "Bash(mkdir *)",
+      "Bash(rmdir *)",
+      "Bash(rm *)",
+      "Bash(mv *)",
+      "Bash(cp *)",
+      "Bash(touch *)",
+      "Bash(chmod *)",
+      "Bash(ln *)",
+
+      "Bash(curl *)",
+      "Bash(jq *)",
+      "Bash(yq *)",
+
+      "Bash(awk *)",
+      "Bash(sed *)",
+      "Bash(tr *)",
+      "Bash(sort *)",
+      "Bash(uniq *)",
+      "Bash(xargs *)",
+      "Bash(cut *)",
+      "Bash(paste *)",
+
+      "Bash(tar *)",
+      "Bash(unzip *)",
+      "Bash(zip *)",
+      "Bash(gzip *)",
+      "Bash(gunzip *)"
+    ]
+  }
+}
