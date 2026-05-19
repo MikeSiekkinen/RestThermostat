@@ -13,16 +13,19 @@ const _allCapable = Capabilities(
   hasDehumidifier: false,
 );
 
-Widget _host(Widget child) {
+Widget _host(Widget child, {bool disableAnimations = false}) {
   // Wrap in MaterialApp so Theme + Directionality + MediaQuery are present,
   // and force a known size so CustomPaint has stable bounds.
   return MaterialApp(
     home: Scaffold(
-      body: Center(
-        child: SizedBox(
-          width: TemperatureDial.preferredDiameter,
-          height: TemperatureDial.preferredDiameter,
-          child: child,
+      body: MediaQuery(
+        data: MediaQueryData(disableAnimations: disableAnimations),
+        child: Center(
+          child: SizedBox(
+            width: TemperatureDial.preferredDiameter,
+            height: TemperatureDial.preferredDiameter,
+            child: child,
+          ),
         ),
       ),
     ),
@@ -279,6 +282,45 @@ void main() {
 
       expect(find.text('25°'), findsOneWidget);
     });
+  });
+
+  group('TemperatureDial reduced motion (§11.7)', () {
+    testWidgets(
+      'target tween snaps to the new value within a single frame when '
+      'disableAnimations is true',
+      (tester) async {
+        await tester.pumpWidget(
+          _host(
+            const TemperatureDial(
+              currentTemperatureCelsius: 18.0,
+              targetTemperatureCelsius: 20.0,
+              mode: DeviceMode.heat,
+              displayUnit: 'C',
+              capabilities: _allCapable,
+            ),
+            disableAnimations: true,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Swap target. With reduced motion, the new label should be visible
+        // on the very next frame — no 400ms wait.
+        await tester.pumpWidget(
+          _host(
+            const TemperatureDial(
+              currentTemperatureCelsius: 18.0,
+              targetTemperatureCelsius: 25.0,
+              mode: DeviceMode.heat,
+              displayUnit: 'C',
+              capabilities: _allCapable,
+            ),
+            disableAnimations: true,
+          ),
+        );
+        await tester.pump(); // one frame
+        expect(find.text('25°'), findsOneWidget);
+      },
+    );
   });
 
   group('TemperatureDial constants', () {

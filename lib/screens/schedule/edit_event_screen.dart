@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/device.dart';
@@ -263,6 +264,8 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
     navigator.pop(next);
     try {
       await client.setSchedule(widget.serial, next);
+      // Schedule save success — medium-impact haptic per DESIGN §11.5.
+      HapticFeedback.mediumImpact();
       messenger?.showSnackBar(
         const SnackBar(
           content: Text('Schedule saved'),
