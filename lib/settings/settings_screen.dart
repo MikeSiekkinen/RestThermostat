@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/auth_config.dart';
 import '../models/device.dart';
+import '../screens/logs/logs_screen.dart';
 import '../services/device_display_name.dart';
 import '../services/onboarding_store.dart';
 import '../services/url_normalizer.dart';
@@ -303,6 +304,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     const Divider(),
                     _buildDevicesSection(context),
                     const Divider(),
+                    _buildDiagnosticsSection(context),
+                    const Divider(),
                     _buildAboutSection(context),
                     const Divider(),
                     _buildDangerZone(context),
@@ -506,6 +509,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               return Column(
                 children: snapshot.devices.map(_buildDeviceRow).toList(),
               );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDiagnosticsSection(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SectionHeader(text: 'Diagnostics'),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('View logs'),
+            subtitle: const Text(
+              'In-memory diagnostic log of recent app activity.',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const LogsScreen()));
             },
           ),
         ],
