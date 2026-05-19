@@ -6,6 +6,7 @@ class FakeOnboardingStore implements OnboardingStore {
   AuthConfig auth = const AuthNone();
   String? activeSerial;
   bool complete = false;
+  final Map<String, String> nameOverrides = {};
 
   @override
   Future<OnboardingConfig> read() async => OnboardingConfig(
@@ -13,6 +14,7 @@ class FakeOnboardingStore implements OnboardingStore {
     auth: auth,
     activeSerial: activeSerial,
     isComplete: complete,
+    deviceNameOverrides: Map.of(nameOverrides),
   );
 
   @override
@@ -26,4 +28,23 @@ class FakeOnboardingStore implements OnboardingStore {
 
   @override
   Future<void> markComplete() async => complete = true;
+
+  @override
+  Future<void> setDeviceNameOverride(String serial, String? name) async {
+    final trimmed = name?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      nameOverrides.remove(serial);
+    } else {
+      nameOverrides[serial] = trimmed;
+    }
+  }
+
+  @override
+  Future<void> clear() async {
+    serverUrl = null;
+    auth = const AuthNone();
+    activeSerial = null;
+    complete = false;
+    nameOverrides.clear();
+  }
 }

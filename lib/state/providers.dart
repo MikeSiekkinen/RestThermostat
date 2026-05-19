@@ -2,7 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/auth_config.dart';
 import '../onboarding/onboarding_flow.dart';
+import '../services/app_info.dart';
 import '../services/nle_api_client.dart';
+import '../services/onboarding_store.dart';
 import 'device_state_source.dart';
 import 'devices_snapshot.dart';
 import 'polling_device_state_source.dart';
@@ -39,6 +41,25 @@ final clientFactoryProvider = Provider<NleClientFactory>(
 );
 
 final stateCacheProvider = Provider<StateCache>((_) => SharedPrefsStateCache());
+
+/// Bound in `main.dart` to the same [OnboardingStore] instance Bootstrap uses,
+/// so Settings reads/writes hit the same persistence layer. Tests override
+/// with [FakeOnboardingStore].
+final onboardingStoreProvider = Provider<OnboardingStore>((_) {
+  throw StateError(
+    'onboardingStoreProvider read without an override. main.dart should '
+    'override it with the platform-backed FlutterOnboardingStore.',
+  );
+});
+
+/// Overridden in tests with a [StaticAppInfo]. Production binding is set up in
+/// `main.dart` after `PackageInfo.fromPlatform()` resolves.
+final appInfoProvider = Provider<AppInfo>((_) {
+  throw StateError(
+    'appInfoProvider read without an override. main.dart should override it '
+    'with the loaded PackageInfo before runApp.',
+  );
+});
 
 final nleApiClientProvider = Provider<NleApiClient>((ref) {
   final config = ref.watch(activeServerProvider);

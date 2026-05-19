@@ -5,14 +5,17 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'models/device.dart';
 import 'onboarding/onboarding_flow.dart';
+import 'services/app_info.dart';
+import 'services/device_display_name.dart';
 import 'services/onboarding_store.dart';
+import 'settings/settings_screen.dart';
 import 'state/devices_snapshot.dart';
 import 'state/lifecycle_bridge.dart';
 import 'state/providers.dart';
 import 'theme/ember_theme.dart';
 import 'widgets/ember_background.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Force bundled-only font lookups. Any GoogleFonts.* call whose asset isn't
@@ -32,7 +35,17 @@ void main() {
     ),
   );
 
-  runApp(const ProviderScope(child: RestThermostatApp()));
+  final appInfo = await PackageInfoAppInfo.load();
+  final store = FlutterOnboardingStore();
+  runApp(
+    ProviderScope(
+      overrides: [
+        appInfoProvider.overrideWithValue(appInfo),
+        onboardingStoreProvider.overrideWithValue(store),
+      ],
+      child: RestThermostatApp(store: store),
+    ),
+  );
 }
 
 class RestThermostatApp extends StatelessWidget {
@@ -86,6 +99,13 @@ class _BootstrapState extends ConsumerState<_Bootstrap> {
     });
   }
 
+  void _onDisconnect() {
+    // Re-read the (now-wiped) config; Bootstrap's switch will render Welcome.
+    setState(() {
+      _configFuture = _load();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<OnboardingConfig>(
@@ -102,7 +122,12 @@ class _BootstrapState extends ConsumerState<_Bootstrap> {
         }
         final config = snapshot.data!;
         if (config.isComplete && config.serverUrl != null) {
-          return const LifecycleBridge(child: _Home());
+          return LifecycleBridge(
+            child: _Home(
+              overrides: config.deviceNameOverrides,
+              onDisconnect: _onDisconnect,
+            ),
+          );
         }
         return OnboardingFlow(
           store: widget.store,
@@ -116,7 +141,10 @@ class _BootstrapState extends ConsumerState<_Bootstrap> {
 }
 
 class _Home extends ConsumerWidget {
-  const _Home();
+  final Map<String, String> overrides;
+  final VoidCallback onDisconnect;
+
+  const _Home({required this.overrides, required this.onDisconnect});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -136,6 +164,29 @@ class _Home extends ConsumerWidget {
       mode: mode,
       child: Scaffold(
         backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          title: const Text('Rest Thermostat'),
+          actions: [
+            IconButton(
+              tooltip: 'Settings',
+              icon: const Icon(Icons.settings),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => SettingsScreen(
+                      onDisconnect: () {
+                        Navigator.of(context).pop();
+                        onDisconnect();
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
         body: SafeArea(
           child: Center(
             child: async.when(
@@ -155,7 +206,7 @@ class _Home extends ConsumerWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(d.name ?? 'unnamed'),
+        Text(displayNameFor(d, overrides)),
         Text('Current: ${d.currentTemperature}'),
         Text('Target: ${d.targetTemperature}'),
         Text('Mode: ${d.mode.toApi()}'),
