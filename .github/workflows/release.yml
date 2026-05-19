@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required to create the GitHub Release + upload assets
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Verify tag matches pubspec version
+        run: |
+          PUBSPEC_VERSION=$(awk '/^version:/ {print $2}' pubspec.yaml | cut -d+ -f1)
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$PUBSPEC_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::tag $TAG_VERSION does not match pubspec.yaml version $PUBSPEC_VERSION"
+            exit 1
+          fi
+
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/keystore.jks
+
+      - name: Write key.properties
+        run: |
+          cat > android/key.properties <<EOF
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          storeFile=keystore.jks
+          EOF
+
+      - name: Build signed APK
+        run: flutter build apk --release
+
+      - name: Extract changelog excerpt
+        run: |
+          if [ -f CHANGELOG.md ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            awk -v v="$VERSION" '
+              /^## \[/ { p = ($0 ~ "\\["v"\\]"); next }
+              p { print }
+            ' CHANGELOG.md > release-body.md
+            if [ ! -s release-body.md ]; then
+              echo "Release ${GITHUB_REF_NAME}" > release-body.md
+            fi
+          else
+            echo "Release ${GITHUB_REF_NAME}" > release-body.md
+          fi
+
+      - name: Create GitHub Release and upload APK
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/app/outputs/flutter-apk/app-release.apk
+          body_path: release-body.md
+
+      - name: Wipe key material
+        if: always()
+        run: |
+          rm -f android/app/keystore.jks android/key.properties
