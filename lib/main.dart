@@ -14,6 +14,7 @@ import 'state/lifecycle_bridge.dart';
 import 'state/providers.dart';
 import 'theme/ember_theme.dart';
 import 'widgets/ember_background.dart';
+import 'widgets/interactive_away_chip.dart';
 import 'widgets/interactive_fan_widget.dart';
 import 'widgets/interactive_mode_pills.dart';
 import 'widgets/interactive_temperature_dial.dart';
@@ -281,7 +282,8 @@ class _Home extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 StatusRow(device: d, nameOverrides: overrides),
-                const SizedBox(height: 24),
+                InteractiveAwayChip(device: d),
+                const SizedBox(height: 8),
                 // Cap the dial at the §10.3 ~240dp diameter, but let it shrink
                 // on narrower viewports rather than overflowing.
                 ConstrainedBox(

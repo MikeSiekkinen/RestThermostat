@@ -35,6 +35,39 @@ void main() {
     });
   });
 
+  group('Device.isAway', () {
+    late Map<String, dynamic> base;
+
+    setUp(() {
+      final raw = File('test/fixtures/devices_one.json').readAsStringSync();
+      base =
+          (jsonDecode(raw) as Map<String, dynamic>)['devices'][0]
+              as Map<String, dynamic>;
+    });
+
+    Device deviceWith({String? ecoMode}) {
+      final entry = Map<String, dynamic>.from(base);
+      entry['eco_mode'] = ecoMode;
+      return Device.fromJson(entry);
+    }
+
+    test('eco_mode "manual-eco" → isAway true', () {
+      expect(deviceWith(ecoMode: 'manual-eco').isAway, isTrue);
+    });
+
+    test('eco_mode "schedule" → isAway false', () {
+      expect(deviceWith(ecoMode: 'schedule').isAway, isFalse);
+    });
+
+    test('eco_mode null → isAway false', () {
+      expect(deviceWith(ecoMode: null).isAway, isFalse);
+    });
+
+    test('eco_mode anything-else → isAway false', () {
+      expect(deviceWith(ecoMode: 'energy-savings').isAway, isFalse);
+    });
+  });
+
   group('DevicesResponse.fromJson', () {
     late Map<String, dynamic> fixture;
 
