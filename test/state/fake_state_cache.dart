@@ -2,6 +2,7 @@ import 'package:rest_thermostat/state/state_cache.dart';
 
 class FakeStateCache implements StateCache {
   CachedDevicesResponse? entry;
+  int clearCount = 0;
 
   @override
   Future<CachedDevicesResponse?> read() async => entry;
@@ -10,5 +11,8 @@ class FakeStateCache implements StateCache {
   Future<void> write(CachedDevicesResponse cached) async => entry = cached;
 
   @override
-  Future<void> clear() async => entry = null;
+  Future<void> clear() async {
+    entry = null;
+    clearCount++;
+  }
 }
