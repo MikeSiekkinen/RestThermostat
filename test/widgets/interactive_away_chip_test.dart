@@ -285,7 +285,7 @@ void main() {
       await tester.pump(const Duration(seconds: 3));
       await tester.pump();
 
-      expect(find.text('Couldn\'t change away'), findsOneWidget);
+      expect(find.text("Couldn't toggle away"), findsOneWidget);
       expect(result.source.refreshCount, 0);
       // Optimistic AWAY reverted → no chip visible.
       expect(find.text('AWAY'), findsNothing);

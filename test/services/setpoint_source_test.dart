@@ -141,11 +141,8 @@ void main() {
     });
   });
 
-  group('SetpointSource labels', () {
-    test('match DESIGN §9.5 wording', () {
-      expect(SetpointSource.away.label, 'Away');
-      expect(SetpointSource.scheduled.label, 'Scheduled');
-      expect(SetpointSource.manual.label, 'Manual');
-    });
-  });
+  // SetpointSource.label is now context-bound — see app_en.arb keys
+  // detailsSetpointSourceAway / detailsSetpointSourceScheduled /
+  // detailsSetpointSourceManual. The localized rendering is exercised
+  // through the Details-screen widget test.
 }

@@ -42,11 +42,24 @@ const _bothDisabled = Capabilities(
 
 void main() {
   group('ModePillOption', () {
-    test('labels are uppercase strings', () {
-      expect(ModePillOption.off.label, 'OFF');
-      expect(ModePillOption.heat.label, 'HEAT');
-      expect(ModePillOption.cool.label, 'COOL');
-      expect(ModePillOption.auto.label, 'AUTO');
+    testWidgets('labels are uppercase strings', (tester) async {
+      late BuildContext capturedContext;
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (context) {
+              capturedContext = context;
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      );
+      expect(ModePillOption.off.label(capturedContext), 'OFF');
+      expect(ModePillOption.heat.label(capturedContext), 'HEAT');
+      expect(ModePillOption.cool.label(capturedContext), 'COOL');
+      expect(ModePillOption.auto.label(capturedContext), 'AUTO');
     });
 
     test('toDeviceMode round-trips with fromDeviceMode for v1 modes', () {

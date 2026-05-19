@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/gen/app_localizations.dart';
 import '../../models/device.dart';
 import '../../models/schedule.dart';
 import '../../services/nle_api_client.dart';
@@ -146,18 +147,19 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final locale = Localizations.maybeLocaleOf(context) ?? const Locale('en');
+    final l = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         leading: TextButton(
           onPressed: _saving ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(l.editEventCancel),
         ),
         leadingWidth: 84,
-        title: Text(widget.isNew ? 'New Event' : 'Edit Event'),
+        title: Text(widget.isNew ? l.editEventTitleNew : l.editEventTitleEdit),
         actions: [
           TextButton(
             onPressed: _saving ? null : _save,
-            child: const Text('Save'),
+            child: Text(l.editEventSave),
           ),
         ],
       ),
@@ -185,7 +187,10 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
               onTargetTempHigh: (c) => setState(() => _targetTempHigh = c),
             ),
             const SizedBox(height: 32),
-            Text('Time', style: Theme.of(context).textTheme.labelLarge),
+            Text(
+              l.editEventTimeLabel,
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
             const SizedBox(height: 12),
             EmberTimePicker(
               key: const ValueKey('ember-time-picker'),
@@ -199,7 +204,10 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
             ),
             if (widget.isNew) ...[
               const SizedBox(height: 32),
-              Text('Repeat', style: Theme.of(context).textTheme.labelLarge),
+              Text(
+                l.editEventRepeatLabel,
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
               const SizedBox(height: 12),
               RepeatDaysRow(
                 selectedDays: _selectedDays,
@@ -214,7 +222,7 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
                   key: const ValueKey('delete-event-button'),
                   onPressed: _saving ? null : _confirmDelete,
                   child: Text(
-                    'Delete Event',
+                    l.editEventDeleteButton,
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.error,
                     ),
@@ -260,6 +268,7 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
     required Schedule next,
   }) async {
     setState(() => _saving = true);
+    final l = AppLocalizations.of(context);
     // Optimistic dismiss — DESIGN §6.5 #2.
     navigator.pop(next);
     try {
@@ -267,9 +276,9 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
       // Schedule save success — medium-impact haptic per DESIGN §11.5.
       HapticFeedback.mediumImpact();
       messenger?.showSnackBar(
-        const SnackBar(
-          content: Text('Schedule saved'),
-          duration: Duration(seconds: 2),
+        SnackBar(
+          content: Text(l.editEventSavedSnack),
+          duration: const Duration(seconds: 2),
         ),
       );
     } catch (_) {
@@ -277,9 +286,9 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
       ref.invalidate(scheduleProvider(widget.serial));
       messenger?.showSnackBar(
         SnackBar(
-          content: const Text("Couldn't save schedule. Retry?"),
+          content: Text(l.editEventSaveFailedSnack),
           action: SnackBarAction(
-            label: 'Retry',
+            label: l.editEventRetryAction,
             onPressed: () => client.setSchedule(widget.serial, next),
           ),
         ),
@@ -321,21 +330,22 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
     final messenger = ScaffoldMessenger.maybeOf(context);
     final navigator = Navigator.of(context);
     final client = ref.read(nleApiClientProvider);
+    final l = AppLocalizations.of(context);
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete event?'),
-        content: const Text('This will remove the event from this day.'),
+        title: Text(l.editEventDeleteDialogTitle),
+        content: Text(l.editEventDeleteDialogBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l.editEventCancel),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
-              'Delete',
+              l.editEventDeleteConfirm,
               style: TextStyle(color: Theme.of(ctx).colorScheme.error),
             ),
           ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../models/device.dart';
 import '../theme/colors.dart';
 import '../theme/typography.dart';
@@ -17,13 +18,18 @@ enum ModePillOption {
   cool,
   auto;
 
-  /// Uppercase display label rendered inside the pill.
-  String get label => switch (this) {
-    off => 'OFF',
-    heat => 'HEAT',
-    cool => 'COOL',
-    auto => 'AUTO',
-  };
+  /// Uppercase display label rendered inside the pill. Pulled from
+  /// AppLocalizations so the four canonical mode labels can be translated
+  /// alongside the rest of the UI.
+  String label(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return switch (this) {
+      off => l.modePillOff,
+      heat => l.modePillHeat,
+      cool => l.modePillCool,
+      auto => l.modePillAuto,
+    };
+  }
 
   /// Map this pill option to the underlying [DeviceMode] that a tap should
   /// translate to. Round-trips with [fromDeviceMode] for the v1 four-mode set.
@@ -162,6 +168,7 @@ class _ModePill extends StatelessWidget {
           ]
         : const <BoxShadow>[];
 
+    final label = option.label(context);
     final pill = AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOut,
@@ -172,10 +179,7 @@ class _ModePill extends StatelessWidget {
         border: Border.all(color: borderColor, width: 1),
         boxShadow: shadow,
       ),
-      child: Text(
-        option.label,
-        style: EmberTypography.labelSmall(color: labelColor),
-      ),
+      child: Text(label, style: EmberTypography.labelSmall(color: labelColor)),
     );
 
     // DESIGN §14.5 + Material guidelines: tap target ≥ 48dp. The pill itself
@@ -190,7 +194,7 @@ class _ModePill extends StatelessWidget {
     return Semantics(
       button: onTap != null,
       selected: isActive,
-      label: option.label,
+      label: label,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,

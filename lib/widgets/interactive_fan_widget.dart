@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../models/device.dart';
 import '../services/nle_error.dart';
 import '../state/auth_failure_coordinator.dart';
@@ -163,7 +164,7 @@ class _InteractiveFanWidgetState extends ConsumerState<InteractiveFanWidget> {
     } catch (_) {
       if (!mounted) return;
       if (onErrorRevert) _revertOptimistic();
-      _showSnack('Couldn\'t change fan');
+      _showSnack(AppLocalizations.of(context).fanChangeFailed);
       return;
     }
     if (!mounted) return;
@@ -186,9 +187,10 @@ class _InteractiveFanWidgetState extends ConsumerState<InteractiveFanWidget> {
     if (e.serverMessage != null && e.serverMessage!.isNotEmpty) {
       return e.serverMessage!;
     }
+    final l = AppLocalizations.of(context);
     return switch (e) {
-      NleClientError() => 'Server rejected fan command',
-      _ => "Couldn't change fan",
+      NleClientError() => l.fanChangeServerRejected,
+      _ => l.fanChangeFailed,
     };
   }
 
@@ -242,7 +244,10 @@ class _FanDurationSheet extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.only(left: 4, bottom: 8),
-              child: Text('RUN FAN FOR', style: EmberTypography.labelSmall()),
+              child: Text(
+                AppLocalizations.of(context).fanDurationSheetTitle,
+                style: EmberTypography.labelSmall(),
+              ),
             ),
             for (final choice in _fanDurationChoices)
               _DurationTile(duration: choice),
@@ -258,12 +263,13 @@ class _DurationTile extends StatelessWidget {
 
   const _DurationTile({required this.duration});
 
-  String get _label {
+  String _label(BuildContext context) {
+    final l = AppLocalizations.of(context);
     if (duration.inHours >= 1) {
       final h = duration.inHours;
-      return h == 1 ? '1 HOUR' : '$h HOURS';
+      return h == 1 ? l.fanDuration1Hour : l.fanDurationHours(h);
     }
-    return '${duration.inMinutes} MINUTES';
+    return l.fanDurationMinutes(duration.inMinutes);
   }
 
   @override
@@ -273,7 +279,7 @@ class _DurationTile extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
         child: Text(
-          _label,
+          _label(context),
           style: EmberTypography.labelSmall(color: EmberColors.textPrimary),
         ),
       ),

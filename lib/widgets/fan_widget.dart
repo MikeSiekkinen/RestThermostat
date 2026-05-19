@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../theme/colors.dart';
 import '../theme/typography.dart';
 
@@ -156,17 +157,17 @@ class _FanWidgetState extends State<FanWidget>
     final remaining = active
         ? _remainingFor(widget.fanTimerTimeout, widget.now())
         : Duration.zero;
-    final label = active
-        ? 'FAN ON • ${_formatCountdown(remaining)}'
-        : 'FAN AUTO';
+    final l = AppLocalizations.of(context);
+    final countdownStr = _formatCountdown(remaining);
+    final label = active ? l.fanLabelOn(countdownStr) : l.fanLabelAuto;
 
     // Screen-reader announcement: describe state + tap affordance. Includes
     // the countdown when the timer is active so blind users hear the same
     // information that's painted onto the label. The `button: true` role
     // signals tap behavior to TalkBack/VoiceOver.
     final semanticLabel = active
-        ? 'Fan on for ${_formatCountdown(remaining)}, tap to switch to auto'
-        : 'Fan auto, tap to turn on';
+        ? l.fanSemanticOn(countdownStr)
+        : l.fanSemanticAuto;
 
     return Semantics(
       label: semanticLabel,

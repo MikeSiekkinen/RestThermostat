@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/gen/app_localizations.dart';
 import '../../models/device.dart';
 import '../../models/schedule.dart';
 import '../../state/providers.dart';
@@ -67,11 +68,11 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Schedule'),
+        title: Text(AppLocalizations.of(context).scheduleTitle),
         actions: [
           IconButton(
             key: const ValueKey('add-event-button'),
-            tooltip: 'Add event',
+            tooltip: AppLocalizations.of(context).scheduleAddEventTooltip,
             icon: const Icon(Icons.add),
             onPressed: () => _openNewEvent(asyncSchedule.value),
           ),
@@ -284,12 +285,12 @@ class _DayEventList extends StatelessWidget {
             child: Column(
               children: [
                 Text(
-                  'No events scheduled',
+                  AppLocalizations.of(context).scheduleEmptyTitle,
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Tap + to add one',
+                  AppLocalizations.of(context).scheduleEmptyHint,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -339,9 +340,13 @@ class _EventRow extends StatelessWidget {
     // mode so TalkBack/VoiceOver reads "Event at 6:00 AM, 68 degrees Heat,
     // tap to edit." instead of three separate `Text` nodes whose color
     // tinting carries the mode signal visually.
-    final semanticLabel =
-        'Event at $timeLabel, $tempLabel ${event.type.toLowerCase()}, '
-        'tap to edit.';
+    final l = AppLocalizations.of(context);
+    final semanticLabel = l.scheduleEventSemanticLabel(
+      timeLabel,
+      tempLabel,
+      event.type.toLowerCase(),
+    );
+    final typeLabel = _typeLabel(context, event.type);
 
     return Semantics(
       label: semanticLabel,
@@ -379,7 +384,7 @@ class _EventRow extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        event.type,
+                        typeLabel,
                         style: Theme.of(context).textTheme.labelSmall,
                       ),
                     ],
@@ -391,6 +396,23 @@ class _EventRow extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Localized label for an event's `type` field. Heat/Cool/Range maps to the
+/// AppLocalizations key set; any unrecognized value (older fixtures, future
+/// types) falls through to the raw uppercase string the API returned.
+String _typeLabel(BuildContext context, String type) {
+  final l = AppLocalizations.of(context);
+  switch (type) {
+    case 'HEAT':
+      return l.scheduleEventTypeHeat;
+    case 'COOL':
+      return l.scheduleEventTypeCool;
+    case 'RANGE':
+      return l.scheduleEventTypeRange;
+    default:
+      return type;
   }
 }
 
@@ -464,7 +486,7 @@ class _ErrorView extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Text(
-              "Couldn't load schedule: $error",
+              AppLocalizations.of(context).scheduleLoadError(error),
               textAlign: TextAlign.center,
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),

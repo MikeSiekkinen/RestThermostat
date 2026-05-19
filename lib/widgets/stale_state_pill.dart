@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../state/connection_status.dart';
 import '../state/providers.dart';
 import '../theme/colors.dart';
@@ -51,6 +52,7 @@ class StaleStatePill extends ConsumerWidget {
     WidgetRef ref,
     ConnectionStatus status,
   ) {
+    final l = AppLocalizations.of(context);
     if (!status.shouldShowPill) {
       // SizedBox.shrink would collapse to zero, but a keyed shrink with a
       // height-stable wrapper lets AnimatedSwitcher cross-fade cleanly.
@@ -59,20 +61,20 @@ class StaleStatePill extends ConsumerWidget {
     if (status.isRateLimited) {
       return _Pill(
         key: const ValueKey('rate-limited'),
-        text: 'Server busy — retrying',
+        text: l.stalePillRateLimited,
         leading: const _Spinner(),
       );
     }
     if (status.isReconnecting) {
       return _Pill(
         key: const ValueKey('reconnecting'),
-        text: 'Reconnecting…',
+        text: l.stalePillReconnecting,
         leading: const _Spinner(),
       );
     }
     return _Pill(
       key: const ValueKey('stale'),
-      text: _staleCopy(status.lastSuccessAt),
+      text: _staleCopy(context, status.lastSuccessAt),
       trailing: TextButton(
         onPressed: () => ref.read(deviceStateSourceProvider).refresh(),
         style: TextButton.styleFrom(
@@ -81,28 +83,30 @@ class StaleStatePill extends ConsumerWidget {
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
         child: Text(
-          'RETRY',
+          l.stalePillRetry,
           style: EmberTypography.labelSmall(color: EmberColors.textPrimary),
         ),
       ),
     );
   }
 
-  String _staleCopy(DateTime? lastSuccessAt) {
-    if (lastSuccessAt == null) return 'Not connected';
+  String _staleCopy(BuildContext context, DateTime? lastSuccessAt) {
+    final l = AppLocalizations.of(context);
+    if (lastSuccessAt == null) return l.stalePillNotConnected;
     final elapsed = now().difference(lastSuccessAt);
-    return 'Last updated ${_formatElapsed(elapsed)}';
+    return l.stalePillLastUpdated(_formatElapsed(context, elapsed));
   }
 
   /// Format a "Xs ago" / "Xm ago" / "Xh ago" string. Intentionally
   /// approximate — the pill isn't a stopwatch, and rounding to the nearest
   /// minute past 60s avoids the seconds counter ticking visibly.
-  static String _formatElapsed(Duration d) {
-    if (d.inSeconds < 60) return 'just now';
-    if (d.inMinutes < 2) return '1 min ago';
-    if (d.inHours < 1) return '${d.inMinutes} min ago';
-    if (d.inHours < 2) return '1 hour ago';
-    return '${d.inHours} hours ago';
+  static String _formatElapsed(BuildContext context, Duration d) {
+    final l = AppLocalizations.of(context);
+    if (d.inSeconds < 60) return l.stalePillElapsedJustNow;
+    if (d.inMinutes < 2) return l.stalePillElapsedOneMinute;
+    if (d.inHours < 1) return l.stalePillElapsedMinutes(d.inMinutes);
+    if (d.inHours < 2) return l.stalePillElapsedOneHour;
+    return l.stalePillElapsedHours(d.inHours);
   }
 }
 
