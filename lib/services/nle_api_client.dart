@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../models/devices_response.dart';
+import '../models/schedule.dart';
 import 'app_logger.dart';
 import 'nle_api_logging_interceptor.dart';
 
@@ -45,6 +46,21 @@ class NleApiClient {
   Future<Map<String, dynamic>> fetchDevicesJson() async {
     final response = await dio.get<Map<String, dynamic>>('/api/devices');
     return response.data!;
+  }
+
+  /// Fetch the active schedule for [serial], or `null` if the server has none
+  /// stored for that device (404). Other status codes still throw — the caller
+  /// surfaces them through the standard error UI.
+  Future<Schedule?> getSchedule(String serial) async {
+    try {
+      final response = await dio.get<Map<String, dynamic>>(
+        '/api/devices/$serial/schedule',
+      );
+      return Schedule.fromJson(response.data!);
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
   }
 
   /// Maps a raw `Authorization` header value to a presence label

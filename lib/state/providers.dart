@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/auth_config.dart';
+import '../models/schedule.dart';
 import '../onboarding/onboarding_flow.dart';
 import '../services/app_info.dart';
 import '../services/app_logger.dart';
@@ -95,4 +96,15 @@ final devicesSnapshotProvider = StreamProvider.autoDispose<DevicesSnapshot>((
   ref,
 ) {
   return ref.watch(deviceStateSourceProvider).watch();
+});
+
+/// Per-device schedule fetched lazily from `/api/devices/<serial>/schedule`.
+/// Returns `null` when the server has no schedule stored for the device (404).
+/// Pull-to-refresh invalidates this provider for the active serial.
+final scheduleProvider = FutureProvider.autoDispose.family<Schedule?, String>((
+  ref,
+  serial,
+) async {
+  final client = ref.watch(nleApiClientProvider);
+  return client.getSchedule(serial);
 });

@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "name": "Weekday/Weekend",
+  "mode": "HEAT",
+  "days": {
+    "0": [
+      {"time": 21600, "type": "HEAT", "temp": 20.0},
+      {"time": 28800, "type": "HEAT", "temp": 17.0},
+      {"time": 61200, "type": "HEAT", "temp": 21.0},
+      {"time": 79200, "type": "HEAT", "temp": 16.5}
+    ],
+    "1": [
+      {"time": 21600, "type": "HEAT", "temp": 20.0},
+      {"time": 28800, "type": "HEAT", "temp": 17.0},
+      {"time": 61200, "type": "HEAT", "temp": 21.0},
+      {"time": 79200, "type": "HEAT", "temp": 16.5}
+    ],
+    "2": [
+      {"time": 21600, "type": "HEAT", "temp": 20.0},
+      {"time": 28800, "type": "HEAT", "temp": 17.0},
+      {"time": 61200, "type": "HEAT", "temp": 21.0},
+      {"time": 79200, "type": "HEAT", "temp": 16.5}
+    ],
+    "3": [
+      {"time": 21600, "type": "RANGE", "temp-min": 18.0, "temp-max": 23.0},
+      {"time": 79200, "type": "COOL", "temp": 24.0}
+    ],
+    "4": [],
+    "5": [
+      {"time": 32400, "type": "HEAT", "temp": 20.5},
+      {"time": 82800, "type": "HEAT", "temp": 17.0}
+    ],
+    "6": [
+      {"time": 32400, "type": "HEAT", "temp": 20.5},
+      {"time": 82800, "type": "HEAT", "temp": 17.0}
+    ]
+  }
+}
