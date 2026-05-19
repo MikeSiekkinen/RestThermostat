@@ -150,8 +150,11 @@ class TemperatureDial extends StatefulWidget {
     if (dx == 0 && dy == 0) return null;
 
     var theta = math.atan2(dy, dx); // [-π, π], east=0, south=+π/2.
-    if (theta < arcStart)
-      theta += 2 * math.pi; // normalize into [arcStart, arcStart + 2π).
+    if (theta < arcStart) {
+      // Normalize into [arcStart, arcStart + 2π) so the bottom half of the
+      // arc lands on the positive side of the sweep.
+      theta += 2 * math.pi;
+    }
     final pos = theta - arcStart; // arc-local angle, 0 at tick 0.
     if (pos > arcSweep) {
       // Touch landed in the bottom-90° gap. Snap to whichever end is closer
