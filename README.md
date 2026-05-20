@@ -21,7 +21,7 @@ NLE server over HTTP — no cloud account, no telemetry, no subscription.
 
 | Home (heating) | Home (cooling) | Schedule | Settings |
 | --- | --- | --- | --- |
-| ![Home, heating mode](docs/screenshots/home-heating.png) | ![Home, cooling mode](docs/screenshots/home-cooling.png) | ![Schedule day view](docs/screenshots/schedule.png) | ![Settings screen](docs/screenshots/settings.png) |
+| ![Home, heating mode](docs/screenshots/home-heating.jpg) | ![Home, cooling mode](docs/screenshots/home-cooling.jpg) | ![Schedule day view](docs/screenshots/schedule.jpg) | ![Settings screen](docs/screenshots/settings.jpeg) |
 
 ---
 
