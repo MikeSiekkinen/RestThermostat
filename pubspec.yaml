@@ -2,7 +2,7 @@ name: rest_thermostat
 description: Community Flutter app for NoLongerEvil firmware on Nest Gen 1/2 thermostats.
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 0.0.0-test+1
 
 environment:
   sdk: ^3.12.0
