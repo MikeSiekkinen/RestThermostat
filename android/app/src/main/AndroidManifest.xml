@@ -1,8 +1,20 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+        usesCleartextTraffic="true": required because the NLE Control API
+        is HTTP-only on LAN (per DESIGN §2 + §7.5 — `nest.home`, `192.168.x.x`,
+        and similar LAN addresses normalize to http://). Android blocks
+        cleartext to non-loopback hosts at targetSdk >= 28 by default;
+        without this flag the onboarding "Test connection" silently fails
+        with "Couldn't reach server" on every release build.
+
+        Users running their NLE server behind a reverse proxy can still use
+        https:// — this flag only permits cleartext, it doesn't require it.
+    -->
     <application
-        android:label="rest_thermostat"
+        android:label="Rest Thermostat"
         android:name="${applicationName}"
-        android:icon="@mipmap/launcher_icon">
+        android:icon="@mipmap/launcher_icon"
+        android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
