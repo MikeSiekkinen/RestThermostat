@@ -1,5 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!--
+        INTERNET permission is required for the NLE Control API client. Flutter's
+        scaffold only declares this in `src/debug/AndroidManifest.xml` (so the
+        Flutter tool can communicate with the running app during dev), so it
+        merges into debug builds but NOT release builds — release APKs that
+        omit this end up unable to open any socket, with no user-visible error
+        beyond "Couldn't reach server" at the Dio layer.
+    -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!--
         usesCleartextTraffic="true": required because the NLE Control API
         is HTTP-only on LAN (per DESIGN §2 + §7.5 — `nest.home`, `192.168.x.x`,
         and similar LAN addresses normalize to http://). Android blocks
