@@ -67,6 +67,15 @@ jobs:
       - name: Build signed APK
         run: flutter build apk --release
 
+      # Gradle produces `app-release.apk` (the gradle module is `app`,
+      # release variant). Rename for the release asset so users see the
+      # product name, not the build variant. The version is captured by the
+      # release tag itself, so we don't need to include it in the filename.
+      - name: Rename APK for release
+        run: |
+          mv build/app/outputs/flutter-apk/app-release.apk \
+             build/app/outputs/flutter-apk/rest-thermostat.apk
+
       - name: Extract changelog excerpt
         run: |
           if [ -f CHANGELOG.md ]; then
@@ -85,7 +94,7 @@ jobs:
       - name: Create GitHub Release and upload APK
         uses: softprops/action-gh-release@v2
         with:
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: build/app/outputs/flutter-apk/rest-thermostat.apk
           body_path: release-body.md
 
       - name: Wipe key material
