@@ -113,7 +113,7 @@ jobs:
           subject-path: build/app/outputs/flutter-apk/rest-thermostat.apk
 
       - name: Create GitHub Release and upload APK
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           files: build/app/outputs/flutter-apk/rest-thermostat.apk
           body_path: release-body.md
