@@ -5,16 +5,25 @@ on:
   push:
     branches: [main]
 
+# Minimum-required GITHUB_TOKEN scopes. Limits blast radius if any third-party
+# action in this workflow is ever compromised. Dependabot/Renovate PRs and
+# normal PR builds only need to read the repo.
+permissions:
+  contents: read
+
 jobs:
   analyze-test-format:
     runs-on: ubuntu-latest
 
     steps:
+      # Third-party actions are pinned to full commit SHAs (not floating tags)
+      # so a compromised tag move at the source can't ship malicious code into
+      # our CI. Dependabot's `github-actions` ecosystem keeps these current.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.44.0'
           channel: 'stable'
