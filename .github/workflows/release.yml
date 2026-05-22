@@ -8,20 +8,26 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # required to create the GitHub Release + upload assets
+      contents: write       # create GitHub Release + upload APK asset
+      id-token: write       # sign the build provenance attestation (Sigstore OIDC)
+      attestations: write   # write the attestation back to the repo
 
     steps:
+      # Third-party actions are pinned to full commit SHAs (not floating tags)
+      # so a compromised tag move at the source can't ship malicious code into
+      # the release build. Dependabot's `github-actions` ecosystem keeps these
+      # current.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.44.0'
           channel: 'stable'
@@ -91,8 +97,18 @@ jobs:
             echo "Release ${GITHUB_REF_NAME}" > release-body.md
           fi
 
+      # Attest that this APK was built from this exact commit in this exact
+      # workflow run. Anyone with the released APK can verify provenance via
+      # `gh attestation verify rest-thermostat.apk --owner MikeSiekkinen`,
+      # which defends against backdoored APKs being uploaded to Releases out
+      # of band.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: build/app/outputs/flutter-apk/rest-thermostat.apk
+
       - name: Create GitHub Release and upload APK
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: build/app/outputs/flutter-apk/rest-thermostat.apk
           body_path: release-body.md
