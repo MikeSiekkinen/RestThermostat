@@ -45,3 +45,53 @@ jobs:
 
       - name: Test
         run: flutter test
+
+  dependency-build-bump:
+    # Enforces DESIGN §13.4: any change to the resolved dependency set
+    # (pubspec.lock) must come with an incremented build number (+N).
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require build-number bump when dependencies change
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # pubspec.lock is the exact record of compiled-in libraries; if it
+          # is unchanged, no dependency changed and no bump is required.
+          if git diff --quiet "$BASE_SHA" HEAD -- pubspec.lock; then
+            echo "pubspec.lock unchanged; build-number bump not required."
+            exit 0
+          fi
+
+          # Extract the integer after '+' from the `version:` line.
+          extract_build() { awk '/^version:/ {print $2; exit}' | awk -F'+' '{print $2}'; }
+
+          BASE_BUILD=$(git show "$BASE_SHA:pubspec.yaml" 2>/dev/null | extract_build)
+          HEAD_BUILD=$(extract_build < pubspec.yaml)
+
+          echo "pubspec.lock changed in this PR."
+          echo "base build number: ${BASE_BUILD:-<none>}"
+          echo "head build number: ${HEAD_BUILD:-<none>}"
+
+          if ! [[ "$HEAD_BUILD" =~ ^[0-9]+$ ]]; then
+            echo "::error file=pubspec.yaml::version must be of the form <semver>+<build> with an integer build number (see DESIGN §13.4)."
+            exit 1
+          fi
+          if ! [[ "$BASE_BUILD" =~ ^[0-9]+$ ]]; then
+            echo "::error::could not read a numeric build number from the base revision's pubspec.yaml."
+            exit 1
+          fi
+
+          if [ "$HEAD_BUILD" -le "$BASE_BUILD" ]; then
+            echo "::error file=pubspec.yaml::Dependencies changed (pubspec.lock) but the build number was not incremented. Set version to <semver>+$((BASE_BUILD + 1)) or higher (see DESIGN §13.4)."
+            exit 1
+          fi
+
+          echo "Build number bumped $BASE_BUILD -> $HEAD_BUILD. OK."
