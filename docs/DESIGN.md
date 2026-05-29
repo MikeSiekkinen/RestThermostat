@@ -571,8 +571,10 @@ GitHub Actions, free for public repos:
 
 ### 13.4 Versioning
 
-- Semver in `pubspec.yaml`: `version: 1.0.0+1` (semver + build number).
-- Git tags: `v1.0.0`.
+- Semver in `pubspec.yaml`: `version: <semver>+<build>` (e.g. `1.0.0+2`).
+- **The build number (`+N`) is incremented on any change to the resolved dependency set, i.e. `pubspec.lock`** — the precise record of compiled-in libraries. Every distinct `pubspec.lock` produces a distinct build number, so an installed APK is traceable to the exact libraries it was built from. (A `pubspec.yaml` edit that does not change `pubspec.lock` — e.g. loosening a constraint, or the SDK/description fields — ships identical libraries and needs no bump.) This is enforced by the `dependency-build-bump` CI job.
+- The marketing version (`1.0.0`) follows semver and changes on feature/fix releases, independent of the build number.
+- Git tags: `v1.0.0`. The release tag-match check in `release.yml` compares only the marketing version, so build-number bumps never affect tagging.
 - `CHANGELOG.md` updated per release.
 
 ### 13.5 License
