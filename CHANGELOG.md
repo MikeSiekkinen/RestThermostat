@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-05-29
+
+### Changed
+
+- Bumped dependencies: `flutter_secure_storage` 10.2.0 → 10.3.1,
+  `package_info_plus` 9.0.0 → 10.1.0, `share_plus` 11.1.0 → 13.1.0.
+- Raised the minimum Flutter SDK to `>=3.38.1` (required by the
+  `package_info_plus` and `share_plus` updates).
+- The build number (`+N`) now increments on any change to the resolved
+  dependency set (`pubspec.lock`), enforced by a new `dependency-build-bump`
+  CI job. See `docs/DESIGN.md` §13.4.
+
+### Security
+
+- Pinned all GitHub Actions to full commit SHAs and set
+  `persist-credentials: false` on checkout steps.
+- Added a Sigstore build-provenance attestation to released APKs
+  (verify with `gh attestation verify rest-thermostat.apk --owner MikeSiekkinen`).
+- Configured Dependabot for the `pub`, `github-actions`, and `gradle`
+  ecosystems.
+
+## [1.0.0] - 2026-05-20
+
 ### Added
 
 - Flutter project scaffold for Android, iOS, macOS, and web platforms.
@@ -38,4 +61,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Project documentation: `README.md`, `LICENSE` (MIT), `CHANGELOG.md`, and
   `docs/IOS_BUILD.md` build-from-source guide.
 
-[Unreleased]: https://github.com/MikeSiekkinen/RestThermostat/commits/main
+[Unreleased]: https://github.com/MikeSiekkinen/RestThermostat/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/MikeSiekkinen/RestThermostat/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/MikeSiekkinen/RestThermostat/releases/tag/v1.0.0
