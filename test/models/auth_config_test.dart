@@ -27,13 +27,13 @@ void main() {
 
   test('AuthCfServiceToken emits the CF-Access header pair, no Authorization', () {
     const auth = AuthCfServiceToken(
-      clientId: '8bc249a56f937824fe81679c9de64dc3.access',
-      clientSecret: 'e8639ea6a3f560d0a50187958f7a358e57f0c2a04',
+      clientId: 'cf-client-id-example.access',
+      clientSecret: 'cf-client-secret-example',
     );
     expect(auth.authorizationHeader, isNull);
     expect(auth.headers, {
-      'CF-Access-Client-Id': '8bc249a56f937824fe81679c9de64dc3.access',
-      'CF-Access-Client-Secret': 'e8639ea6a3f560d0a50187958f7a358e57f0c2a04',
+      'CF-Access-Client-Id': 'cf-client-id-example.access',
+      'CF-Access-Client-Secret': 'cf-client-secret-example',
     });
     expect(auth.tag, 'cf_service_token');
   });

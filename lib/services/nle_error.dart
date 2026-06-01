@@ -82,8 +82,11 @@ sealed class NleError implements Exception {
     final headers = response.headers;
     final wwwAuth = headers.value('www-authenticate')?.toLowerCase() ?? '';
     if (wwwAuth.contains('cloudflare-access')) return true;
-    final location = headers.value('location') ?? '';
-    return location.contains('cloudflareaccess.com');
+    final location = headers.value('location');
+    if (location == null || location.isEmpty) return false;
+    final host = Uri.tryParse(location)?.host.toLowerCase() ?? '';
+    return host == 'cloudflareaccess.com' ||
+        host.endsWith('.cloudflareaccess.com');
   }
 
   static String? _extractServerMessage(Object? body) {

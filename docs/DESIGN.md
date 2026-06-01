@@ -497,7 +497,7 @@ Check `MediaQuery.disableAnimations`. When true:
 
 | Data | Storage |
 |---|---|
-| `auth_type`, `auth_basic_username`, `auth_basic_password`, `auth_bearer_token` | `flutter_secure_storage` |
+| `auth_type`, `auth_basic_username`, `auth_basic_password`, `auth_bearer_token`, `auth_cf_client_id`, `auth_cf_client_secret` | `flutter_secure_storage` |
 | `server_url`, `active_device_serial`, `device_name_overrides`, `onboarding_complete` | `shared_preferences` |
 | `last_state_cache` (JSON), `last_schedule_cache_{serial}` (JSON with timestamp) | `shared_preferences` |
 
@@ -700,7 +700,7 @@ The **Control API on port 8082**. The V1 API (`/api/v1/*`) is for the hosted ser
 
 ### 16.2 Authentication
 
-No auth by default. Server passes through `Authorization` headers unchanged from a reverse proxy. App supports optional Basic or Bearer per [§7.2](#72-auth-ux).
+No auth by default. Server passes through `Authorization` headers unchanged from a reverse proxy. App supports optional Basic, Bearer, or Cloudflare Access service-token auth per [§7.2](#72-auth-ux). Cloudflare Access sends the `CF-Access-Client-Id` / `CF-Access-Client-Secret` header pair (no `Authorization` header) to authenticate the client to the Cloudflare Access edge in front of the proxy.
 
 ### 16.3 Endpoints used
 
