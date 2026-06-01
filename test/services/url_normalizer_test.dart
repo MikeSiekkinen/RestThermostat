@@ -7,10 +7,21 @@ void main() {
       expect(normalizeServerUrl('nest.home'), 'http://nest.home:8082');
     });
 
-    test('adds default port when scheme is present without port', () {
+    test('defaults https without a port to 443 (reverse proxy / Cloudflare)', () {
       expect(
         normalizeServerUrl('https://nest.example.com'),
-        'https://nest.example.com:8082',
+        'https://nest.example.com:443',
+      );
+    });
+
+    test('defaults http without a port to 8082 (direct-LAN NLE)', () {
+      expect(normalizeServerUrl('http://nest.home'), 'http://nest.home:8082');
+    });
+
+    test('preserves an explicit port on https', () {
+      expect(
+        normalizeServerUrl('https://nest.example.com:8443'),
+        'https://nest.example.com:8443',
       );
     });
 

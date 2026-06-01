@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rest_thermostat/services/nle_error.dart';
@@ -64,6 +66,53 @@ void main() {
       expect(e.statusCode, 500);
     });
 
+    test('302 to Cloudflare Access login → NleAuthError(isCloudflareAccess)', () {
+      final e =
+          NleError.fromDio(
+                _badResponse(
+                  code: 302,
+                  headers: {
+                    'location': [
+                      'https://team.cloudflareaccess.com/cdn-cgi/access/login/x',
+                    ],
+                    'www-authenticate': ['Cloudflare-Access'],
+                  },
+                ),
+              )
+              as NleAuthError;
+      expect(e.statusCode, 302);
+      expect(e.isCloudflareAccess, isTrue);
+    });
+
+    test('generic 302 (no Access markers) → NleAuthError, not CF', () {
+      final e =
+          NleError.fromDio(
+                _badResponse(
+                  code: 302,
+                  headers: {
+                    'location': ['https://example.com/login'],
+                  },
+                ),
+              )
+              as NleAuthError;
+      expect(e.statusCode, 302);
+      expect(e.isCloudflareAccess, isFalse);
+    });
+
+    test('403 carrying Cloudflare-Access challenge sets the flag', () {
+      final e =
+          NleError.fromDio(
+                _badResponse(
+                  code: 403,
+                  headers: {
+                    'www-authenticate': ['Cloudflare-Access'],
+                  },
+                ),
+              )
+              as NleAuthError;
+      expect(e.isCloudflareAccess, isTrue);
+    });
+
     test('429 with integer Retry-After parses to Duration', () {
       final e =
           NleError.fromDio(
@@ -111,6 +160,94 @@ void main() {
     test('serverMessage is null when body is empty', () {
       final e = NleError.fromDio(_badResponse(code: 400)) as NleClientError;
       expect(e.serverMessage, isNull);
+    });
+  });
+
+  group('NleNetworkError.kind classification', () {
+    NleNetworkError net(
+      DioExceptionType type, {
+      Object? error,
+      String baseUrl = 'http://nest.home:8082',
+    }) {
+      return NleError.fromDio(
+            DioException(
+              requestOptions: RequestOptions(path: '/api/devices', baseUrl: baseUrl),
+              type: type,
+              error: error,
+            ),
+          )
+          as NleNetworkError;
+    }
+
+    test('connectionTimeout type → connectionTimeout kind', () {
+      expect(
+        net(DioExceptionType.connectionTimeout).kind,
+        NleNetworkErrorKind.connectionTimeout,
+      );
+    });
+
+    test('receiveTimeout type → receiveTimeout kind', () {
+      expect(
+        net(DioExceptionType.receiveTimeout).kind,
+        NleNetworkErrorKind.receiveTimeout,
+      );
+    });
+
+    test('badCertificate type → tlsFailure kind', () {
+      expect(
+        net(DioExceptionType.badCertificate).kind,
+        NleNetworkErrorKind.tlsFailure,
+      );
+    });
+
+    test('connectionError wrapping HandshakeException → tlsFailure', () {
+      expect(
+        net(
+          DioExceptionType.connectionError,
+          error: const HandshakeException('handshake failed'),
+        ).kind,
+        NleNetworkErrorKind.tlsFailure,
+      );
+    });
+
+    test('SocketException "Connection refused" → connectionRefused', () {
+      expect(
+        net(
+          DioExceptionType.connectionError,
+          error: const SocketException(
+            'Connection refused',
+            osError: OSError('Connection refused', 61),
+          ),
+        ).kind,
+        NleNetworkErrorKind.connectionRefused,
+      );
+    });
+
+    test('SocketException "Failed host lookup" → dnsFailure', () {
+      expect(
+        net(
+          DioExceptionType.connectionError,
+          error: const SocketException(
+            "Failed host lookup: 'nest.home'",
+            osError: OSError('nodename nor servname provided', 8),
+          ),
+        ).kind,
+        NleNetworkErrorKind.dnsFailure,
+      );
+    });
+
+    test('connectionError with no underlying error → unknown', () {
+      expect(
+        net(DioExceptionType.connectionError).kind,
+        NleNetworkErrorKind.unknown,
+      );
+    });
+
+    test('target exposes host:port from the request', () {
+      expect(
+        net(DioExceptionType.connectionError).target,
+        'nest.home:8082',
+      );
     });
   });
 

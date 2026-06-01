@@ -53,8 +53,32 @@ class NleApiLoggingInterceptor extends Interceptor {
     final ms = _elapsedMs(err.requestOptions);
     final klass = _errorClass(err);
     final statusFragment = status != null ? '$status' : 'no-response';
-    logger.error('$method $path → $statusFragment $klass (${ms}ms)');
+    // Include the target host:port and the low-level reason so a connection
+    // failure shows what it actually tried to reach (e.g. a wrong port). The
+    // URI host/port carry no credentials, and the reason is the OS/socket
+    // message — never a header or body. Query strings remain omitted (see the
+    // class doc); RequestOptions.path is just the path.
+    final target = _target(err.requestOptions);
+    final reason = _reasonFragment(err);
+    logger.error(
+      '$method $target$path → $statusFragment $klass$reason (${ms}ms)',
+    );
     handler.next(err);
+  }
+
+  String _target(RequestOptions options) {
+    final uri = options.uri;
+    return uri.host.isEmpty ? '' : '${uri.host}:${uri.port}';
+  }
+
+  /// The nested socket/handshake reason for connection-level failures, e.g.
+  /// `[Connection refused]`. Empty for `badResponse` (the status already
+  /// explains it) and when dio carries no underlying error.
+  String _reasonFragment(DioException err) {
+    if (err.type == DioExceptionType.badResponse) return '';
+    final underlying = err.error?.toString() ?? err.message;
+    if (underlying == null || underlying.isEmpty) return '';
+    return ' [$underlying]';
   }
 
   int _elapsedMs(RequestOptions options) {

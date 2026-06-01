@@ -241,6 +241,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authChoiceBearer => 'Bearer';
 
   @override
+  String get authChoiceCfServiceToken => 'Cloudflare Access';
+
+  @override
   String get authUsernameLabel => 'Username';
 
   @override
@@ -262,13 +265,54 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authTokenHide => 'Hide token';
 
   @override
+  String get authCfClientIdLabel => 'Service token client ID';
+
+  @override
+  String get authCfClientSecretLabel => 'Service token client secret';
+
+  @override
+  String get authCfClientSecretShow => 'Show client secret';
+
+  @override
+  String get authCfClientSecretHide => 'Hide client secret';
+
+  @override
   String get connectButton => 'Connect';
 
   @override
   String get connectFailedAuth => 'Authentication failed.';
 
   @override
+  String get connectFailedCloudflareAccess =>
+      'Blocked by Cloudflare Access. Add a valid service token under Advanced → Cloudflare Access.';
+
+  @override
   String get connectFailedUnreachable => 'Couldn\'t reach server.';
+
+  @override
+  String connectFailedTimeout(String target) {
+    return 'Connection to $target timed out. The server didn\'t respond.';
+  }
+
+  @override
+  String connectFailedRefused(String target) {
+    return 'Connection to $target was refused. Check the address and port.';
+  }
+
+  @override
+  String connectFailedDns(String target) {
+    return 'Couldn\'t find server $target. Check the address.';
+  }
+
+  @override
+  String connectFailedTls(String target) {
+    return 'Secure (TLS) connection to $target failed. Check the address and certificate.';
+  }
+
+  @override
+  String connectFailedNetwork(String target) {
+    return 'Couldn\'t reach $target. Check your network and the address.';
+  }
 
   @override
   String get devicePickerTitle => 'Choose a thermostat';

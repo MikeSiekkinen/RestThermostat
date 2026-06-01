@@ -514,6 +514,12 @@ abstract class AppLocalizations {
   /// **'Bearer'**
   String get authChoiceBearer;
 
+  /// Dropdown option: Cloudflare Access service-token authentication.
+  ///
+  /// In en, this message translates to:
+  /// **'Cloudflare Access'**
+  String get authChoiceCfServiceToken;
+
   /// Username text field label (HTTP Basic auth).
   ///
   /// In en, this message translates to:
@@ -556,6 +562,30 @@ abstract class AppLocalizations {
   /// **'Hide token'**
   String get authTokenHide;
 
+  /// Cloudflare Access service-token client ID field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Service token client ID'**
+  String get authCfClientIdLabel;
+
+  /// Cloudflare Access service-token client secret field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Service token client secret'**
+  String get authCfClientSecretLabel;
+
+  /// Visibility-toggle tooltip when the CF client-secret field is obscured.
+  ///
+  /// In en, this message translates to:
+  /// **'Show client secret'**
+  String get authCfClientSecretShow;
+
+  /// Visibility-toggle tooltip when the CF client-secret field is visible.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide client secret'**
+  String get authCfClientSecretHide;
+
   /// Primary submit button on the Server Setup screen.
   ///
   /// In en, this message translates to:
@@ -568,11 +598,47 @@ abstract class AppLocalizations {
   /// **'Authentication failed.'**
   String get connectFailedAuth;
 
-  /// Inline error after Test Connection for any non-auth failure.
+  /// Inline error after Test Connection when Cloudflare Access blocked the request (redirect to the Access login, or a Cloudflare-Access challenge).
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked by Cloudflare Access. Add a valid service token under Advanced → Cloudflare Access.'**
+  String get connectFailedCloudflareAccess;
+
+  /// Inline error after Test Connection for a non-network failure (e.g. server or parse error).
   ///
   /// In en, this message translates to:
   /// **'Couldn\'t reach server.'**
   String get connectFailedUnreachable;
+
+  /// Inline error after Test Connection when the connection or response timed out.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection to {target} timed out. The server didn\'t respond.'**
+  String connectFailedTimeout(String target);
+
+  /// Inline error after Test Connection when the host refused the connection (wrong port / nothing listening).
+  ///
+  /// In en, this message translates to:
+  /// **'Connection to {target} was refused. Check the address and port.'**
+  String connectFailedRefused(String target);
+
+  /// Inline error after Test Connection when the hostname failed to resolve (DNS).
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t find server {target}. Check the address.'**
+  String connectFailedDns(String target);
+
+  /// Inline error after Test Connection when the TLS handshake / certificate check failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Secure (TLS) connection to {target} failed. Check the address and certificate.'**
+  String connectFailedTls(String target);
+
+  /// Inline error after Test Connection for an otherwise-unclassified network failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t reach {target}. Check your network and the address.'**
+  String connectFailedNetwork(String target);
 
   /// AppBar title on the onboarding device-picker screen.
   ///

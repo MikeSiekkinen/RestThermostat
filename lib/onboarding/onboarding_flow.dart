@@ -76,14 +76,10 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         _step = _Step.devicePicker;
       });
       return const ConnectSuccess();
-    } on NleAuthError catch (_) {
+    } on NleError catch (e) {
       if (!mounted) return const ConnectInlineError('');
       final l = AppLocalizations.of(context);
-      return ConnectInlineError(l.connectFailedAuth);
-    } on NleError catch (_) {
-      if (!mounted) return const ConnectInlineError('');
-      final l = AppLocalizations.of(context);
-      return ConnectInlineError(l.connectFailedUnreachable);
+      return ConnectInlineError(connectErrorMessage(l, e));
     }
   }
 

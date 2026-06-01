@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
@@ -99,7 +101,8 @@ void main() {
     expect(logger.entries, hasLength(1));
     final entry = logger.entries.first;
     expect(entry.level, LogLevel.error);
-    expect(entry.message, contains('GET /api/devices'));
+    expect(entry.message, startsWith('GET '));
+    expect(entry.message, contains('/api/devices'));
     expect(entry.message, contains('500'));
     expect(entry.message, contains('bad-response'));
     expectNoLeaks(logger.entries);
@@ -158,6 +161,42 @@ void main() {
 
       await dio2.get('/api/devices');
       expect(logger.entries.first.message, contains('(250ms)'));
+    },
+  );
+
+  test(
+    'connection error logs target host:port and the underlying reason',
+    () async {
+      adapter.onGet(
+        '/api/devices',
+        (server) => server.throws(
+          0,
+          DioException.connectionError(
+            requestOptions: RequestOptions(
+              path: '/api/devices',
+              baseUrl: 'http://test.local:8082',
+            ),
+            reason: 'connection refused',
+            error: const SocketException('Connection refused'),
+          ),
+        ),
+      );
+
+      try {
+        await dio.get(
+          '/api/devices',
+          options: Options(headers: {'Authorization': 'Basic $_basicCreds'}),
+        );
+        fail('expected DioException');
+      } on DioException catch (_) {
+        // expected
+      }
+
+      final message = logger.entries.first.message;
+      expect(message, contains('test.local:8082'));
+      expect(message, contains('Connection refused'));
+      expect(message, contains('connection-error'));
+      expectNoLeaks(logger.entries);
     },
   );
 

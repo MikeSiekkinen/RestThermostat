@@ -305,20 +305,91 @@ void main() {
   });
 
   group('factory NleApiClient.create', () {
-    test('uses provided baseUrl without authorization header by default', () {
+    test('uses provided baseUrl without auth headers by default', () {
       final c = NleApiClient.create(baseUrl: 'http://nest.home:8082');
-      // No assertion needed beyond construction succeeding; the absence of an
-      // auth header is exercised by the success test above which mocks paths
-      // relative to baseUrl.
-      expect(c, isA<NleApiClient>());
+      expect(c.dio.options.headers.containsKey('Authorization'), isFalse);
+      expect(
+        c.dio.options.headers.containsKey('CF-Access-Client-Id'),
+        isFalse,
+      );
     });
 
-    test('passes authorization header when provided', () async {
+    test('merges Authorization auth header when provided', () async {
       final c = NleApiClient.create(
         baseUrl: 'http://nest.home:8082',
-        authorizationHeader: 'Bearer test-token',
+        authHeaders: const {'Authorization': 'Bearer test-token'},
       );
-      expect(c, isA<NleApiClient>());
+      expect(c.dio.options.headers['Authorization'], 'Bearer test-token');
     });
+
+    test('merges Cloudflare Access service-token headers when provided', () {
+      final c = NleApiClient.create(
+        baseUrl: 'http://nest.home:8082',
+        authHeaders: const {
+          'CF-Access-Client-Id': 'abc.access',
+          'CF-Access-Client-Secret': 's3cr3t',
+        },
+      );
+      expect(c.dio.options.headers['CF-Access-Client-Id'], 'abc.access');
+      expect(c.dio.options.headers['CF-Access-Client-Secret'], 's3cr3t');
+      expect(c.dio.options.headers.containsKey('Authorization'), isFalse);
+    });
+
+    test('disables redirect following (3xx must surface, not be chased)', () {
+      final c = NleApiClient.create(baseUrl: 'http://nest.home:8082');
+      expect(c.dio.options.followRedirects, isFalse);
+    });
+
+    test(
+      'sends CF Access headers on EVERY request (GET devices + POST command)',
+      () async {
+        // Build via the production factory so we exercise the real header
+        // plumbing (BaseOptions.headers), not a hand-rolled Dio.
+        final c = NleApiClient.create(
+          baseUrl: 'http://nest.home:8082',
+          authHeaders: const {
+            'CF-Access-Client-Id': 'abc.access',
+            'CF-Access-Client-Secret': 's3cr3t',
+          },
+        );
+        final captured = <String, Map<String, dynamic>>{};
+        c.dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              captured[options.path] = Map<String, dynamic>.from(
+                options.headers,
+              );
+              handler.next(options);
+            },
+          ),
+        );
+        final adapter = DioAdapter(dio: c.dio);
+        adapter.onGet(
+          '/api/devices',
+          (s) => s.reply(200, {'total': 0, 'devices': <dynamic>[]}),
+        );
+        adapter.onPost(
+          '/command',
+          (s) => s.reply(200, {'ok': true}),
+          data: Matchers.any,
+        );
+
+        await c.fetchDevicesJson();
+        await c.sendCommand(serial: 'X', command: 'set_mode', value: 'heat');
+
+        for (final path in ['/api/devices', '/command']) {
+          expect(
+            captured[path]?['CF-Access-Client-Id'],
+            'abc.access',
+            reason: 'CF client id missing on $path',
+          );
+          expect(
+            captured[path]?['CF-Access-Client-Secret'],
+            's3cr3t',
+            reason: 'CF client secret missing on $path',
+          );
+        }
+      },
+    );
   });
 }

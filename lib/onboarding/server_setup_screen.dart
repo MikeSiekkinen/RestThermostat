@@ -8,7 +8,7 @@ import 'connect_outcome.dart';
 typedef ConnectFn =
     Future<ConnectOutcome> Function(String normalizedUrl, AuthConfig auth);
 
-enum _AuthChoice { none, basic, bearer }
+enum _AuthChoice { none, basic, bearer, cfServiceToken }
 
 class ServerSetupScreen extends StatefulWidget {
   final String? initialUrl;
@@ -32,6 +32,8 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
   late final TextEditingController _userCtrl;
   late final TextEditingController _passCtrl;
   late final TextEditingController _tokenCtrl;
+  late final TextEditingController _cfClientIdCtrl;
+  late final TextEditingController _cfClientSecretCtrl;
   late _AuthChoice _authChoice;
   bool _advancedExpanded = false;
   bool _busy = false;
@@ -44,6 +46,8 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
     _userCtrl = TextEditingController();
     _passCtrl = TextEditingController();
     _tokenCtrl = TextEditingController();
+    _cfClientIdCtrl = TextEditingController();
+    _cfClientSecretCtrl = TextEditingController();
     switch (widget.initialAuth) {
       case AuthNone():
         _authChoice = _AuthChoice.none;
@@ -56,6 +60,11 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
         _authChoice = _AuthChoice.bearer;
         _tokenCtrl.text = token;
         _advancedExpanded = true;
+      case AuthCfServiceToken(:final clientId, :final clientSecret):
+        _authChoice = _AuthChoice.cfServiceToken;
+        _cfClientIdCtrl.text = clientId;
+        _cfClientSecretCtrl.text = clientSecret;
+        _advancedExpanded = true;
     }
   }
 
@@ -65,6 +74,8 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
     _userCtrl.dispose();
     _passCtrl.dispose();
     _tokenCtrl.dispose();
+    _cfClientIdCtrl.dispose();
+    _cfClientSecretCtrl.dispose();
     super.dispose();
   }
 
@@ -75,6 +86,10 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
       password: _passCtrl.text,
     ),
     _AuthChoice.bearer => AuthBearer(token: _tokenCtrl.text),
+    _AuthChoice.cfServiceToken => AuthCfServiceToken(
+      clientId: _cfClientIdCtrl.text,
+      clientSecret: _cfClientSecretCtrl.text,
+    ),
   };
 
   Future<void> _submit() async {
@@ -164,6 +179,10 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                           value: _AuthChoice.bearer,
                           child: Text(l.authChoiceBearer),
                         ),
+                        DropdownMenuItem(
+                          value: _AuthChoice.cfServiceToken,
+                          child: Text(l.authChoiceCfServiceToken),
+                        ),
                       ],
                       onChanged: (v) {
                         if (v != null) setState(() => _authChoice = v);
@@ -195,6 +214,27 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                         controller: _tokenCtrl,
                         decoration: InputDecoration(
                           labelText: l.authTokenLabel,
+                        ),
+                        obscureText: true,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                      ),
+                    ] else if (_authChoice ==
+                        _AuthChoice.cfServiceToken) ...[
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _cfClientIdCtrl,
+                        decoration: InputDecoration(
+                          labelText: l.authCfClientIdLabel,
+                        ),
+                        autocorrect: false,
+                        enableSuggestions: false,
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _cfClientSecretCtrl,
+                        decoration: InputDecoration(
+                          labelText: l.authCfClientSecretLabel,
                         ),
                         obscureText: true,
                         autocorrect: false,

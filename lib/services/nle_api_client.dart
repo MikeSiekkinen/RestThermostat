@@ -20,12 +20,16 @@ class NleApiClient {
   /// HTTP call appears in [AppLogger]; logs the configured auth presence once
   /// at construction time (never the credential value).
   ///
+  /// [authHeaders] are merged verbatim into every request — this covers both
+  /// `Authorization`-style schemes and custom header pairs (e.g. Cloudflare
+  /// Access service tokens). See [AuthConfig.headers].
+  ///
   /// The raw [NleApiClient] constructor intentionally does NOT install the
   /// interceptor — that keeps mock-adapter-based unit tests of unrelated code
   /// from leaking entries into the global logger.
   factory NleApiClient.create({
     required String baseUrl,
-    String? authorizationHeader,
+    Map<String, String>? authHeaders,
     AppLogger? logger,
   }) {
     final effectiveLogger = logger ?? AppLogger.instance;
@@ -34,11 +38,16 @@ class NleApiClient {
         baseUrl: baseUrl,
         connectTimeout: const Duration(seconds: 5),
         receiveTimeout: const Duration(seconds: 10),
-        headers: {'Authorization': ?authorizationHeader},
+        headers: {...?authHeaders},
+        // The NLE control API returns JSON and never legitimately redirects.
+        // A 3xx means an access gate (Cloudflare Access, an SSO proxy)
+        // intercepted the request — don't chase it into an HTML login page;
+        // surface the 3xx so NleError.fromDio can classify it as an auth gate.
+        followRedirects: false,
       ),
     );
     dio.interceptors.add(NleApiLoggingInterceptor(logger: effectiveLogger));
-    effectiveLogger.info('auth: ${_authPresence(authorizationHeader)}');
+    effectiveLogger.info('auth: ${_authPresence(authHeaders)}');
     return NleApiClient(dio: dio, logger: effectiveLogger);
   }
 
@@ -167,13 +176,15 @@ class NleApiClient {
     return s.length <= 200 ? s : '${s.substring(0, 200)}…';
   }
 
-  /// Maps a raw `Authorization` header value to a presence label
-  /// (`"bearer"`/`"basic"`/`"none"`) without leaking the credential itself.
-  static String _authPresence(String? header) {
-    if (header == null || header.isEmpty) return 'none';
-    final lower = header.toLowerCase();
-    if (lower.startsWith('bearer')) return 'bearer';
-    if (lower.startsWith('basic')) return 'basic';
+  /// Maps the configured auth headers to a presence label
+  /// (`"bearer"`/`"basic"`/`"cf-service-token"`/`"none"`/`"other"`) without
+  /// leaking any credential value.
+  static String _authPresence(Map<String, String>? headers) {
+    if (headers == null || headers.isEmpty) return 'none';
+    if (headers.containsKey('CF-Access-Client-Id')) return 'cf-service-token';
+    final auth = headers['Authorization']?.toLowerCase() ?? '';
+    if (auth.startsWith('bearer')) return 'bearer';
+    if (auth.startsWith('basic')) return 'basic';
     return 'other';
   }
 }

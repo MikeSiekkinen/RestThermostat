@@ -52,6 +52,8 @@ class FlutterOnboardingStore implements OnboardingStore {
   static const _kBasicUser = 'auth_basic_username';
   static const _kBasicPass = 'auth_basic_password';
   static const _kBearer = 'auth_bearer_token';
+  static const _kCfClientId = 'auth_cf_client_id';
+  static const _kCfClientSecret = 'auth_cf_client_secret';
   static const _kDeviceNameOverrides = 'device_name_overrides';
 
   final FlutterSecureStorage _secure;
@@ -73,6 +75,10 @@ class FlutterOnboardingStore implements OnboardingStore {
         password: await _secure.read(key: _kBasicPass) ?? '',
       ),
       'bearer' => AuthBearer(token: await _secure.read(key: _kBearer) ?? ''),
+      'cf_service_token' => AuthCfServiceToken(
+        clientId: await _secure.read(key: _kCfClientId) ?? '',
+        clientSecret: await _secure.read(key: _kCfClientSecret) ?? '',
+      ),
       _ => const AuthNone(),
     };
     return OnboardingConfig(
@@ -105,20 +111,30 @@ class FlutterOnboardingStore implements OnboardingStore {
   @override
   Future<void> saveAuth(AuthConfig auth) async {
     await _secure.write(key: _kAuthType, value: auth.tag);
+    // Clear every credential key first so switching auth type never leaves a
+    // stale secret behind (e.g. an old CF secret lingering after a switch to
+    // Basic), then write only the keys the active config needs.
+    await _clearCredentialKeys();
     switch (auth) {
       case AuthNone():
-        await _secure.delete(key: _kBasicUser);
-        await _secure.delete(key: _kBasicPass);
-        await _secure.delete(key: _kBearer);
+        break;
       case AuthBasic(:final username, :final password):
         await _secure.write(key: _kBasicUser, value: username);
         await _secure.write(key: _kBasicPass, value: password);
-        await _secure.delete(key: _kBearer);
       case AuthBearer(:final token):
         await _secure.write(key: _kBearer, value: token);
-        await _secure.delete(key: _kBasicUser);
-        await _secure.delete(key: _kBasicPass);
+      case AuthCfServiceToken(:final clientId, :final clientSecret):
+        await _secure.write(key: _kCfClientId, value: clientId);
+        await _secure.write(key: _kCfClientSecret, value: clientSecret);
     }
+  }
+
+  Future<void> _clearCredentialKeys() async {
+    await _secure.delete(key: _kBasicUser);
+    await _secure.delete(key: _kBasicPass);
+    await _secure.delete(key: _kBearer);
+    await _secure.delete(key: _kCfClientId);
+    await _secure.delete(key: _kCfClientSecret);
   }
 
   @override
