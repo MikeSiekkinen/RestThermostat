@@ -507,6 +507,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get detailsFirmware => 'FIRMWARE';
 
   @override
+  String get detailsLocalIp => 'LOCAL IP';
+
+  @override
+  String get detailsMacAddress => 'MAC ADDRESS';
+
+  @override
   String get detailsLastSync => 'LAST SYNC';
 
   @override

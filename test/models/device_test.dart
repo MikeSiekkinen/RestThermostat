@@ -158,5 +158,30 @@ void main() {
       final parsed = DevicesResponse.fromJson(modified).devices.first;
       expect(parsed.ecoTemperatures, isNull);
     });
+
+    // local_ip / mac_address only exist on NLE-SelfHosted servers running
+    // main newer than 2026-06-29 (upstream PR #24). The exact wire keys
+    // below are copied from that PR's diff — don't rename them.
+    test('parses local_ip and mac_address when present', () {
+      final modified = Map<String, dynamic>.from(fixture);
+      final device = Map<String, dynamic>.from(modified['devices'][0] as Map);
+      device['local_ip'] = '192.168.1.50';
+      device['mac_address'] = '18b430aabbcc';
+      modified['devices'] = [device];
+
+      final parsed = DevicesResponse.fromJson(modified).devices.first;
+      expect(parsed.localIp, '192.168.1.50');
+      expect(parsed.macAddress, '18b430aabbcc');
+    });
+
+    test(
+      'local_ip and mac_address are null when absent (pre-release server)',
+      () {
+        // The fixture predates the upstream change and carries neither key.
+        final device = DevicesResponse.fromJson(fixture).devices.first;
+        expect(device.localIp, isNull);
+        expect(device.macAddress, isNull);
+      },
+    );
   });
 }
