@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/gen/app_localizations.dart';
 import '../../models/device.dart';
 import '../../models/schedule.dart';
+import '../../services/device_display_name.dart';
+import '../../services/schedule_helpers.dart';
+import '../../services/setpoint_source.dart';
 import '../../state/providers.dart';
 import '../../theme/colors.dart';
 import 'day_index.dart';
@@ -40,12 +43,30 @@ class ScheduleScreen extends ConsumerStatefulWidget {
   /// is needed alongside `set_schedule` (Issue #93).
   final String? scheduleMode;
 
+  /// The resolved active device — feeds `deriveSetpointSource` (its
+  /// `targetTemperature` and away state) for the in-control event highlight
+  /// (Issue #97). Nullable for callers without a full `Device` (tests,
+  /// mostly); the highlight simply stays off then.
+  final Device? device;
+
+  /// Clock injection so the highlight's active-event derivation is
+  /// deterministic in tests. Production callers use the [DateTime.now] default.
+  final DateTime Function() now;
+
+  /// Per-device display-name overrides (DESIGN §4.4), forwarded from
+  /// `MainShell` so the header can resolve which thermostat is being scheduled
+  /// (Issue #100). Defaults to empty for callers without them (tests).
+  final Map<String, String> overrides;
+
   const ScheduleScreen({
     super.key,
     required this.serial,
     this.temperatureScale = 'F',
     this.deviceMode = DeviceMode.heat,
     this.scheduleMode,
+    this.device,
+    this.now = DateTime.now,
+    this.overrides = const {},
     this.capabilities = const Capabilities(
       canHeat: true,
       canCool: false,
@@ -62,9 +83,87 @@ class ScheduleScreen extends ConsumerStatefulWidget {
 
 class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
   /// Internal day index (Mon=0..Sun=6) currently shown in the event list.
-  /// Initialized to today's index in `initState`; user taps on the tab strip
-  /// move this around.
-  int _selectedDay = weekdayToIndex(DateTime.now().weekday);
+  /// Seeded to today in `initState` off the injected clock (so tests and the
+  /// tint share one notion of "now"); user taps on the tab strip move it.
+  late int _selectedDay;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDay = weekdayToIndex(widget.now().weekday);
+  }
+
+  /// The scheduled event currently driving the setpoint, whose row gets the
+  /// in-control highlight (Issue #97) — or `null` when the schedule isn't in
+  /// control: manual override, away, no/failed schedule, or an active RANGE
+  /// event (which `deriveSetpointSource` deliberately never matches, DESIGN
+  /// §9.5).
+  ///
+  /// Reuses `deriveSetpointSource` unchanged so the highlight always agrees
+  /// with the Details screen's Scheduled/Manual row by construction: only when
+  /// it reports `scheduled` do we surface the active event.
+  ScheduleEvent? _activeDrivingEvent(Schedule? schedule) {
+    final device = widget.device;
+    if (device == null || schedule == null) return null;
+    final now = widget.now();
+    final source = deriveSetpointSource(
+      device: device,
+      schedule: schedule,
+      now: now,
+    );
+    if (source != SetpointSource.scheduled) return null;
+    return findActiveEvent(schedule, now);
+  }
+
+  /// Header title (Issue #100): the scheduled device's display name over a
+  /// small current-measured / target line. Falls back to the plain "Schedule"
+  /// title when no `Device` is available (test callers).
+  Widget _buildHeaderTitle(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final device = widget.device;
+    if (device == null) return Text(l.scheduleTitle);
+
+    final name = displayNameFor(device, widget.overrides);
+    final measured = _convertTemp(
+      device.currentTemperature,
+      widget.temperatureScale,
+    );
+    final target = _headerTarget(device);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        const SizedBox(height: 2),
+        Text(
+          l.scheduleHeaderTemps(measured, target),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(color: EmberColors.textSecondary),
+          semanticsLabel: l.scheduleHeaderTempsSemantics(measured, target),
+        ),
+      ],
+    );
+  }
+
+  /// The header's "Set" value. Mirrors the Details screen's `_setpointDisplay`
+  /// (details_screen.dart) so the two never disagree: a heat-cool device with
+  /// both bounds shows the `low – high` band (the scalar `targetTemperature`
+  /// is a midpoint/sentinel on the wire in that mode); every other mode shows
+  /// the single target.
+  String _headerTarget(Device device) {
+    if (device.mode == DeviceMode.heatCool) {
+      final low = device.targetTemperatureLow;
+      final high = device.targetTemperatureHigh;
+      if (low != null && high != null) {
+        return '${_convertTemp(low, widget.temperatureScale)} – '
+            '${_convertTemp(high, widget.temperatureScale)}';
+      }
+    }
+    return _convertTemp(device.targetTemperature, widget.temperatureScale);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -72,10 +171,19 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
     final order = localeDayOrder(locale);
     final labels = displayDayLabels(locale);
     final asyncSchedule = ref.watch(scheduleProvider(widget.serial));
+    // A failed refetch keeps its previous data in `AsyncValue.value`, but the
+    // screen shows the error view then — keep the highlight in agreement with
+    // what is actually visible by treating any error as "no schedule".
+    final activeEvent = _activeDrivingEvent(
+      asyncSchedule.hasError ? null : asyncSchedule.value,
+    );
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppLocalizations.of(context).scheduleTitle),
+        // Scale the two-line header's height with the text scale so a large
+        // accessibility font grows the toolbar instead of clipping it.
+        toolbarHeight: MediaQuery.textScalerOf(context).scale(72),
+        title: _buildHeaderTitle(context),
         actions: [
           IconButton(
             key: const ValueKey('add-event-button'),
@@ -110,6 +218,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                   data: (schedule) => _DayEventList(
                     events: schedule?.eventsForDay(_selectedDay) ?? const [],
                     temperatureScale: widget.temperatureScale,
+                    activeEvent: activeEvent,
                     onTapEvent: (event) => _openEditEvent(schedule, event),
                   ),
                 ),
@@ -278,11 +387,16 @@ class _DayTab extends StatelessWidget {
 class _DayEventList extends StatelessWidget {
   final List<ScheduleEvent> events;
   final String temperatureScale;
+
+  /// The event currently driving the setpoint (Issue #97), or `null`. When one
+  /// of this day's events equals it, that row gets the in-control highlight.
+  final ScheduleEvent? activeEvent;
   final ValueChanged<ScheduleEvent> onTapEvent;
 
   const _DayEventList({
     required this.events,
     required this.temperatureScale,
+    required this.activeEvent,
     required this.onTapEvent,
   });
 
@@ -321,6 +435,7 @@ class _DayEventList extends StatelessWidget {
       itemBuilder: (context, i) => _EventRow(
         event: events[i],
         temperatureScale: temperatureScale,
+        isActive: activeEvent != null && events[i] == activeEvent,
         onTap: () => onTapEvent(events[i]),
       ),
     );
@@ -330,11 +445,17 @@ class _DayEventList extends StatelessWidget {
 class _EventRow extends StatelessWidget {
   final ScheduleEvent event;
   final String temperatureScale;
+
+  /// Whether this event is the one currently driving the setpoint (Issue #97).
+  /// When true the row gets a full-strength type-colored border and glow so it
+  /// reads as "the schedule is holding this right now" regardless of mode.
+  final bool isActive;
   final VoidCallback onTap;
 
   const _EventRow({
     required this.event,
     required this.temperatureScale,
+    required this.isActive,
     required this.onTap,
   });
 
@@ -352,13 +473,18 @@ class _EventRow extends StatelessWidget {
     // Screen-reader announcement: one merged label combining time + temp +
     // mode so TalkBack/VoiceOver reads "Event at 6:00 AM, 68 degrees Heat,
     // tap to edit." instead of three separate `Text` nodes whose color
-    // tinting carries the mode signal visually.
+    // tinting carries the mode signal visually. When this is the active event
+    // the highlight is purely visual, so prepend the state for non-sighted
+    // users.
     final l = AppLocalizations.of(context);
-    final semanticLabel = l.scheduleEventSemanticLabel(
+    final baseLabel = l.scheduleEventSemanticLabel(
       timeLabel,
       tempLabel,
       event.type.toLowerCase(),
     );
+    final semanticLabel = isActive
+        ? l.scheduleActiveEventSemanticLabel(baseLabel)
+        : baseLabel;
     final typeLabel = _typeLabel(context, event.type);
 
     return Semantics(
@@ -370,12 +496,30 @@ class _EventRow extends StatelessWidget {
           child: InkWell(
             onTap: onTap,
             borderRadius: BorderRadius.circular(12),
-            child: Container(
+            // AnimatedContainer so the highlight glides on/off (300ms
+            // easeInOutCubic, DESIGN §11.4) as the clock crosses into a new
+            // event or a poll changes the match. Keyed by content so a moving
+            // highlight animates on stable per-event elements.
+            child: AnimatedContainer(
+              key: ValueKey('event-row-${event.dayIndex}-${event.timeSeconds}'),
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOutCubic,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: tint.withValues(alpha: 0.10),
+                color: tint.withValues(alpha: isActive ? 0.20 : 0.10),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: tint.withValues(alpha: 0.35)),
+                border: Border.all(
+                  color: isActive ? tint : tint.withValues(alpha: 0.35),
+                  width: isActive ? 2 : 1,
+                ),
+                boxShadow: isActive
+                    ? [
+                        BoxShadow(
+                          color: tint.withValues(alpha: 0.45),
+                          blurRadius: 16,
+                        ),
+                      ]
+                    : null,
               ),
               child: Row(
                 children: [
