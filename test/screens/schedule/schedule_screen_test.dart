@@ -14,7 +14,6 @@ import 'package:rest_thermostat/screens/schedule/schedule_screen.dart';
 import 'package:rest_thermostat/services/nle_api_client.dart';
 import 'package:rest_thermostat/state/providers.dart';
 import 'package:rest_thermostat/theme/colors.dart';
-import 'package:rest_thermostat/widgets/ember_background.dart';
 
 class _Harness {
   final Widget widget;
