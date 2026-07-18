@@ -874,6 +874,48 @@ abstract class AppLocalizations {
   /// **'Delete'**
   String get editEventDeleteConfirm;
 
+  /// Label above the hour text field on the edit-event screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Hour'**
+  String get editEventHourLabel;
+
+  /// Label above the minute text field on the edit-event screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Minute'**
+  String get editEventMinuteLabel;
+
+  /// AM pill of the 12-hour-mode time selector.
+  ///
+  /// In en, this message translates to:
+  /// **'AM'**
+  String get editEventAmLabel;
+
+  /// PM pill of the 12-hour-mode time selector.
+  ///
+  /// In en, this message translates to:
+  /// **'PM'**
+  String get editEventPmLabel;
+
+  /// Inline validation message for an invalid hour in 24-hour mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an hour from 0–23'**
+  String get editEventHourError24;
+
+  /// Inline validation message for an invalid hour in 12-hour mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an hour from 1–12'**
+  String get editEventHourError12;
+
+  /// Inline validation message for an invalid minute value.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter minutes from 0–59'**
+  String get editEventMinuteError;
+
   /// Snackbar shown after a successful set_schedule write.
   ///
   /// In en, this message translates to:

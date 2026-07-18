@@ -449,6 +449,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editEventDeleteConfirm => 'Delete';
 
   @override
+  String get editEventHourLabel => 'Hour';
+
+  @override
+  String get editEventMinuteLabel => 'Minute';
+
+  @override
+  String get editEventAmLabel => 'AM';
+
+  @override
+  String get editEventPmLabel => 'PM';
+
+  @override
+  String get editEventHourError24 => 'Enter an hour from 0–23';
+
+  @override
+  String get editEventHourError12 => 'Enter an hour from 1–12';
+
+  @override
+  String get editEventMinuteError => 'Enter minutes from 0–59';
+
+  @override
   String get editEventSavedSnack => 'Schedule saved';
 
   @override
