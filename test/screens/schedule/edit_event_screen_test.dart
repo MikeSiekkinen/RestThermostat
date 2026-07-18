@@ -682,6 +682,41 @@ void main() {
       expect(wireTimes(h.requests, 1), [70200]);
     });
 
+    testWidgets('tapping AM on a prefilled PM event re-derives the wire time', (
+      tester,
+    ) async {
+      const existing = ScheduleEvent(
+        dayIndex: 1,
+        hour: 19,
+        minute: 30,
+        type: 'HEAT',
+        targetTemp: 20.0,
+      );
+      final h = _setup(
+        schedule: _emptyWeek().addEvent(existing),
+        existingEvent: existing,
+        defaultDayIndex: 1,
+        storedScheduleMode: 'HEAT',
+      );
+      h.adapter.onPost(
+        '/command',
+        (s) => s.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      // Flip the prefilled 7:30 PM to AM without touching the text fields;
+      // expect 07:30 → 27000 on the wire.
+      await tester.tap(find.byKey(amPill));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(wireTimes(h.requests, 1), [27000]);
+    });
+
     testWidgets('editing a 19:30 event prefills 19/30 in 24-hour mode', (
       tester,
     ) async {

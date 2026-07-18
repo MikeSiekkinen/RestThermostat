@@ -110,6 +110,100 @@ void main() {
     expect(calls.last, (19, 30));
   });
 
+  testWidgets('12-hour mode rejects 13 (above the 1–12 range)', (tester) async {
+    final calls = <(int?, int?)>[];
+    await tester.pumpWidget(
+      _wrap(
+        EmberTimeFields(
+          initialHour: 7,
+          initialMinute: 0,
+          onChanged: (h, m) => calls.add((h, m)),
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byKey(_hourField), '13');
+    await tester.pump();
+    expect(calls.last, (null, 0));
+    expect(find.text('Enter an hour from 1–12'), findsOneWidget);
+  });
+
+  testWidgets('non-numeric input is filtered out, leaving the field empty and '
+      'invalid', (tester) async {
+    final calls = <(int?, int?)>[];
+    await tester.pumpWidget(
+      _wrap(
+        EmberTimeFields(
+          initialHour: 7,
+          initialMinute: 0,
+          use24Hour: true,
+          onChanged: (h, m) => calls.add((h, m)),
+        ),
+      ),
+    );
+
+    // digitsOnly formatter strips letters; 'ab' reaches the field as ''.
+    await tester.enterText(find.byKey(_hourField), 'ab');
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(find.byKey(_hourField)).controller!.text,
+      '',
+    );
+    expect(calls.last, (null, 0));
+    expect(find.text('Enter an hour from 0–23'), findsOneWidget);
+
+    // Digits mixed with letters keep only the digits.
+    await tester.enterText(find.byKey(_hourField), '1a8');
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(find.byKey(_hourField)).controller!.text,
+      '18',
+    );
+    expect(calls.last, (18, 0));
+  });
+
+  testWidgets('flipping the 12/24h format mid-edit keeps the same instant', (
+    tester,
+  ) async {
+    final calls = <(int?, int?)>[];
+    var use24 = false;
+    late StateSetter setOuter;
+    await tester.pumpWidget(
+      _wrap(
+        StatefulBuilder(
+          builder: (context, setState) {
+            setOuter = setState;
+            return EmberTimeFields(
+              initialHour: 7,
+              initialMinute: 0,
+              use24Hour: use24,
+              onChanged: (h, m) => calls.add((h, m)),
+            );
+          },
+        ),
+      ),
+    );
+
+    // Enter 7:30 PM in 12-hour mode → 19:30.
+    await tester.enterText(find.byKey(_hourField), '7');
+    await tester.enterText(find.byKey(_minuteField), '30');
+    await tester.tap(find.byKey(_pmPill));
+    await tester.pump();
+    expect(calls.last, (19, 30));
+
+    // System flips to 24-hour format while the screen is open.
+    setOuter(() => use24 = true);
+    await tester.pumpAndSettle();
+
+    // Hour field reformats to 19 and re-emits the same instant; no AM/PM pills.
+    expect(
+      tester.widget<TextField>(find.byKey(_hourField)).controller!.text,
+      '19',
+    );
+    expect(find.byKey(_pmPill), findsNothing);
+    expect(calls.last, (19, 30));
+  });
+
   testWidgets('12-hour mode rejects 0 with an inline error', (tester) async {
     final calls = <(int?, int?)>[];
     await tester.pumpWidget(

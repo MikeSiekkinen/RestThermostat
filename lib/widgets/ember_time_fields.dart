@@ -53,6 +53,32 @@ class _EmberTimeFieldsState extends State<EmberTimeFields> {
   }
 
   @override
+  void didUpdateWidget(EmberTimeFields oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // `use24Hour` is fed live from `MediaQuery.alwaysUse24HourFormat`, so the
+    // user can flip the system 12/24-hour setting while this screen is open.
+    // Reformat the hour field for the new mode from the value it held under
+    // the old one, and re-emit — otherwise the displayed digits would be
+    // reinterpreted under the new mode (a 12-hour "7 PM" silently reading as
+    // 07:00), desyncing the display from the value the parent saves and
+    // stranding Save-gating on the stale parse.
+    if (oldWidget.use24Hour != widget.use24Hour) {
+      final hour24 = _parseHour24(oldWidget.use24Hour);
+      if (hour24 != null) {
+        _isPm = hour24 >= 12;
+        _hourCtrl.text = widget.use24Hour
+            ? hour24.toString().padLeft(2, '0')
+            : _to12(hour24).toString();
+      }
+      // Defer past this build so onChanged doesn't call the parent's setState
+      // mid-rebuild.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _emit();
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _hourCtrl.dispose();
     _minuteCtrl.dispose();
@@ -64,11 +90,17 @@ class _EmberTimeFieldsState extends State<EmberTimeFields> {
     return h == 0 ? 12 : h;
   }
 
-  /// Parsed 24-hour hour, or `null` when the field is empty/out of range.
-  int? get _hour24 {
+  /// Parsed 24-hour hour under the current [EmberTimeFields.use24Hour], or
+  /// `null` when the field is empty/out of range.
+  int? get _hour24 => _parseHour24(widget.use24Hour);
+
+  /// Parse the hour field as a 24-hour value under [use24] mode, or `null`
+  /// when empty/out of range. Split out so [didUpdateWidget] can read the
+  /// field under the *previous* mode during a 12/24-hour flip.
+  int? _parseHour24(bool use24) {
     final parsed = int.tryParse(_hourCtrl.text.trim());
     if (parsed == null) return null;
-    if (widget.use24Hour) {
+    if (use24) {
       return (parsed >= 0 && parsed <= 23) ? parsed : null;
     }
     if (parsed < 1 || parsed > 12) return null;
@@ -131,14 +163,19 @@ class _EmberTimeFieldsState extends State<EmberTimeFields> {
         ),
         // Errors live below the row (not per-field `errorText`) so the two
         // fields stay vertically aligned with the colon and AM/PM pills.
+        // `liveRegion` restores the announcement that `InputDecoration.errorText`
+        // would otherwise give screen readers when the message appears.
         for (final error in [hourError, minuteError])
           if (error != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                error,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.error,
+              child: Semantics(
+                liveRegion: true,
+                child: Text(
+                  error,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
                 ),
               ),
             ),
@@ -154,33 +191,40 @@ class _EmberTimeFieldsState extends State<EmberTimeFields> {
     required bool hasError,
   }) {
     final errorColor = Theme.of(context).colorScheme.error;
-    return SizedBox(
-      width: 88,
-      child: TextField(
-        key: key,
-        controller: controller,
-        keyboardType: TextInputType.number,
-        inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-          LengthLimitingTextInputFormatter(2),
-        ],
-        textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-          color: EmberColors.textPrimary,
+    // Flexible + a max-width cap: the fields sit at 88px when there's room but
+    // shrink rather than overflow when a large accessibility text scale grows
+    // the colon and AM/PM labels past the available row width.
+    return Flexible(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 88),
+        child: TextField(
+          key: key,
+          controller: controller,
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(2),
+          ],
+          textAlign: TextAlign.center,
+          style: Theme.of(
+            context,
+          ).textTheme.headlineMedium?.copyWith(color: EmberColors.textPrimary),
+          decoration: InputDecoration(
+            labelText: label,
+            floatingLabelBehavior: FloatingLabelBehavior.always,
+            enabledBorder: hasError
+                ? UnderlineInputBorder(
+                    borderSide: BorderSide(color: errorColor),
+                  )
+                : null,
+            focusedBorder: hasError
+                ? UnderlineInputBorder(
+                    borderSide: BorderSide(color: errorColor, width: 2),
+                  )
+                : null,
+          ),
+          onChanged: (_) => _emit(),
         ),
-        decoration: InputDecoration(
-          labelText: label,
-          floatingLabelBehavior: FloatingLabelBehavior.always,
-          enabledBorder: hasError
-              ? UnderlineInputBorder(borderSide: BorderSide(color: errorColor))
-              : null,
-          focusedBorder: hasError
-              ? UnderlineInputBorder(
-                  borderSide: BorderSide(color: errorColor, width: 2),
-                )
-              : null,
-        ),
-        onChanged: (_) => _emit(),
       ),
     );
   }
