@@ -72,6 +72,7 @@ _Harness _setup({
   DeviceMode deviceMode = DeviceMode.heat,
   String? storedScheduleMode,
   Locale locale = const Locale('en', 'GB'),
+  bool use24Hour = false,
 }) {
   final dio = Dio(BaseOptions(baseUrl: 'http://test.local:8082'));
   final adapter = DioAdapter(dio: dio);
@@ -113,15 +114,20 @@ _Harness _setup({
               onPressed: () async {
                 final r = await Navigator.of(context).push<Schedule?>(
                   MaterialPageRoute(
-                    builder: (_) => EditEventScreen(
-                      serial: 'abc',
-                      capabilities: capabilities,
-                      temperatureScale: temperatureScale,
-                      currentSchedule: schedule,
-                      defaultDayIndex: defaultDayIndex,
-                      deviceMode: deviceMode,
-                      storedScheduleMode: storedScheduleMode,
-                      existingEvent: existingEvent,
+                    builder: (routeContext) => MediaQuery(
+                      data: MediaQuery.of(
+                        routeContext,
+                      ).copyWith(alwaysUse24HourFormat: use24Hour),
+                      child: EditEventScreen(
+                        serial: 'abc',
+                        capabilities: capabilities,
+                        temperatureScale: temperatureScale,
+                        currentSchedule: schedule,
+                        defaultDayIndex: defaultDayIndex,
+                        deviceMode: deviceMode,
+                        storedScheduleMode: storedScheduleMode,
+                        existingEvent: existingEvent,
+                      ),
                     ),
                   ),
                 );
@@ -479,6 +485,233 @@ void main() {
 
     final saved = h.result.value!;
     expect(saved.eventsForDay(2), isEmpty);
+  });
+
+  group('time text inputs (Issue #96)', () {
+    const hourField = ValueKey('time-hour-field');
+    const minuteField = ValueKey('time-minute-field');
+    const amPill = ValueKey('time-am-pill');
+    const pmPill = ValueKey('time-pm-pill');
+
+    /// The `time` values of every event in [day] of the set_schedule wire
+    /// payload — pins the 12h→24h conversion at the raw JSON layer.
+    List<int> wireTimes(List<Map<String, dynamic>> requests, int day) {
+      final write = requests.lastWhere((r) => r['command'] == 'set_schedule');
+      final days = (write['value'] as Map<String, dynamic>)['days'] as Map;
+      final dayMap = (days['$day'] ?? const {}) as Map;
+      return [
+        for (final e in dayMap.values) ((e as Map)['time'] as num).toInt(),
+      ];
+    }
+
+    testWidgets('12 AM serializes to time 0 on the wire', (tester) async {
+      final h = _setup(schedule: _emptyWeek(), storedScheduleMode: 'HEAT');
+      h.adapter.onPost(
+        '/command',
+        (s) => s.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      // 12-hour mode (harness default); the 7:00 seed is AM already.
+      await tester.enterText(find.byKey(hourField), '12');
+      await tester.enterText(find.byKey(minuteField), '00');
+      await tester.tap(find.byKey(amPill));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(wireTimes(h.requests, 0), [0]);
+    });
+
+    testWidgets('12 PM serializes to time 43200 on the wire', (tester) async {
+      final h = _setup(schedule: _emptyWeek(), storedScheduleMode: 'HEAT');
+      h.adapter.onPost(
+        '/command',
+        (s) => s.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      await tester.enterText(find.byKey(hourField), '12');
+      await tester.enterText(find.byKey(minuteField), '00');
+      await tester.tap(find.byKey(pmPill));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(wireTimes(h.requests, 0), [43200]);
+    });
+
+    testWidgets('7:30 PM serializes to time 70200 on the wire', (tester) async {
+      final h = _setup(schedule: _emptyWeek(), storedScheduleMode: 'HEAT');
+      h.adapter.onPost(
+        '/command',
+        (s) => s.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      await tester.enterText(find.byKey(hourField), '7');
+      await tester.enterText(find.byKey(minuteField), '30');
+      await tester.tap(find.byKey(pmPill));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(wireTimes(h.requests, 0), [70200]);
+    });
+
+    testWidgets('24-hour mode hides AM/PM and takes 19:30 directly', (
+      tester,
+    ) async {
+      final h = _setup(
+        schedule: _emptyWeek(),
+        storedScheduleMode: 'HEAT',
+        use24Hour: true,
+      );
+      h.adapter.onPost(
+        '/command',
+        (s) => s.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      expect(find.byKey(amPill), findsNothing);
+      expect(find.byKey(pmPill), findsNothing);
+
+      await tester.enterText(find.byKey(hourField), '19');
+      await tester.enterText(find.byKey(minuteField), '30');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(wireTimes(h.requests, 0), [70200]);
+    });
+
+    testWidgets('invalid minute disables Save with an inline error', (
+      tester,
+    ) async {
+      final h = _setup(schedule: _emptyWeek(), storedScheduleMode: 'HEAT');
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      await tester.enterText(find.byKey(minuteField), '75');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Enter minutes from 0–59'), findsOneWidget);
+      final save = tester.widget<TextButton>(
+        find.widgetWithText(TextButton, 'Save'),
+      );
+      expect(save.onPressed, isNull);
+      expect(h.requests, isEmpty);
+
+      // Correcting the field re-enables Save.
+      await tester.enterText(find.byKey(minuteField), '45');
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, 'Save'))
+            .onPressed,
+        isNotNull,
+      );
+    });
+
+    testWidgets('empty hour disables Save', (tester) async {
+      final h = _setup(schedule: _emptyWeek(), storedScheduleMode: 'HEAT');
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      await tester.enterText(find.byKey(hourField), '');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Enter an hour from 1–12'), findsOneWidget);
+      final save = tester.widget<TextButton>(
+        find.widgetWithText(TextButton, 'Save'),
+      );
+      expect(save.onPressed, isNull);
+      expect(h.requests, isEmpty);
+    });
+
+    testWidgets('editing a 19:30 event prefills 7/30 in 12-hour mode and '
+        'round-trips unchanged', (tester) async {
+      const existing = ScheduleEvent(
+        dayIndex: 1,
+        hour: 19,
+        minute: 30,
+        type: 'HEAT',
+        targetTemp: 20.0,
+      );
+      final h = _setup(
+        schedule: _emptyWeek().addEvent(existing),
+        existingEvent: existing,
+        defaultDayIndex: 1,
+        storedScheduleMode: 'HEAT',
+      );
+      h.adapter.onPost(
+        '/command',
+        (s) => s.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      expect(
+        tester.widget<TextField>(find.byKey(hourField)).controller!.text,
+        '7',
+      );
+      expect(
+        tester.widget<TextField>(find.byKey(minuteField)).controller!.text,
+        '30',
+      );
+
+      // Saving untouched keeps 19:30 — proves the PM half survived prefill.
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(wireTimes(h.requests, 1), [70200]);
+    });
+
+    testWidgets('editing a 19:30 event prefills 19/30 in 24-hour mode', (
+      tester,
+    ) async {
+      const existing = ScheduleEvent(
+        dayIndex: 1,
+        hour: 19,
+        minute: 30,
+        type: 'HEAT',
+        targetTemp: 20.0,
+      );
+      final h = _setup(
+        schedule: _emptyWeek().addEvent(existing),
+        existingEvent: existing,
+        defaultDayIndex: 1,
+        storedScheduleMode: 'HEAT',
+        use24Hour: true,
+      );
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      expect(
+        tester.widget<TextField>(find.byKey(hourField)).controller!.text,
+        '19',
+      );
+      expect(
+        tester.widget<TextField>(find.byKey(minuteField)).controller!.text,
+        '30',
+      );
+    });
   });
 
   group('set_schedule_mode orchestration (Issue #93)', () {
