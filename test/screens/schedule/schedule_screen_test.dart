@@ -34,6 +34,7 @@ _Harness _setup({
   bool use24Hour = false,
   Device? device,
   DateTime Function()? now,
+  Map<String, String> overrides = const {},
 }) {
   final dio = Dio(BaseOptions(baseUrl: 'http://test.local:8082'));
   final adapter = DioAdapter(dio: dio);
@@ -64,6 +65,7 @@ _Harness _setup({
             temperatureScale: temperatureScale,
             device: device,
             now: now ?? DateTime.now,
+            overrides: overrides,
           ),
         ),
       ),
@@ -795,6 +797,121 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(isHighlighted(rowDecoration(tester, 28800)), isFalse);
+
+      await _disposeTree(tester);
+    });
+  });
+
+  group('schedule header (Issue #100)', () {
+    Device headerDevice({
+      String name = 'Upstairs',
+      double current = 24.76999, // 76.6°F → 77°F
+      double target = 24.444444444444443, // 76.0°F → 76°F
+    }) {
+      final raw = File('test/fixtures/devices_one.json').readAsStringSync();
+      final entry = Map<String, dynamic>.from(
+        (jsonDecode(raw) as Map<String, dynamic>)['devices'][0]
+            as Map<String, dynamic>,
+      );
+      entry['name'] = name;
+      entry['current_temperature'] = current;
+      entry['target_temperature'] = target;
+      return Device.fromJson(entry);
+    }
+
+    void stubSchedule(_Harness h) {
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(200, _scheduleFixture()),
+        queryParameters: {'serial': 'abc'},
+      );
+    }
+
+    testWidgets('shows the scheduled device name and measured/target temps in '
+        '°F', (tester) async {
+      final h = _setup(serial: 'abc', device: headerDevice());
+      stubSchedule(h);
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Upstairs'), findsOneWidget);
+      expect(find.textContaining('Now 77°F'), findsOneWidget);
+      expect(find.textContaining('Set 76°F'), findsOneWidget);
+      // The plain "Schedule" title is replaced when a device is present.
+      expect(find.text('Schedule'), findsNothing);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('honors a local display-name override', (tester) async {
+      const serial = '02AA01AC041403JM';
+      final h = _setup(
+        serial: 'abc',
+        device: headerDevice(),
+        overrides: const {serial: 'Basement'},
+      );
+      stubSchedule(h);
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Basement'), findsOneWidget);
+      expect(find.text('Upstairs'), findsNothing);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('formats the header temps in °C when the scale is C', (
+      tester,
+    ) async {
+      final h = _setup(
+        serial: 'abc',
+        temperatureScale: 'C',
+        device: headerDevice(),
+      );
+      stubSchedule(h);
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Now 25°C'), findsOneWidget);
+      expect(find.textContaining('Set 24°C'), findsOneWidget);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('the header updates when a poll delivers new device state', (
+      tester,
+    ) async {
+      final h = _setup(serial: 'abc', device: headerDevice());
+      stubSchedule(h);
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Now 77°F'), findsOneWidget);
+
+      // Next poll: measured rises to 26.11°C ≈ 79°F.
+      h.device.value = headerDevice(current: 26.11);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Now 79°F'), findsOneWidget);
+      expect(find.textContaining('Now 77°F'), findsNothing);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('falls back to the plain "Schedule" title with no device', (
+      tester,
+    ) async {
+      final h = _setup(serial: 'abc');
+      stubSchedule(h);
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Schedule'), findsOneWidget);
+      expect(find.textContaining('Now '), findsNothing);
 
       await _disposeTree(tester);
     });

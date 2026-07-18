@@ -77,6 +77,7 @@ class _MainShellState extends State<MainShell> {
             capabilities: widget.device.capabilities,
             device: widget.device,
             now: widget.now,
+            overrides: widget.overrides,
           ),
           DetailsScreen(
             device: widget.device,

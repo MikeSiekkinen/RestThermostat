@@ -423,6 +423,16 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String scheduleHeaderTemps(String measured, String target) {
+    return 'Now $measured  ·  Set $target';
+  }
+
+  @override
+  String scheduleHeaderTempsSemantics(String measured, String target) {
+    return 'Now $measured, set to $target';
+  }
+
+  @override
   String get editEventTitleNew => 'New Event';
 
   @override

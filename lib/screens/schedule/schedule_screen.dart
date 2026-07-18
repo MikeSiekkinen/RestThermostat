@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/gen/app_localizations.dart';
 import '../../models/device.dart';
 import '../../models/schedule.dart';
+import '../../services/device_display_name.dart';
 import '../../services/schedule_helpers.dart';
 import '../../services/setpoint_source.dart';
 import '../../state/providers.dart';
@@ -52,6 +53,11 @@ class ScheduleScreen extends ConsumerStatefulWidget {
   /// deterministic in tests. Production callers use the [DateTime.now] default.
   final DateTime Function() now;
 
+  /// Per-device display-name overrides (DESIGN §4.4), forwarded from
+  /// `MainShell` so the header can resolve which thermostat is being scheduled
+  /// (Issue #100). Defaults to empty for callers without them (tests).
+  final Map<String, String> overrides;
+
   const ScheduleScreen({
     super.key,
     required this.serial,
@@ -60,6 +66,7 @@ class ScheduleScreen extends ConsumerStatefulWidget {
     this.scheduleMode,
     this.device,
     this.now = DateTime.now,
+    this.overrides = const {},
     this.capabilities = const Capabilities(
       canHeat: true,
       canCool: false,
@@ -108,6 +115,40 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
     return findActiveEvent(schedule, now);
   }
 
+  /// Header title (Issue #100): the scheduled device's display name over a
+  /// small current-measured / target line. Falls back to the plain "Schedule"
+  /// title when no `Device` is available (test callers).
+  Widget _buildHeaderTitle(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final device = widget.device;
+    if (device == null) return Text(l.scheduleTitle);
+
+    final name = displayNameFor(device, widget.overrides);
+    final measured = _convertTemp(
+      device.currentTemperature,
+      widget.temperatureScale,
+    );
+    final target = _convertTemp(
+      device.targetTemperature,
+      widget.temperatureScale,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        const SizedBox(height: 2),
+        Text(
+          l.scheduleHeaderTemps(measured, target),
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(color: EmberColors.textSecondary),
+          semanticsLabel: l.scheduleHeaderTempsSemantics(measured, target),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final locale = Localizations.maybeLocaleOf(context) ?? const Locale('en');
@@ -123,7 +164,8 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppLocalizations.of(context).scheduleTitle),
+        toolbarHeight: 72,
+        title: _buildHeaderTitle(context),
         actions: [
           IconButton(
             key: const ValueKey('add-event-button'),

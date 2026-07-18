@@ -335,6 +335,8 @@
   "scheduleEventTypeRange": "RANGE",
   "scheduleEventSemanticLabel": "Event at {time}, {temp} {modeLower}, tap to edit.",
   "scheduleActiveEventSemanticLabel": "Currently active. {event}",
+  "scheduleHeaderTemps": "Now {measured}  ·  Set {target}",
+  "scheduleHeaderTempsSemantics": "Now {measured}, set to {target}",
   "@scheduleTitle": { "description": "AppBar title on the Schedule screen." },
   "@scheduleAddEventTooltip": { "description": "Tooltip on the AppBar + IconButton that opens the new-event editor." },
   "@scheduleEmptyTitle": { "description": "Empty-state title shown for a day with no events." },
@@ -358,6 +360,20 @@
     "description": "Semantics label for the schedule event currently driving the setpoint (Issue #97) — prepends the active state to the base event label, since the highlight is otherwise only visual.",
     "placeholders": {
       "event": { "type": "String", "example": "Event at 2:25 PM, 72°F cool, tap to edit." }
+    }
+  },
+  "@scheduleHeaderTemps": {
+    "description": "Schedule header line showing the scheduled device's current measured and target temperatures (Issue #100). Both values arrive pre-formatted with their unit.",
+    "placeholders": {
+      "measured": { "type": "String", "example": "77°F" },
+      "target": { "type": "String", "example": "72°F" }
+    }
+  },
+  "@scheduleHeaderTempsSemantics": {
+    "description": "Screen-reader version of the Schedule header temperatures (Issue #100), spelled out rather than using the middot separator.",
+    "placeholders": {
+      "measured": { "type": "String", "example": "77°F" },
+      "target": { "type": "String", "example": "72°F" }
     }
   },
 
