@@ -209,17 +209,28 @@ Events are single-day in the data model and the UI. The Edit Event screen does *
 ### 6.5 Optimistic schedule saves
 
 1. User edits local schedule model → UI updates immediately.
-2. App serializes full week → `POST /command set_schedule`.
-3. On success → done (no reconcile required; the server's schedule bucket is authoritative immediately, and the thermostat picks it up on its next subscribe).
-4. On failure → revert local model + snackbar with retry.
+2. App derives the write's `schedule_mode` from the device's operating mode (§6.6) and coerces any stale event types to it.
+3. When the derived mode differs from the device's shared-bucket `schedule_mode` (`Device.scheduleMode` from `/api/devices`), app issues `POST /command set_schedule_mode` first.
+4. App serializes full week → `POST /command set_schedule` (wire shape in §6.8).
+5. On success → done. The server stores and pushes the bucket to the device's long-poll connection immediately — but the *server* echoing the payload back on `GET /api/schedule` only proves storage, not device acceptance (§6.8).
+6. On failure → revert local model + snackbar with retry (retry re-runs steps 3–4; re-sending `set_schedule_mode` is idempotent).
 
 ### 6.6 `schedule_mode` field handling
 
-Preserve the schedule's top-level `schedule_mode` exactly as loaded. When creating a new schedule from scratch, default to `"HEAT"`. Not surfaced in UI in v1.
+Derived deliberately at save time from the device's operating mode — never preserved-as-loaded or defaulted (the pre-#93 behavior of defaulting to `"HEAT"` made devices in other modes silently ignore the schedule): heat/emergency → `HEAT`, cool → `COOL`, heat-cool → `RANGE`. A device in `off` keeps the stored shared-bucket mode and sends no `set_schedule_mode`. Event-type pills on Edit Event are constrained to the single type matching the derived mode, and stale events from before a mode switch are coerced at save, so a written payload never contains an event whose `type` contradicts its `schedule_mode` (the device ignores such schedules). Not surfaced in UI in v1.
 
 ### 6.7 Empty days
 
-A day with empty events is valid (empty list). PRD's "No events scheduled — tap + to add one" placeholder handles this.
+A day with empty events is valid (empty map on the wire, §6.8). PRD's "No events scheduled — tap + to add one" placeholder handles this.
+
+### 6.8 `set_schedule` write contract (Issue #93 live ablation, 2026-07-18)
+
+Gen 2 firmware silently ignores the **entire** schedule bucket unless all of the following hold. The NLE server validates only `time`/`type`/temps and forwards the payload verbatim, so a nonconforming payload still round-trips through `GET /api/schedule` looking healthy:
+
+- `days` values are **maps keyed by string index** (`{"0": ev, "1": ev}`) in time-sorted order — **not arrays**, despite the upstream Control API docs' write example. All seven day keys present; empty day → empty map.
+- A top-level **`name`** is present (preserve from the last read, else `"Current Schedule"`).
+- Every event carries **`entry_type: "setpoint"`** (`continuation` entries are server-generated; they're dropped on read and never written back).
+- The payload's `schedule_mode` matches the shared bucket's `schedule_mode` (synced via `set_schedule_mode`, §6.5–6.6).
 
 ---
 
@@ -713,7 +724,8 @@ No auth by default. Server passes through `Authorization` headers unchanged from
 | `set_away` | boolean |
 | `set_fan` | `"auto"` / `"on"` / number (seconds) |
 | `set_eco_temperatures` | `{"high": number, "low": number}` |
-| `set_schedule` | full schedule object — see [§6](#6-schedule-model) |
+| `set_schedule` | full schedule object — wire contract in [§6.8](#68-set_schedule-write-contract-issue-93-live-ablation-2026-07-18) |
+| `set_schedule_mode` | bare mode string `"HEAT"` / `"COOL"` / `"RANGE"` — must match the written schedule's `schedule_mode` (§6.5) |
 
 ### 16.5 Load-bearing facts
 
@@ -721,6 +733,7 @@ No auth by default. Server passes through `Authorization` headers unchanged from
 - **`/api/devices` returns all devices in one response.** Use this as the polling endpoint, not per-device `/status`.
 - **Schedules are keyed Monday=0..Sunday=6.** Not JS-standard.
 - **Schedule writes are full-replace.** No partial updates supported.
+- **The server accepts schedule payloads the firmware ignores.** `GET /api/schedule` echoing a write back proves storage, not device acceptance — conform to §6.8 exactly.
 - **`/api/stats` is server stats** (subscription counts, availability) — not HVAC runtime. Daily runtime is unavailable from NLE.
 - **Weather is on port 8000 only** for thermostats. Outside temperature is unavailable for clients.
 - **SSE exists at `/api/events`** but is not used in v1 (architectural seam preserved).
