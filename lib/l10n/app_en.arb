@@ -334,6 +334,7 @@
   "scheduleEventTypeCool": "COOL",
   "scheduleEventTypeRange": "RANGE",
   "scheduleEventSemanticLabel": "Event at {time}, {temp} {modeLower}, tap to edit.",
+  "scheduleActiveEventSemanticLabel": "Currently active. {event}",
   "@scheduleTitle": { "description": "AppBar title on the Schedule screen." },
   "@scheduleAddEventTooltip": { "description": "Tooltip on the AppBar + IconButton that opens the new-event editor." },
   "@scheduleEmptyTitle": { "description": "Empty-state title shown for a day with no events." },
@@ -351,6 +352,12 @@
       "time": { "type": "String", "example": "6:00 AM" },
       "temp": { "type": "String", "example": "68°F" },
       "modeLower": { "type": "String", "example": "heat" }
+    }
+  },
+  "@scheduleActiveEventSemanticLabel": {
+    "description": "Semantics label for the schedule event currently driving the setpoint (Issue #97) — prepends the active state to the base event label, since the highlight is otherwise only visual.",
+    "placeholders": {
+      "event": { "type": "String", "example": "Event at 2:25 PM, 72°F cool, tap to edit." }
     }
   },
 

@@ -8,7 +8,6 @@ import '../../services/schedule_helpers.dart';
 import '../../services/setpoint_source.dart';
 import '../../state/providers.dart';
 import '../../theme/colors.dart';
-import '../../widgets/ember_background.dart';
 import 'day_index.dart';
 import 'edit_event_screen.dart';
 
@@ -44,13 +43,13 @@ class ScheduleScreen extends ConsumerStatefulWidget {
   final String? scheduleMode;
 
   /// The resolved active device — feeds `deriveSetpointSource` (its
-  /// `targetTemperature` and away state) for the background tint (Issue #97).
-  /// Nullable for callers without a full `Device` (tests, mostly); the tint
-  /// simply stays off then.
+  /// `targetTemperature` and away state) for the in-control event highlight
+  /// (Issue #97). Nullable for callers without a full `Device` (tests,
+  /// mostly); the highlight simply stays off then.
   final Device? device;
 
-  /// Clock injection so the tint's active-event derivation is deterministic
-  /// in tests. Production callers use the [DateTime.now] default.
+  /// Clock injection so the highlight's active-event derivation is
+  /// deterministic in tests. Production callers use the [DateTime.now] default.
   final DateTime Function() now;
 
   const ScheduleScreen({
@@ -81,27 +80,22 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
   /// tint share one notion of "now"); user taps on the tab strip move it.
   late int _selectedDay;
 
-  /// The most recent non-default tint color, retained so the fade-out
-  /// animation interpolates only the alpha channel down from this color
-  /// rather than lerping toward transparent black (which would drag the RGB
-  /// toward black and muddy the glow mid-transition).
-  Color _lastTint = EmberColors.heatGlow;
-
   @override
   void initState() {
     super.initState();
     _selectedDay = weekdayToIndex(widget.now().weekday);
   }
 
-  /// Tint color when the active scheduled event is what's driving the
-  /// current setpoint (Issue #97): heat red for an active HEAT event, cool
-  /// blue for COOL, `null` (default background) otherwise — manual override,
-  /// away, no/failed schedule, or an active RANGE event (which
-  /// `deriveSetpointSource` deliberately never matches, DESIGN §9.5).
+  /// The scheduled event currently driving the setpoint, whose row gets the
+  /// in-control highlight (Issue #97) — or `null` when the schedule isn't in
+  /// control: manual override, away, no/failed schedule, or an active RANGE
+  /// event (which `deriveSetpointSource` deliberately never matches, DESIGN
+  /// §9.5).
   ///
-  /// Reuses `deriveSetpointSource` unchanged so this always agrees with the
-  /// Details screen's Scheduled/Manual row by construction.
-  Color? _activeScheduleTint(Schedule? schedule) {
+  /// Reuses `deriveSetpointSource` unchanged so the highlight always agrees
+  /// with the Details screen's Scheduled/Manual row by construction: only when
+  /// it reports `scheduled` do we surface the active event.
+  ScheduleEvent? _activeDrivingEvent(Schedule? schedule) {
     final device = widget.device;
     if (device == null || schedule == null) return null;
     final now = widget.now();
@@ -111,11 +105,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
       now: now,
     );
     if (source != SetpointSource.scheduled) return null;
-    return switch (findActiveEvent(schedule, now)?.type) {
-      'HEAT' => EmberColors.heatGlow,
-      'COOL' => EmberColors.coolGlow,
-      _ => null,
-    };
+    return findActiveEvent(schedule, now);
   }
 
   @override
@@ -125,52 +115,12 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
     final labels = displayDayLabels(locale);
     final asyncSchedule = ref.watch(scheduleProvider(widget.serial));
     // A failed refetch keeps its previous data in `AsyncValue.value`, but the
-    // screen shows the error view then — keep the tint in agreement with what
-    // is actually visible by treating any error as "no schedule".
-    final tint = _activeScheduleTint(
+    // screen shows the error view then — keep the highlight in agreement with
+    // what is actually visible by treating any error as "no schedule".
+    final activeEvent = _activeDrivingEvent(
       asyncSchedule.hasError ? null : asyncSchedule.value,
     );
-    if (tint != null) _lastTint = tint;
-    // Reuses EmberBackground's glow-overlay recipe (shared constants, same
-    // Positioned.fill → IgnorePointer → AnimatedContainer subtree) so the
-    // tint reads as the same visual vocabulary. Only the alpha animates: the
-    // base color stays [_lastTint] even while fading out, so the 300ms
-    // transition never lerps the RGB channels toward black.
-    final glowAlpha = tint == null ? 0.0 : EmberBackground.glowAlpha;
 
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: IgnorePointer(
-            child: AnimatedContainer(
-              key: const ValueKey('schedule-tint'),
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOutCubic,
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: EmberBackground.glowCenter,
-                  radius: EmberBackground.glowRadius,
-                  colors: [
-                    _lastTint.withValues(alpha: glowAlpha),
-                    _lastTint.withValues(alpha: 0.0),
-                  ],
-                  stops: const [0.0, 1.0],
-                ),
-              ),
-            ),
-          ),
-        ),
-        _buildScaffold(context, order, labels, asyncSchedule),
-      ],
-    );
-  }
-
-  Scaffold _buildScaffold(
-    BuildContext context,
-    List<int> order,
-    List<String> labels,
-    AsyncValue<Schedule?> asyncSchedule,
-  ) {
     return Scaffold(
       appBar: AppBar(
         title: Text(AppLocalizations.of(context).scheduleTitle),
@@ -208,6 +158,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                   data: (schedule) => _DayEventList(
                     events: schedule?.eventsForDay(_selectedDay) ?? const [],
                     temperatureScale: widget.temperatureScale,
+                    activeEvent: activeEvent,
                     onTapEvent: (event) => _openEditEvent(schedule, event),
                   ),
                 ),
@@ -376,11 +327,16 @@ class _DayTab extends StatelessWidget {
 class _DayEventList extends StatelessWidget {
   final List<ScheduleEvent> events;
   final String temperatureScale;
+
+  /// The event currently driving the setpoint (Issue #97), or `null`. When one
+  /// of this day's events equals it, that row gets the in-control highlight.
+  final ScheduleEvent? activeEvent;
   final ValueChanged<ScheduleEvent> onTapEvent;
 
   const _DayEventList({
     required this.events,
     required this.temperatureScale,
+    required this.activeEvent,
     required this.onTapEvent,
   });
 
@@ -419,6 +375,7 @@ class _DayEventList extends StatelessWidget {
       itemBuilder: (context, i) => _EventRow(
         event: events[i],
         temperatureScale: temperatureScale,
+        isActive: activeEvent != null && events[i] == activeEvent,
         onTap: () => onTapEvent(events[i]),
       ),
     );
@@ -428,11 +385,17 @@ class _DayEventList extends StatelessWidget {
 class _EventRow extends StatelessWidget {
   final ScheduleEvent event;
   final String temperatureScale;
+
+  /// Whether this event is the one currently driving the setpoint (Issue #97).
+  /// When true the row gets a full-strength type-colored border and glow so it
+  /// reads as "the schedule is holding this right now" regardless of mode.
+  final bool isActive;
   final VoidCallback onTap;
 
   const _EventRow({
     required this.event,
     required this.temperatureScale,
+    required this.isActive,
     required this.onTap,
   });
 
@@ -450,13 +413,18 @@ class _EventRow extends StatelessWidget {
     // Screen-reader announcement: one merged label combining time + temp +
     // mode so TalkBack/VoiceOver reads "Event at 6:00 AM, 68 degrees Heat,
     // tap to edit." instead of three separate `Text` nodes whose color
-    // tinting carries the mode signal visually.
+    // tinting carries the mode signal visually. When this is the active event
+    // the highlight is purely visual, so prepend the state for non-sighted
+    // users.
     final l = AppLocalizations.of(context);
-    final semanticLabel = l.scheduleEventSemanticLabel(
+    final baseLabel = l.scheduleEventSemanticLabel(
       timeLabel,
       tempLabel,
       event.type.toLowerCase(),
     );
+    final semanticLabel = isActive
+        ? l.scheduleActiveEventSemanticLabel(baseLabel)
+        : baseLabel;
     final typeLabel = _typeLabel(context, event.type);
 
     return Semantics(
@@ -468,12 +436,30 @@ class _EventRow extends StatelessWidget {
           child: InkWell(
             onTap: onTap,
             borderRadius: BorderRadius.circular(12),
-            child: Container(
+            // AnimatedContainer so the highlight glides on/off (300ms
+            // easeInOutCubic, DESIGN §11.4) as the clock crosses into a new
+            // event or a poll changes the match. Keyed by content so a moving
+            // highlight animates on stable per-event elements.
+            child: AnimatedContainer(
+              key: ValueKey('event-row-${event.dayIndex}-${event.timeSeconds}'),
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOutCubic,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: tint.withValues(alpha: 0.10),
+                color: tint.withValues(alpha: isActive ? 0.20 : 0.10),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: tint.withValues(alpha: 0.35)),
+                border: Border.all(
+                  color: isActive ? tint : tint.withValues(alpha: 0.35),
+                  width: isActive ? 2 : 1,
+                ),
+                boxShadow: isActive
+                    ? [
+                        BoxShadow(
+                          color: tint.withValues(alpha: 0.45),
+                          blurRadius: 16,
+                        ),
+                      ]
+                    : null,
               ),
               child: Row(
                 children: [

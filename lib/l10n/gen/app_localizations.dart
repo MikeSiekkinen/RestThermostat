@@ -814,6 +814,12 @@ abstract class AppLocalizations {
   /// **'Event at {time}, {temp} {modeLower}, tap to edit.'**
   String scheduleEventSemanticLabel(String time, String temp, String modeLower);
 
+  /// Semantics label for the schedule event currently driving the setpoint (Issue #97) — prepends the active state to the base event label, since the highlight is otherwise only visual.
+  ///
+  /// In en, this message translates to:
+  /// **'Currently active. {event}'**
+  String scheduleActiveEventSemanticLabel(String event);
+
   /// AppBar title when creating a new schedule event.
   ///
   /// In en, this message translates to:

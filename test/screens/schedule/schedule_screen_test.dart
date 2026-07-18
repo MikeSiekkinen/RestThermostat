@@ -387,7 +387,7 @@ void main() {
     await _disposeTree(tester);
   });
 
-  group('schedule-in-control background tint (Issue #97)', () {
+  group('schedule-in-control event highlight (Issue #97)', () {
     // Fixed clock: Wednesday 2026-05-13 12:00 local → internal day index 2.
     final wedNoon = DateTime(2026, 5, 13, 12, 0, 0);
 
@@ -425,22 +425,144 @@ void main() {
       },
     };
 
-    /// The tint layer's target gradient start color — [Colors.transparent]
-    /// with zero alpha when no tint applies.
-    Color tintColor(WidgetTester tester) {
-      final container = tester.widget<AnimatedContainer>(
-        find.byKey(const ValueKey('schedule-tint')),
+    /// The row's target `BoxDecoration` (Wednesday = day index 2), found by
+    /// the content key `event-row-<day>-<timeSeconds>`.
+    BoxDecoration rowDecoration(WidgetTester tester, int timeSeconds) {
+      final c = tester.widget<AnimatedContainer>(
+        find.byKey(ValueKey('event-row-2-$timeSeconds')),
       );
-      final gradient =
-          (container.decoration! as BoxDecoration).gradient! as RadialGradient;
-      return gradient.colors.first;
+      return c.decoration! as BoxDecoration;
     }
 
-    void expectNoTint(WidgetTester tester) {
-      expect(tintColor(tester).a, 0.0);
+    /// A row is highlighted (Issue #97) when its border is the full 2px
+    /// type-colored border with a glow, vs the 1px dimmed default.
+    bool isHighlighted(BoxDecoration d) {
+      final border = d.border! as Border;
+      return border.top.width == 2 && (d.boxShadow?.isNotEmpty ?? false);
     }
 
-    testWidgets('active HEAT event matching the target tints heat red', (
+    /// Assert no rendered event row carries the highlight.
+    void expectNoHighlightedRow(WidgetTester tester) {
+      final rows = tester.widgetList<AnimatedContainer>(
+        find.byWidgetPredicate(
+          (w) =>
+              w is AnimatedContainer &&
+              w.key is ValueKey<String> &&
+              (w.key! as ValueKey<String>).value.startsWith('event-row-'),
+        ),
+      );
+      for (final row in rows) {
+        expect(isHighlighted(row.decoration! as BoxDecoration), isFalse);
+      }
+    }
+
+    testWidgets('active HEAT event matching the target highlights its row '
+        'heat-red', (tester) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 20.0),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'HEAT',
+              'time': 28800,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+          ]),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      final d = rowDecoration(tester, 28800);
+      expect(isHighlighted(d), isTrue);
+      expect((d.border! as Border).top.color, EmberColors.heatGlow);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('active COOL event matching the target highlights its row '
+        'cool-blue', (tester) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 22.0),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'COOL',
+              'time': 28800,
+              'temp': 22.0,
+              'entry_type': 'setpoint',
+            },
+          ], mode: 'COOL'),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      final d = rowDecoration(tester, 28800);
+      expect(isHighlighted(d), isTrue);
+      expect((d.border! as Border).top.color, EmberColors.coolGlow);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('only the active event is highlighted, not an earlier sibling '
+        'on the same day', (tester) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 20.0),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            // 06:00 earlier event, same setpoint — must NOT be highlighted.
+            {
+              'type': 'HEAT',
+              'time': 21600,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+            // 08:00 is the most recent before noon — the active one.
+            {
+              'type': 'HEAT',
+              'time': 28800,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+          ]),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expect(isHighlighted(rowDecoration(tester, 28800)), isTrue);
+      expect(isHighlighted(rowDecoration(tester, 21600)), isFalse);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('the active row announces its state to screen readers', (
       tester,
     ) async {
       final h = _setup(
@@ -467,45 +589,17 @@ void main() {
       await tester.pumpWidget(h.widget);
       await tester.pumpAndSettle();
 
-      expect(tintColor(tester), EmberColors.heatGlow.withValues(alpha: 0.18));
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Currently active\. Event at ')),
+        findsOneWidget,
+      );
 
       await _disposeTree(tester);
     });
 
-    testWidgets('active COOL event matching the target tints cool blue', (
+    testWidgets('manual override (target differs) leaves rows unhighlighted', (
       tester,
     ) async {
-      final h = _setup(
-        serial: 'abc',
-        device: device(target: 22.0),
-        now: () => wedNoon,
-      );
-      h.adapter.onGet(
-        '/api/schedule',
-        (s) => s.reply(
-          200,
-          wireSchedule([
-            {
-              'type': 'COOL',
-              'time': 28800,
-              'temp': 22.0,
-              'entry_type': 'setpoint',
-            },
-          ], mode: 'COOL'),
-        ),
-        queryParameters: {'serial': 'abc'},
-      );
-
-      await tester.pumpWidget(h.widget);
-      await tester.pumpAndSettle();
-
-      expect(tintColor(tester), EmberColors.coolGlow.withValues(alpha: 0.18));
-
-      await _disposeTree(tester);
-    });
-
-    testWidgets('manual override (target differs) keeps the default '
-        'background', (tester) async {
       final h = _setup(
         serial: 'abc',
         device: device(target: 25.0),
@@ -530,12 +624,12 @@ void main() {
       await tester.pumpWidget(h.widget);
       await tester.pumpAndSettle();
 
-      expectNoTint(tester);
+      expectNoHighlightedRow(tester);
 
       await _disposeTree(tester);
     });
 
-    testWidgets('active RANGE event keeps the default background even when a '
+    testWidgets('active RANGE event leaves rows unhighlighted even when a '
         'bound matches (documented v1 policy)', (tester) async {
       final h = _setup(
         serial: 'abc',
@@ -562,12 +656,12 @@ void main() {
       await tester.pumpWidget(h.widget);
       await tester.pumpAndSettle();
 
-      expectNoTint(tester);
+      expectNoHighlightedRow(tester);
 
       await _disposeTree(tester);
     });
 
-    testWidgets('away mode keeps the default background even when the active '
+    testWidgets('away mode leaves rows unhighlighted even when the active '
         'event matches', (tester) async {
       final h = _setup(
         serial: 'abc',
@@ -593,34 +687,12 @@ void main() {
       await tester.pumpWidget(h.widget);
       await tester.pumpAndSettle();
 
-      expectNoTint(tester);
+      expectNoHighlightedRow(tester);
 
       await _disposeTree(tester);
     });
 
-    testWidgets('schedule fetch error keeps the default background', (
-      tester,
-    ) async {
-      final h = _setup(
-        serial: 'abc',
-        device: device(target: 20.0),
-        now: () => wedNoon,
-      );
-      h.adapter.onGet(
-        '/api/schedule',
-        (s) => s.reply(500, {'error': 'boom'}),
-        queryParameters: {'serial': 'abc'},
-      );
-
-      await tester.pumpWidget(h.widget);
-      await tester.pumpAndSettle();
-
-      expectNoTint(tester);
-
-      await _disposeTree(tester);
-    });
-
-    testWidgets('no device handed in keeps the default background', (
+    testWidgets('no device handed in leaves rows unhighlighted', (
       tester,
     ) async {
       final h = _setup(serial: 'abc', now: () => wedNoon);
@@ -643,13 +715,14 @@ void main() {
       await tester.pumpWidget(h.widget);
       await tester.pumpAndSettle();
 
-      expectNoTint(tester);
+      expectNoHighlightedRow(tester);
 
       await _disposeTree(tester);
     });
 
-    testWidgets('a rebuild delivering a changed targetTemperature flips the '
-        'tint off', (tester) async {
+    testWidgets('the highlight only shows on the active event\'s own day', (
+      tester,
+    ) async {
       final h = _setup(
         serial: 'abc',
         device: device(target: 20.0),
@@ -673,59 +746,55 @@ void main() {
 
       await tester.pumpWidget(h.widget);
       await tester.pumpAndSettle();
-      expect(tintColor(tester), EmberColors.heatGlow.withValues(alpha: 0.18));
+      // Active event's day (Wednesday) is selected initially → highlighted.
+      expect(isHighlighted(rowDecoration(tester, 28800)), isTrue);
+
+      // Switch to Thursday (index 3): the Wednesday event isn't rendered, so
+      // no row is highlighted on the visible day.
+      await tester.tap(
+        find.ancestor(
+          of: find.byKey(const ValueKey('day-underline-3')),
+          matching: find.byType(InkWell),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expectNoHighlightedRow(tester);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('a rebuild delivering a changed targetTemperature clears the '
+        'highlight', (tester) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 20.0),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'HEAT',
+              'time': 28800,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+          ]),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+      expect(isHighlighted(rowDecoration(tester, 28800)), isTrue);
 
       // Simulate the next poll reporting a manual dial turn.
       h.device.value = device(target: 25.0);
       await tester.pumpAndSettle();
 
-      expectNoTint(tester);
-
-      await _disposeTree(tester);
-    });
-
-    testWidgets('fading out retains the tint hue (alpha only), never lerps '
-        'toward black', (tester) async {
-      final h = _setup(
-        serial: 'abc',
-        device: device(target: 20.0),
-        now: () => wedNoon,
-      );
-      h.adapter.onGet(
-        '/api/schedule',
-        (s) => s.reply(
-          200,
-          wireSchedule([
-            {
-              'type': 'HEAT',
-              'time': 28800,
-              'temp': 20.0,
-              'entry_type': 'setpoint',
-            },
-          ]),
-        ),
-        queryParameters: {'serial': 'abc'},
-      );
-
-      await tester.pumpWidget(h.widget);
-      await tester.pumpAndSettle();
-
-      // Flip to manual. The fade-out endpoint must keep the heat-red hue with
-      // only its alpha dropped to zero — NOT Colors.transparent (RGB all
-      // zero), which would drag the animated color toward black across the
-      // 300ms DecorationTween. Since both gradient stops share this endpoint
-      // color, the whole fade interpolates alpha alone.
-      h.device.value = device(target: 25.0);
-      await tester.pump();
-
-      final endpoint = tintColor(tester);
-      expect(endpoint.a, 0.0);
-      expect(endpoint.r, closeTo(EmberColors.heatGlow.r, 0.001));
-      expect(endpoint.g, closeTo(EmberColors.heatGlow.g, 0.001));
-      expect(endpoint.b, closeTo(EmberColors.heatGlow.b, 0.001));
-
-      await tester.pumpAndSettle();
-      expectNoTint(tester);
+      expect(isHighlighted(rowDecoration(tester, 28800)), isFalse);
 
       await _disposeTree(tester);
     });

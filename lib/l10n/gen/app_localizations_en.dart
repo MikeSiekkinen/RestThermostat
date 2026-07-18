@@ -418,6 +418,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String scheduleActiveEventSemanticLabel(String event) {
+    return 'Currently active. $event';
+  }
+
+  @override
   String get editEventTitleNew => 'New Event';
 
   @override

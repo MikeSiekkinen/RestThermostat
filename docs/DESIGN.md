@@ -232,11 +232,13 @@ Gen 2 firmware silently ignores the **entire** schedule bucket unless all of the
 - Every event carries **`entry_type: "setpoint"`** (`continuation` entries are server-generated; they're dropped on read and never written back).
 - The payload's `schedule_mode` matches the shared bucket's `schedule_mode` (synced via `set_schedule_mode`, §6.5–6.6).
 
-### 6.9 Schedule-in-control background tint (Issue #97)
+### 6.9 Schedule-in-control event highlight (Issue #97)
 
-While the Schedule tab is visible and the [§9.5](#95-setpoint-source-details-screen) derivation returns `scheduled`, the screen tints its background with the active event's glow color — `HEAT` → heat red, `COOL` → cool blue (the standard `EmberColors` glow family). Every other state — `manual`, `away`, no schedule loaded, fetch error, or an active `RANGE` event (which §9.5 deliberately never matches in v1; maintainer reaffirmed 2026-07-18) — keeps the default background.
+When the [§9.5](#95-setpoint-source-details-screen) derivation returns `scheduled`, the Schedule screen highlights the **specific event row** that is currently driving the setpoint — the one `findActiveEvent` returns — with a full-strength, type-colored border and glow (`HEAT` → heat red, `COOL` → cool blue; the standard `EmberColors` glow family). Every other state — `manual`, `away`, no schedule loaded, fetch error, or an active `RANGE` event (which §9.5 deliberately never matches in v1; maintainer reaffirmed 2026-07-18) — leaves all rows in their normal (dimmed-border) treatment.
 
-The tint is a Schedule-screen-local layer under its transparent Scaffold — the app-level `EmberBackground` is untouched, so Home and Details are unaffected. It reuses `deriveSetpointSource` unchanged, keeping the tint and the Details screen's Scheduled/Manual row in agreement by construction, and animates between states with the app's standard 300ms `easeInOutCubic` idiom (§4.3). It recomputes on rebuild (each poll, refetch, or provider invalidation); there is no dedicated timer for the moment the clock crosses into a new event.
+**Why a per-row highlight, not a background wash:** an earlier draft tinted the whole screen background. In practice that was near-invisible whenever the device was in heat/cool mode, because the app-level `EmberBackground` already washes the screen in the same heat-red/cool-blue — tint-on-same-color. The maintainer reversed it (2026-07-18) to a per-event-row highlight, which reads in every mode and points at *which* event is holding, matching how users think about the schedule.
+
+The highlight only appears on the active event's own row, so it shows only while its day is the one being viewed; other days show no highlight. It reuses `deriveSetpointSource` unchanged, keeping the highlight and the Details screen's Scheduled/Manual row in agreement by construction, and the row's border/glow animates on and off with the standard 300ms `easeInOutCubic` idiom (§4.3, §11.4) as the clock crosses into a new event or a poll changes the match. It recomputes on rebuild (each poll, refetch, or provider invalidation); there is no dedicated timer for the crossing instant. Non-visual users get the state through a Semantics label that prepends "Currently active." to the row's announcement.
 
 ---
 
@@ -468,7 +470,7 @@ Bundle .ttf files for: Fraunces (300, 400, 500), Geist (400, 500, 700), JetBrain
 | Animation | Mechanism | Duration | Curve |
 |---|---|---|---|
 | Background gradient mode swap | `AnimatedContainer` | 300ms | `easeInOutCubic` |
-| Schedule-in-control background tint (§6.9) | `AnimatedContainer` | 300ms | `easeInOutCubic` |
+| Schedule-in-control event highlight (§6.9) | `AnimatedContainer` | 300ms | `easeInOutCubic` |
 | Fan concentric ring pulse | `AnimationController` (repeat) | 1.6s | linear |
 | Status dot glow pulse | `AnimationController` (repeat) | 2.5s | `easeInOut` |
 | Dial target temp tween | `TweenAnimationBuilder` | 400ms | `easeInOutCubic` |
