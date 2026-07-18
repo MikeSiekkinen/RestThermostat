@@ -823,7 +823,7 @@ abstract class AppLocalizations {
   /// Schedule header line showing the scheduled device's current measured and target temperatures (Issue #100). Both values arrive pre-formatted with their unit.
   ///
   /// In en, this message translates to:
-  /// **'Now {measured}  ·  Set {target}'**
+  /// **'Now {measured} • Set {target}'**
   String scheduleHeaderTemps(String measured, String target);
 
   /// Screen-reader version of the Schedule header temperatures (Issue #100), spelled out rather than using the middot separator.

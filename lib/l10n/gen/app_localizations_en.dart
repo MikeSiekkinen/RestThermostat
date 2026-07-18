@@ -424,7 +424,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String scheduleHeaderTemps(String measured, String target) {
-    return 'Now $measured  ·  Set $target';
+    return 'Now $measured • Set $target';
   }
 
   @override

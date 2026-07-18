@@ -128,10 +128,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
       device.currentTemperature,
       widget.temperatureScale,
     );
-    final target = _convertTemp(
-      device.targetTemperature,
-      widget.temperatureScale,
-    );
+    final target = _headerTarget(device);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -140,6 +137,8 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
         const SizedBox(height: 2),
         Text(
           l.scheduleHeaderTemps(measured, target),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: Theme.of(
             context,
           ).textTheme.labelSmall?.copyWith(color: EmberColors.textSecondary),
@@ -147,6 +146,23 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
         ),
       ],
     );
+  }
+
+  /// The header's "Set" value. Mirrors the Details screen's `_setpointDisplay`
+  /// (details_screen.dart) so the two never disagree: a heat-cool device with
+  /// both bounds shows the `low – high` band (the scalar `targetTemperature`
+  /// is a midpoint/sentinel on the wire in that mode); every other mode shows
+  /// the single target.
+  String _headerTarget(Device device) {
+    if (device.mode == DeviceMode.heatCool) {
+      final low = device.targetTemperatureLow;
+      final high = device.targetTemperatureHigh;
+      if (low != null && high != null) {
+        return '${_convertTemp(low, widget.temperatureScale)} – '
+            '${_convertTemp(high, widget.temperatureScale)}';
+      }
+    }
+    return _convertTemp(device.targetTemperature, widget.temperatureScale);
   }
 
   @override
@@ -164,7 +180,9 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: 72,
+        // Scale the two-line header's height with the text scale so a large
+        // accessibility font grows the toolbar instead of clipping it.
+        toolbarHeight: MediaQuery.textScalerOf(context).scale(72),
         title: _buildHeaderTitle(context),
         actions: [
           IconButton(

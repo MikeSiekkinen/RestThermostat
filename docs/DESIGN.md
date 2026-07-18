@@ -240,6 +240,10 @@ When the [§9.5](#95-setpoint-source-details-screen) derivation returns `schedul
 
 The highlight only appears on the active event's own row, so it shows only while its day is the one being viewed; other days show no highlight. It reuses `deriveSetpointSource` unchanged, keeping the highlight and the Details screen's Scheduled/Manual row in agreement by construction, and the row's border/glow animates on and off with the standard 300ms `easeInOutCubic` idiom (§4.3, §11.4) as the clock crosses into a new event or a poll changes the match. It recomputes on rebuild (each poll, refetch, or provider invalidation); there is no dedicated timer for the crossing instant. Non-visual users get the state through a Semantics label that prepends "Currently active." to the row's announcement.
 
+### 6.10 Schedule header — device name + live temps (Issue #100)
+
+The Schedule screen's header shows **which** thermostat is being scheduled and what it's doing now: the device's resolved display name (`displayNameFor`, §4.4 — local override → server name → `Thermostat (XXXX)`) over a small `Now <measured> • Set <target>` line, both in the device's unit. The "Set" value mirrors the Details screen's `_setpointDisplay` — a heat-cool device with both bounds shows the `low – high` band (the scalar `targetTemperature` is a midpoint/sentinel in that mode), every other mode the single target — so header and Details never disagree. When no `Device` is available (e.g. before first resolution, or in tests) the header falls back to the plain "Schedule" title with no temps. The two-line title's `toolbarHeight` scales with the text scaler so large accessibility fonts grow the header rather than clipping it, and a Semantics label spells the temps out ("Now 77°F, set to 76°F") in place of the middot line.
+
 ---
 
 ## 7. Setup and auth

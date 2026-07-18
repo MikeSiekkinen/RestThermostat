@@ -335,7 +335,7 @@
   "scheduleEventTypeRange": "RANGE",
   "scheduleEventSemanticLabel": "Event at {time}, {temp} {modeLower}, tap to edit.",
   "scheduleActiveEventSemanticLabel": "Currently active. {event}",
-  "scheduleHeaderTemps": "Now {measured}  ·  Set {target}",
+  "scheduleHeaderTemps": "Now {measured} • Set {target}",
   "scheduleHeaderTempsSemantics": "Now {measured}, set to {target}",
   "@scheduleTitle": { "description": "AppBar title on the Schedule screen." },
   "@scheduleAddEventTooltip": { "description": "Tooltip on the AppBar + IconButton that opens the new-event editor." },

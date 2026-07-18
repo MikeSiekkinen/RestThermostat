@@ -35,6 +35,7 @@ _Harness _setup({
   Device? device,
   DateTime Function()? now,
   Map<String, String> overrides = const {},
+  double textScale = 1.0,
 }) {
   final dio = Dio(BaseOptions(baseUrl: 'http://test.local:8082'));
   final adapter = DioAdapter(dio: dio);
@@ -57,7 +58,10 @@ _Harness _setup({
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: const [Locale('en', 'GB'), Locale('en', 'US')],
       home: MediaQuery(
-        data: MediaQueryData(alwaysUse24HourFormat: use24Hour),
+        data: MediaQueryData(
+          alwaysUse24HourFormat: use24Hour,
+          textScaler: TextScaler.linear(textScale),
+        ),
         child: ValueListenableBuilder<Device?>(
           valueListenable: deviceNotifier,
           builder: (_, device, _) => ScheduleScreen(
@@ -807,6 +811,9 @@ void main() {
       String name = 'Upstairs',
       double current = 24.76999, // 76.6°F → 77°F
       double target = 24.444444444444443, // 76.0°F → 76°F
+      String mode = 'cool',
+      double? low,
+      double? high,
     }) {
       final raw = File('test/fixtures/devices_one.json').readAsStringSync();
       final entry = Map<String, dynamic>.from(
@@ -816,6 +823,9 @@ void main() {
       entry['name'] = name;
       entry['current_temperature'] = current;
       entry['target_temperature'] = target;
+      entry['mode'] = mode;
+      entry['target_temperature_low'] = low;
+      entry['target_temperature_high'] = high;
       return Device.fromJson(entry);
     }
 
@@ -912,6 +922,63 @@ void main() {
 
       expect(find.text('Schedule'), findsOneWidget);
       expect(find.textContaining('Now '), findsNothing);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('a heat-cool device shows the target as a low–high band, like '
+        'Details', (tester) async {
+      final h = _setup(
+        serial: 'abc',
+        device: headerDevice(
+          mode: 'heat-cool',
+          low: 20.0, // 68°F
+          high: 24.0, // 75.2°F → 75°F
+        ),
+      );
+      stubSchedule(h);
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Set 68°F – 75°F'), findsOneWidget);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('the temps line exposes a spelled-out semantics label', (
+      tester,
+    ) async {
+      final h = _setup(serial: 'abc', device: headerDevice());
+      stubSchedule(h);
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      // Screen readers get the comma-form label, not the middot visual string.
+      // (AppBar may merge the title's child nodes, so match the substring.)
+      expect(find.bySemanticsLabel(RegExp('Now 77°F, set to 76°F')), findsOne);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('the two-line header does not overflow at large text scale', (
+      tester,
+    ) async {
+      final h = _setup(
+        serial: 'abc',
+        device: headerDevice(name: 'Downstairs Guest Bedroom'),
+        textScale: 3.0,
+      );
+      stubSchedule(h);
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      // A clipped/overflowing toolbar throws a RenderFlex overflow during
+      // layout; assert none was swallowed.
+      expect(tester.takeException(), isNull);
+      expect(find.textContaining('Now 77°F'), findsOneWidget);
 
       await _disposeTree(tester);
     });
