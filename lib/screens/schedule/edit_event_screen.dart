@@ -8,7 +8,7 @@ import '../../models/schedule.dart';
 import '../../services/nle_api_client.dart';
 import '../../state/providers.dart';
 import '../../theme/colors.dart';
-import '../../widgets/ember_time_picker.dart';
+import '../../widgets/ember_time_fields.dart';
 import '../../widgets/repeat_days_row.dart';
 
 /// Per `docs/DESIGN.md` §6 / PRD §5.5 (with DESIGN §18 divergences).
@@ -88,9 +88,15 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
   double? _targetTemp;
   double? _targetTempLow;
   double? _targetTempHigh;
-  late int _hour;
-  late int _minute;
+
+  /// 24-hour time as reported by [EmberTimeFields]. `null` while the
+  /// corresponding field holds empty/out-of-range input, which disables Save —
+  /// invalid input is never clamped or coerced (Issue #96).
+  int? _hour;
+  int? _minute;
   late Set<int> _selectedDays;
+
+  bool get _timeValid => _hour != null && _minute != null;
 
   bool _saving = false;
 
@@ -183,7 +189,7 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
         title: Text(widget.isNew ? l.editEventTitleNew : l.editEventTitleEdit),
         actions: [
           TextButton(
-            onPressed: _saving ? null : _save,
+            onPressed: (_saving || !_timeValid) ? null : _save,
             child: Text(l.editEventSave),
           ),
         ],
@@ -217,15 +223,15 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
               style: Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(height: 12),
-            EmberTimePicker(
-              key: const ValueKey('ember-time-picker'),
-              initialHour: _hour,
-              initialMinute: _minute,
+            EmberTimeFields(
+              key: const ValueKey('ember-time-fields'),
+              initialHour: _hour ?? 7,
+              initialMinute: _minute ?? 0,
               use24Hour: mediaQuery.alwaysUse24HourFormat,
-              onChanged: (h, m) {
+              onChanged: (h, m) => setState(() {
                 _hour = h;
                 _minute = m;
-              },
+              }),
             ),
             if (widget.isNew) ...[
               const SizedBox(height: 32),
@@ -393,6 +399,9 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
 
   ScheduleEvent? _buildEvent() {
     final dayIndex = widget.existingEvent?.dayIndex ?? widget.defaultDayIndex;
+    final hour = _hour;
+    final minute = _minute;
+    if (hour == null || minute == null) return null;
     switch (_type) {
       case 'HEAT':
       case 'COOL':
@@ -400,8 +409,8 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
         if (t == null) return null;
         return ScheduleEvent(
           dayIndex: dayIndex,
-          hour: _hour,
-          minute: _minute,
+          hour: hour,
+          minute: minute,
           type: _type,
           targetTemp: t.clamp(_minTempC, _maxTempC),
         );
@@ -411,8 +420,8 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
         if (low == null || high == null) return null;
         return ScheduleEvent(
           dayIndex: dayIndex,
-          hour: _hour,
-          minute: _minute,
+          hour: hour,
+          minute: minute,
           type: 'RANGE',
           targetTempLow: low.clamp(_minTempC, _maxTempC),
           targetTempHigh: high.clamp(_minTempC, _maxTempC),
