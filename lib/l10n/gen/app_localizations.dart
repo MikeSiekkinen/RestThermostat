@@ -640,6 +640,12 @@ abstract class AppLocalizations {
   /// **'Couldn\'t reach {target}. Check your network and the address.'**
   String connectFailedNetwork(String target);
 
+  /// Inline error after Test Connection when the server answered with a non-Cloudflare redirect (reverse-proxy http→https upgrade, path rewrite) — an address problem, not an auth problem.
+  ///
+  /// In en, this message translates to:
+  /// **'Server at {target} redirected the request. Check the address — if your proxy upgrades to HTTPS, use the https:// URL directly.'**
+  String connectFailedRedirect(String target);
+
   /// AppBar title on the onboarding device-picker screen.
   ///
   /// In en, this message translates to:

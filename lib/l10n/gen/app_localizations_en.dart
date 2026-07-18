@@ -315,6 +315,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String connectFailedRedirect(String target) {
+    return 'Server at $target redirected the request. Check the address — if your proxy upgrades to HTTPS, use the https:// URL directly.';
+  }
+
+  @override
   String get devicePickerTitle => 'Choose a thermostat';
 
   @override

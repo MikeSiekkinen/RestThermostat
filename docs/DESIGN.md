@@ -247,7 +247,11 @@ NLE's self-hosted Control API has **no auth by default**; the auth headers are f
 
 The auth choices are **mutually exclusive**. Cloudflare Access authenticates the client to the Cloudflare Access edge in front of the proxy; Cloudflare strips the `CF-Access-Client-*` headers before the request reaches the origin, so the origin sees no auth. Layering Cloudflare Access on top of origin Basic/Bearer is not supported (would require a second header set) — the common NLE-behind-Cloudflare-Tunnel deployment relies on Access as the sole gate.
 
-The model (`AuthConfig`, [§7.x]) exposes each choice's contribution as a `Map<String,String> headers` so the HTTP client merges header-based schemes uniformly; `authorizationHeader` remains a convenience accessor (null for `None` and `Cloudflare Access`).
+The model (`AuthConfig` in `lib/models/auth_config.dart`) exposes each choice's contribution as a `Map<String,String> headers` so the HTTP client merges header-based schemes uniformly; `authorizationHeader` remains a convenience accessor (null for `None` and `Cloudflare Access`).
+
+**Redirect handling.** The API client does not follow redirects (a JSON control API never legitimately redirects). A 3xx bearing Cloudflare Access markers (`WWW-Authenticate: Cloudflare-Access`, or a `Location` on `*.cloudflareaccess.com`) — like a 401/403 with the same markers — is classified as a Cloudflare Access gate and the UI points the user at the service-token fields. Any other redirect (a reverse proxy's http→https upgrade, a trailing-slash rewrite) surfaces as its own "server redirected — check the address" error, **not** an auth failure: no credential was rejected, and routing the user to auth settings would misdiagnose an address problem.
+
+**The Cloudflare classification is trusted only for `https` targets.** A real Access deployment always terminates TLS; over plain http the markers are forgeable by anyone on-path, and acting on them would turn the "add a service token" guidance into an elicitation surface for an org-scoped credential the app would then send in cleartext. On http, such responses fall through to the generic auth/redirect copy.
 
 ### 7.3 Credential storage
 

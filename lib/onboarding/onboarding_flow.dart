@@ -5,6 +5,7 @@ import '../models/auth_config.dart';
 import '../models/device.dart';
 import '../services/nle_api_client.dart';
 import '../services/nle_error.dart';
+import '../services/nle_error_messages.dart';
 import '../services/onboarding_store.dart';
 import 'connect_outcome.dart';
 import 'device_picker_screen.dart';

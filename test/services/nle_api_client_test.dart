@@ -308,10 +308,7 @@ void main() {
     test('uses provided baseUrl without auth headers by default', () {
       final c = NleApiClient.create(baseUrl: 'http://nest.home:8082');
       expect(c.dio.options.headers.containsKey('Authorization'), isFalse);
-      expect(
-        c.dio.options.headers.containsKey('CF-Access-Client-Id'),
-        isFalse,
-      );
+      expect(c.dio.options.headers.containsKey('CF-Access-Client-Id'), isFalse);
     });
 
     test('merges Authorization auth header when provided', () async {
@@ -339,6 +336,64 @@ void main() {
       final c = NleApiClient.create(baseUrl: 'http://nest.home:8082');
       expect(c.dio.options.followRedirects, isFalse);
     });
+
+    // End-to-end 3xx classification through the real client: the feature
+    // depends on the chain followRedirects=false → dio's default
+    // validateStatus turning the 3xx into a badResponse DioException →
+    // fromDio seeing it with headers intact. A future validateStatus
+    // override or dio upgrade could silently break any link; these pin the
+    // whole chain, not just the flag.
+    test('https 302 to Cloudflare Access surfaces as '
+        'NleAuthError(isCloudflareAccess) end-to-end', () async {
+      final httpsDio = Dio(BaseOptions(baseUrl: 'https://nest.example.com'));
+      httpsDio.options.followRedirects = false;
+      final httpsAdapter = DioAdapter(dio: httpsDio);
+      final c = NleApiClient(dio: httpsDio);
+      httpsAdapter.onGet(
+        '/api/devices',
+        (server) => server.reply(
+          302,
+          '',
+          headers: {
+            'location': ['https://team.cloudflareaccess.com/login'],
+          },
+        ),
+      );
+
+      try {
+        await c.getDevices();
+        fail('expected throw');
+      } on NleAuthError catch (e) {
+        expect(e.statusCode, 302);
+        expect(e.isCloudflareAccess, isTrue);
+      }
+    });
+
+    test(
+      'non-Cloudflare 302 surfaces as NleRedirectError end-to-end',
+      () async {
+        dio.options.followRedirects = false;
+        dioAdapter.onGet(
+          '/api/devices',
+          (server) => server.reply(
+            302,
+            '',
+            headers: {
+              'location': ['https://test.local/'],
+            },
+          ),
+        );
+
+        try {
+          await client.getDevices();
+          fail('expected throw');
+        } on NleRedirectError catch (e) {
+          expect(e.statusCode, 302);
+          expect(e.location, 'https://test.local/');
+          expect(e.target, 'test.local:8082');
+        }
+      },
+    );
 
     test(
       'sends CF Access headers on EVERY request (GET devices + POST command)',

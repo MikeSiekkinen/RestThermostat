@@ -253,6 +253,7 @@
   "connectFailedDns": "Couldn't find server {target}. Check the address.",
   "connectFailedTls": "Secure (TLS) connection to {target} failed. Check the address and certificate.",
   "connectFailedNetwork": "Couldn't reach {target}. Check your network and the address.",
+  "connectFailedRedirect": "Server at {target} redirected the request. Check the address — if your proxy upgrades to HTTPS, use the https:// URL directly.",
   "@connectFailedAuth": { "description": "Inline error after Test Connection when the server rejected credentials (401/403)." },
   "@connectFailedCloudflareAccess": { "description": "Inline error after Test Connection when Cloudflare Access blocked the request (redirect to the Access login, or a Cloudflare-Access challenge)." },
   "@connectFailedUnreachable": { "description": "Inline error after Test Connection for a non-network failure (e.g. server or parse error)." },
@@ -275,6 +276,10 @@
   "@connectFailedNetwork": {
     "description": "Inline error after Test Connection for an otherwise-unclassified network failure.",
     "placeholders": { "target": { "type": "String", "example": "nest.home:8082" } }
+  },
+  "@connectFailedRedirect": {
+    "description": "Inline error after Test Connection when the server answered with a non-Cloudflare redirect (reverse-proxy http→https upgrade, path rewrite) — an address problem, not an auth problem.",
+    "placeholders": { "target": { "type": "String", "example": "nest.home:80" } }
   },
 
   "devicePickerTitle": "Choose a thermostat",
