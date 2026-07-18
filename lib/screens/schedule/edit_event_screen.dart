@@ -552,19 +552,30 @@ class _TempStepper extends StatelessWidget {
   final String scale;
   final ValueChanged<double> onChanged;
 
+  /// Whether to render the [label] caption above the stepper. False for the
+  /// single HEAT/COOL stepper, where the mode is already stated by the pill at
+  /// the top of the screen — the caption would just repeat it. Stays true for
+  /// RANGE, where the two stacked steppers need HEAT/COOL captions to tell the
+  /// low and high setpoints apart. [label] is still supplied when hidden so the
+  /// `temp-up`/`temp-down` widget keys remain stable.
+  final bool showLabel;
+
   const _TempStepper({
     required this.label,
     required this.valueC,
     required this.scale,
     required this.onChanged,
+    this.showLabel = true,
   });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(label, style: Theme.of(context).textTheme.labelSmall),
-        const SizedBox(height: 8),
+        if (showLabel) ...[
+          Text(label, style: Theme.of(context).textTheme.labelSmall),
+          const SizedBox(height: 8),
+        ],
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -663,6 +674,7 @@ class _TempSection extends StatelessWidget {
     }
     return _TempStepper(
       label: type,
+      showLabel: false,
       valueC: targetTemp ?? 20.0,
       scale: scale,
       onChanged: onTargetTemp,
