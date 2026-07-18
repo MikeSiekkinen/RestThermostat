@@ -32,6 +32,13 @@ class EmberBackground extends StatelessWidget {
     this.curve = Curves.easeInOutCubic,
   });
 
+  /// Glow-overlay geometry, exposed so other screen-local glow layers (e.g.
+  /// the Schedule-in-control tint, Issue #97) can reuse the exact same visual
+  /// vocabulary instead of re-hardcoding drift-prone literals.
+  static const double glowAlpha = 0.18;
+  static const Alignment glowCenter = Alignment(0.0, -0.3);
+  static const double glowRadius = 0.9;
+
   /// The base radial-gradient color stops for the given mode.
   @visibleForTesting
   static List<Color> backgroundColorsFor(DeviceMode mode) {
@@ -90,10 +97,10 @@ class EmberBackground extends StatelessWidget {
                 curve: curve,
                 decoration: BoxDecoration(
                   gradient: RadialGradient(
-                    center: const Alignment(0.0, -0.3),
-                    radius: 0.9,
+                    center: glowCenter,
+                    radius: glowRadius,
                     colors: [
-                      glow.withValues(alpha: 0.18),
+                      glow.withValues(alpha: glowAlpha),
                       glow.withValues(alpha: 0.0),
                     ],
                     stops: const [0.0, 1.0],

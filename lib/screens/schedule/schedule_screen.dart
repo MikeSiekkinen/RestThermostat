@@ -8,6 +8,7 @@ import '../../services/schedule_helpers.dart';
 import '../../services/setpoint_source.dart';
 import '../../state/providers.dart';
 import '../../theme/colors.dart';
+import '../../widgets/ember_background.dart';
 import 'day_index.dart';
 import 'edit_event_screen.dart';
 
@@ -76,9 +77,21 @@ class ScheduleScreen extends ConsumerStatefulWidget {
 
 class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
   /// Internal day index (Mon=0..Sun=6) currently shown in the event list.
-  /// Initialized to today's index in `initState`; user taps on the tab strip
-  /// move this around.
-  int _selectedDay = weekdayToIndex(DateTime.now().weekday);
+  /// Seeded to today in `initState` off the injected clock (so tests and the
+  /// tint share one notion of "now"); user taps on the tab strip move it.
+  late int _selectedDay;
+
+  /// The most recent non-default tint color, retained so the fade-out
+  /// animation interpolates only the alpha channel down from this color
+  /// rather than lerping toward transparent black (which would drag the RGB
+  /// toward black and muddy the glow mid-transition).
+  Color _lastTint = EmberColors.heatGlow;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDay = weekdayToIndex(widget.now().weekday);
+  }
 
   /// Tint color when the active scheduled event is what's driving the
   /// current setpoint (Issue #97): heat red for an active HEAT event, cool
@@ -117,11 +130,13 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
     final tint = _activeScheduleTint(
       asyncSchedule.hasError ? null : asyncSchedule.value,
     );
-    // Mirrors EmberBackground's glow overlay (alpha 0.18 → 0.0 radial) so the
-    // tint reads as the same visual vocabulary; both stops go fully
-    // transparent when no tint applies so gradient-to-gradient animation
-    // fades smoothly instead of snapping.
-    final glow = tint ?? Colors.transparent;
+    if (tint != null) _lastTint = tint;
+    // Reuses EmberBackground's glow-overlay recipe (shared constants, same
+    // Positioned.fill → IgnorePointer → AnimatedContainer subtree) so the
+    // tint reads as the same visual vocabulary. Only the alpha animates: the
+    // base color stays [_lastTint] even while fading out, so the 300ms
+    // transition never lerps the RGB channels toward black.
+    final glowAlpha = tint == null ? 0.0 : EmberBackground.glowAlpha;
 
     return Stack(
       children: [
@@ -133,11 +148,11 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
               curve: Curves.easeInOutCubic,
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  center: const Alignment(0.0, -0.3),
-                  radius: 0.9,
+                  center: EmberBackground.glowCenter,
+                  radius: EmberBackground.glowRadius,
                   colors: [
-                    glow.withValues(alpha: tint == null ? 0.0 : 0.18),
-                    glow.withValues(alpha: 0.0),
+                    _lastTint.withValues(alpha: glowAlpha),
+                    _lastTint.withValues(alpha: 0.0),
                   ],
                   stops: const [0.0, 1.0],
                 ),

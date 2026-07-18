@@ -14,6 +14,7 @@ import 'package:rest_thermostat/screens/schedule/schedule_screen.dart';
 import 'package:rest_thermostat/services/nle_api_client.dart';
 import 'package:rest_thermostat/state/providers.dart';
 import 'package:rest_thermostat/theme/colors.dart';
+import 'package:rest_thermostat/widgets/ember_background.dart';
 
 class _Harness {
   final Widget widget;
@@ -679,6 +680,52 @@ void main() {
       h.device.value = device(target: 25.0);
       await tester.pumpAndSettle();
 
+      expectNoTint(tester);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('fading out retains the tint hue (alpha only), never lerps '
+        'toward black', (tester) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 20.0),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'HEAT',
+              'time': 28800,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+          ]),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      // Flip to manual. The fade-out endpoint must keep the heat-red hue with
+      // only its alpha dropped to zero — NOT Colors.transparent (RGB all
+      // zero), which would drag the animated color toward black across the
+      // 300ms DecorationTween. Since both gradient stops share this endpoint
+      // color, the whole fade interpolates alpha alone.
+      h.device.value = device(target: 25.0);
+      await tester.pump();
+
+      final endpoint = tintColor(tester);
+      expect(endpoint.a, 0.0);
+      expect(endpoint.r, closeTo(EmberColors.heatGlow.r, 0.001));
+      expect(endpoint.g, closeTo(EmberColors.heatGlow.g, 0.001));
+      expect(endpoint.b, closeTo(EmberColors.heatGlow.b, 0.001));
+
+      await tester.pumpAndSettle();
       expectNoTint(tester);
 
       await _disposeTree(tester);

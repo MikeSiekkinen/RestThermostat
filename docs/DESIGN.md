@@ -468,6 +468,7 @@ Bundle .ttf files for: Fraunces (300, 400, 500), Geist (400, 500, 700), JetBrain
 | Animation | Mechanism | Duration | Curve |
 |---|---|---|---|
 | Background gradient mode swap | `AnimatedContainer` | 300ms | `easeInOutCubic` |
+| Schedule-in-control background tint (§6.9) | `AnimatedContainer` | 300ms | `easeInOutCubic` |
 | Fan concentric ring pulse | `AnimationController` (repeat) | 1.6s | linear |
 | Status dot glow pulse | `AnimationController` (repeat) | 2.5s | `easeInOut` |
 | Dial target temp tween | `TweenAnimationBuilder` | 400ms | `easeInOutCubic` |

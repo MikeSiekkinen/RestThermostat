@@ -32,7 +32,9 @@ class MainShell extends StatefulWidget {
   /// providers.
   final Widget homeTab;
 
-  /// `now()` injection for the Details tab's relative-time formatting.
+  /// `now()` injection for time-dependent tab logic: the Details tab's
+  /// relative-time formatting and the Schedule tab's setpoint-source
+  /// derivation for the in-control background tint (Issue #97).
   final DateTime Function() now;
 
   const MainShell({
