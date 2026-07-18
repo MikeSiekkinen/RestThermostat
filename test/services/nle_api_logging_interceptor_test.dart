@@ -13,6 +13,8 @@ const _bearerToken = 'SYNTHETIC_BEARER_TOKEN_DO_NOT_LOG';
 const _basicCreds = 'SYNTHETIC_BASIC_CREDS_DO_NOT_LOG';
 const _sensitiveApiKey = 'a.SYNTHETIC_API_KEY_DO_NOT_LOG';
 const _sensitiveBodyMarker = 'SYNTHETIC_RESPONSE_BODY_DO_NOT_LOG';
+const _cfClientId = 'SYNTHETIC_CF_CLIENT_ID_DO_NOT_LOG.access';
+const _cfClientSecret = 'SYNTHETIC_CF_CLIENT_SECRET_DO_NOT_LOG';
 
 void main() {
   late AppLogger logger;
@@ -52,6 +54,21 @@ void main() {
         entry.message.toLowerCase(),
         isNot(contains('authorization')),
         reason: 'Authorization header name leaked into log message',
+      );
+      expect(
+        entry.message,
+        isNot(contains(_cfClientId)),
+        reason: 'CF client id leaked into "${entry.message}"',
+      );
+      expect(
+        entry.message,
+        isNot(contains(_cfClientSecret)),
+        reason: 'CF client secret leaked into "${entry.message}"',
+      );
+      expect(
+        entry.message.toLowerCase(),
+        isNot(contains('cf-access-client-secret')),
+        reason: 'CF secret header name leaked into log message',
       );
     }
   }
@@ -214,6 +231,45 @@ void main() {
     );
 
     expect(logger.entries.first.message, startsWith('POST /command → 200'));
+    expectNoLeaks(logger.entries);
+  });
+
+  test('Cloudflare service-token headers never leak into logs — success, '
+      'error response, and network failure', () async {
+    final cfHeaders = {
+      'CF-Access-Client-Id': _cfClientId,
+      'CF-Access-Client-Secret': _cfClientSecret,
+    };
+
+    adapter.onGet('/api/devices', (server) => server.reply(200, {}));
+    await dio.get('/api/devices', options: Options(headers: cfHeaders));
+
+    adapter.onGet(
+      '/api/schedule',
+      (server) => server.reply(403, {'error': 'denied'}),
+    );
+    try {
+      await dio.get('/api/schedule', options: Options(headers: cfHeaders));
+      fail('expected DioException');
+    } on DioException catch (_) {}
+
+    adapter.onGet(
+      '/status',
+      (server) => server.throws(
+        0,
+        DioException(
+          requestOptions: RequestOptions(path: '/status'),
+          type: DioExceptionType.connectionError,
+          error: const SocketException('Connection refused'),
+        ),
+      ),
+    );
+    try {
+      await dio.get('/status', options: Options(headers: cfHeaders));
+      fail('expected DioException');
+    } on DioException catch (_) {}
+
+    expect(logger.entries, isNotEmpty);
     expectNoLeaks(logger.entries);
   });
 }

@@ -219,8 +219,7 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                         autocorrect: false,
                         enableSuggestions: false,
                       ),
-                    ] else if (_authChoice ==
-                        _AuthChoice.cfServiceToken) ...[
+                    ] else if (_authChoice == _AuthChoice.cfServiceToken) ...[
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _cfClientIdCtrl,

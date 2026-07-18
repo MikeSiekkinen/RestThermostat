@@ -25,16 +25,19 @@ void main() {
     expect(auth.tag, 'bearer');
   });
 
-  test('AuthCfServiceToken emits the CF-Access header pair, no Authorization', () {
-    const auth = AuthCfServiceToken(
-      clientId: 'cf-client-id-example.access',
-      clientSecret: 'cf-client-secret-example',
-    );
-    expect(auth.authorizationHeader, isNull);
-    expect(auth.headers, {
-      'CF-Access-Client-Id': 'cf-client-id-example.access',
-      'CF-Access-Client-Secret': 'cf-client-secret-example',
-    });
-    expect(auth.tag, 'cf_service_token');
-  });
+  test(
+    'AuthCfServiceToken emits the CF-Access header pair, no Authorization',
+    () {
+      const auth = AuthCfServiceToken(
+        clientId: 'cf-client-id-example.access',
+        clientSecret: 'cf-client-secret-example',
+      );
+      expect(auth.authorizationHeader, isNull);
+      expect(auth.headers, {
+        'CF-Access-Client-Id': 'cf-client-id-example.access',
+        'CF-Access-Client-Secret': 'cf-client-secret-example',
+      });
+      expect(auth.tag, 'cf_service_token');
+    },
+  );
 }
