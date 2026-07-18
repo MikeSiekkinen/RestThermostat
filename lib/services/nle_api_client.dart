@@ -142,11 +142,31 @@ class NleApiClient {
 
   /// Thin wrapper over [sendCommand] that posts a full schedule object as the
   /// `set_schedule` value. Schedule writes are full-replace per DESIGN §6.1.
-  Future<void> setSchedule(String serial, Schedule schedule) {
+  /// [scheduleMode] is the deliberate `schedule_mode` for the payload — see
+  /// [Schedule.toJson]; when it differs from the device's shared-bucket value
+  /// the caller must also issue [setScheduleMode] or the device ignores the
+  /// schedule.
+  Future<void> setSchedule(
+    String serial,
+    Schedule schedule, {
+    required String scheduleMode,
+  }) {
     return sendCommand(
       serial: serial,
       command: 'set_schedule',
-      value: schedule.toJson(),
+      value: schedule.toJson(scheduleMode: scheduleMode),
+    );
+  }
+
+  /// Set the device's shared-bucket `schedule_mode`. The value is the bare
+  /// mode string per the Control API: one of `HEAT`/`COOL`/`RANGE`. The device
+  /// ignores any schedule whose `schedule_mode` disagrees with this value, so
+  /// the save path issues it before `set_schedule` whenever the two diverge.
+  Future<void> setScheduleMode(String serial, String mode) {
+    return sendCommand(
+      serial: serial,
+      command: 'set_schedule_mode',
+      value: mode,
     );
   }
 

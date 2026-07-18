@@ -289,18 +289,64 @@ void main() {
           },
         ),
       );
+      // The fixture is a {serial, schedule, ...} envelope; parse the inner
+      // schedule object (the envelope itself would parse as an empty week).
+      final envelope =
+          jsonDecode(File('test/fixtures/schedule_one.json').readAsStringSync())
+              as Map<String, dynamic>;
       final schedule = Schedule.fromJson(
-        jsonDecode(File('test/fixtures/schedule_one.json').readAsStringSync())
-            as Map<String, dynamic>,
+        envelope['schedule'] as Map<String, dynamic>,
       );
 
-      await client.setSchedule('abc', schedule);
+      await client.setSchedule('abc', schedule, scheduleMode: 'HEAT');
 
       expect(capturedCommand, 'set_schedule');
       expect(capturedValue, isA<Map<String, dynamic>>());
       final value = capturedValue as Map<String, dynamic>;
-      expect(value['days'], isA<Map<String, dynamic>>());
-      expect((value['days'] as Map).keys, hasLength(7));
+      // Exact top-level key set — the server passes the payload through
+      // verbatim and the firmware silently ignores nonconforming buckets
+      // (Issue #93), so assert the full wire contract on the raw JSON.
+      expect(value.keys.toSet(), {'ver', 'schedule_mode', 'name', 'days'});
+      expect(value['schedule_mode'], 'HEAT');
+      expect(value['name'], 'Current Schedule');
+      final days = value['days'] as Map<String, dynamic>;
+      expect(days.keys, hasLength(7));
+      for (final day in days.values) {
+        // Day containers are maps keyed by string index, never arrays.
+        expect(day, isA<Map<String, dynamic>>());
+        for (final event in (day as Map<String, dynamic>).values) {
+          expect((event as Map<String, dynamic>)['entry_type'], 'setpoint');
+        }
+      }
+      // The fixture has events, so at least one entry_type was asserted.
+      expect(days.values.any((d) => (d as Map).isNotEmpty), isTrue);
+    });
+  });
+
+  group('setScheduleMode', () {
+    test('POSTs /command with the bare mode string as value', () async {
+      Object? capturedBody;
+      dioAdapter.onPost(
+        '/command',
+        (server) => server.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            capturedBody = options.data;
+            handler.next(options);
+          },
+        ),
+      );
+
+      await client.setScheduleMode('abc', 'COOL');
+
+      expect(capturedBody, {
+        'serial': 'abc',
+        'command': 'set_schedule_mode',
+        'value': 'COOL',
+      });
     });
   });
 

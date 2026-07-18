@@ -199,7 +199,12 @@ void main() {
         type: 'HEAT',
         targetTemp: 20.0,
       );
-      expect(e.toJson(), {'time': 23400, 'type': 'HEAT', 'temp': 20.0});
+      expect(e.toJson(), {
+        'time': 23400,
+        'type': 'HEAT',
+        'entry_type': 'setpoint',
+        'temp': 20.0,
+      });
     });
 
     test('toJson emits temp-min / temp-max for RANGE events', () {
@@ -214,9 +219,74 @@ void main() {
       expect(e.toJson(), {
         'time': 21600,
         'type': 'RANGE',
+        'entry_type': 'setpoint',
         'temp-min': 18.0,
         'temp-max': 23.0,
       });
+    });
+
+    test(
+      'conformedTo returns the event unchanged when types already agree',
+      () {
+        const e = ScheduleEvent(
+          dayIndex: 0,
+          hour: 6,
+          minute: 0,
+          type: 'HEAT',
+          targetTemp: 20.0,
+        );
+        expect(e.conformedTo('HEAT'), same(e));
+      },
+    );
+
+    test('conformedTo carries the single setpoint across HEAT/COOL', () {
+      const e = ScheduleEvent(
+        dayIndex: 0,
+        hour: 6,
+        minute: 0,
+        type: 'HEAT',
+        targetTemp: 20.0,
+      );
+      final coerced = e.conformedTo('COOL');
+      expect(coerced.type, 'COOL');
+      expect(coerced.targetTemp, 20.0);
+      expect(coerced.targetTempLow, isNull);
+      expect(coerced.targetTempHigh, isNull);
+    });
+
+    test('conformedTo RANGE→HEAT keeps the low bound, RANGE→COOL the high', () {
+      const e = ScheduleEvent(
+        dayIndex: 0,
+        hour: 6,
+        minute: 0,
+        type: 'RANGE',
+        targetTempLow: 18.0,
+        targetTempHigh: 23.0,
+      );
+      final heat = e.conformedTo('HEAT');
+      expect(heat.type, 'HEAT');
+      expect(heat.targetTemp, 18.0);
+      expect(heat.targetTempLow, isNull);
+      expect(heat.targetTempHigh, isNull);
+
+      final cool = e.conformedTo('COOL');
+      expect(cool.type, 'COOL');
+      expect(cool.targetTemp, 23.0);
+    });
+
+    test('conformedTo single→RANGE builds a ±1°C band around the setpoint', () {
+      const e = ScheduleEvent(
+        dayIndex: 0,
+        hour: 6,
+        minute: 0,
+        type: 'COOL',
+        targetTemp: 24.0,
+      );
+      final range = e.conformedTo('RANGE');
+      expect(range.type, 'RANGE');
+      expect(range.targetTemp, isNull);
+      expect(range.targetTempLow, 23.0);
+      expect(range.targetTempHigh, 25.0);
     });
 
     test('== compares by all fields', () {
@@ -353,39 +423,153 @@ void main() {
       expect(schedule.eventsForDay(0), [b]);
     });
 
-    test('toJson emits all seven days even if empty', () {
+    // The write contract below was established by the Issue #93 live ablation
+    // (2026-07-18): Gen 2 firmware silently ignores the whole bucket unless
+    // days are MAPS keyed by string index, a top-level `name` is present, and
+    // every event carries `entry_type: "setpoint"`. These tests assert on the
+    // raw JSON (not round-trips) because the parser tolerantly accepts both
+    // day shapes, so a regression to arrays would survive a round-trip test.
+
+    test('toJson emits all seven days as empty maps even if empty', () {
       final schedule = emptyWeek();
-      final json = schedule.toJson();
+      final json = schedule.toJson(scheduleMode: 'HEAT');
       expect(json['days'], isA<Map<String, dynamic>>());
       final days = json['days'] as Map<String, dynamic>;
       for (var i = 0; i < 7; i++) {
-        expect(days.containsKey('$i'), isTrue, reason: 'day $i missing');
+        expect(days['$i'], isA<Map<String, dynamic>>(), reason: 'day $i');
+        expect(days['$i'], isEmpty, reason: 'day $i should be an empty map');
       }
     });
 
-    test('toJson emits NLE wire keys: ver + schedule_mode + days', () {
+    test('toJson emits the exact top-level wire keys', () {
       const schedule = Schedule(
         events: {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []},
         version: 2,
-        name: 'Weekday/Weekend', // not on the wire — should be dropped
+        name: 'Weekday/Weekend',
         mode: 'HEAT',
       );
-      final json = schedule.toJson();
+      final json = schedule.toJson(scheduleMode: 'HEAT');
+      expect(
+        json.keys.toSet(),
+        {'ver', 'schedule_mode', 'name', 'days'},
+        reason:
+            'exact top-level key set — the server silently accepts '
+            'unknown/missing keys, so assert the full set',
+      );
       expect(json['ver'], 2);
       expect(json['schedule_mode'], 'HEAT');
-      expect(json['days'], isA<Map<String, dynamic>>());
-      expect(json.containsKey('version'), isFalse);
-      expect(json.containsKey('mode'), isFalse);
-      expect(json.containsKey('name'), isFalse);
+      expect(json['name'], 'Weekday/Weekend');
     });
 
-    test('toJson defaults ver=2 and schedule_mode=HEAT for new schedules', () {
+    test('toJson wraps day events in maps keyed by string index, sorted by '
+        'time', () {
+      const dawn = ScheduleEvent(
+        dayIndex: 5,
+        hour: 6,
+        minute: 0,
+        type: 'HEAT',
+        targetTemp: 20.0,
+      );
+      const night = ScheduleEvent(
+        dayIndex: 5,
+        hour: 22,
+        minute: 0,
+        type: 'HEAT',
+        targetTemp: 17.0,
+      );
+      // Build with events out of order to prove toJson emits time-sorted.
+      const schedule = Schedule(
+        events: {
+          0: [],
+          1: [],
+          2: [],
+          3: [],
+          4: [],
+          5: [night, dawn],
+          6: [],
+        },
+      );
+      final json = schedule.toJson(scheduleMode: 'HEAT');
+      final saturday = (json['days'] as Map<String, dynamic>)['5'];
+      expect(saturday, {
+        '0': {
+          'time': 21600,
+          'type': 'HEAT',
+          'entry_type': 'setpoint',
+          'temp': 20.0,
+        },
+        '1': {
+          'time': 79200,
+          'type': 'HEAT',
+          'entry_type': 'setpoint',
+          'temp': 17.0,
+        },
+      });
+      // Map iteration order must also be index order (JSON-encodes in order).
+      expect((saturday as Map).keys.toList(), ['0', '1']);
+    });
+
+    test(
+      'toJson emits the explicit scheduleMode, ignoring the stored mode',
+      () {
+        const schedule = Schedule(
+          events: {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []},
+          mode: 'HEAT', // stale stored mode — must NOT leak onto the wire
+        );
+        final json = schedule.toJson(scheduleMode: 'COOL');
+        expect(json['schedule_mode'], 'COOL');
+      },
+    );
+
+    test('toJson defaults ver=2 and name="Current Schedule" when absent', () {
       const schedule = Schedule(
         events: {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []},
       );
-      final json = schedule.toJson();
+      final json = schedule.toJson(scheduleMode: 'HEAT');
       expect(json['ver'], 2);
-      expect(json['schedule_mode'], 'HEAT');
+      expect(json['name'], 'Current Schedule');
+    });
+
+    test('conformedTo coerces stale events across all days', () {
+      const staleHeat = ScheduleEvent(
+        dayIndex: 0,
+        hour: 6,
+        minute: 0,
+        type: 'HEAT',
+        targetTemp: 20.0,
+      );
+      const staleRange = ScheduleEvent(
+        dayIndex: 3,
+        hour: 8,
+        minute: 0,
+        type: 'RANGE',
+        targetTempLow: 18.0,
+        targetTempHigh: 23.0,
+      );
+      const schedule = Schedule(
+        events: {
+          0: [staleHeat],
+          1: [],
+          2: [],
+          3: [staleRange],
+          4: [],
+          5: [],
+          6: [],
+        },
+      );
+      final cooled = schedule.conformedTo('COOL');
+      expect(cooled.eventsForDay(0).single.type, 'COOL');
+      expect(cooled.eventsForDay(0).single.targetTemp, 20.0);
+      expect(cooled.eventsForDay(3).single.type, 'COOL');
+      expect(cooled.eventsForDay(3).single.targetTemp, 23.0);
+      // Serialized payload contains no event conflicting with schedule_mode.
+      final json = cooled.toJson(scheduleMode: 'COOL');
+      final days = json['days'] as Map<String, dynamic>;
+      for (final day in days.values) {
+        for (final event in (day as Map<String, dynamic>).values) {
+          expect((event as Map<String, dynamic>)['type'], 'COOL');
+        }
+      }
     });
 
     test('fromJson accepts ver+schedule_mode (current NLE shape)', () {

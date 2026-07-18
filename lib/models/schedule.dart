@@ -100,9 +100,16 @@ class ScheduleEvent {
   }
 
   /// Serialize back to the NLE wire shape (`time` seconds, lowercase keys for
-  /// range temps as `temp-min`/`temp-max`).
+  /// range temps as `temp-min`/`temp-max`). Every written event is an
+  /// `entry_type: "setpoint"` — Gen 2 firmware ignores the entire schedule
+  /// bucket when the field is absent (Issue #93 live ablation, 2026-07-18).
+  /// `continuation` entries are never serialized; `fromJson` drops them.
   Map<String, dynamic> toJson() {
-    final json = <String, dynamic>{'time': timeSeconds, 'type': type};
+    final json = <String, dynamic>{
+      'time': timeSeconds,
+      'type': type,
+      'entry_type': 'setpoint',
+    };
     if (type == 'RANGE') {
       if (targetTempLow != null) json['temp-min'] = targetTempLow;
       if (targetTempHigh != null) json['temp-max'] = targetTempHigh;
@@ -110,6 +117,43 @@ class ScheduleEvent {
       if (targetTemp != null) json['temp'] = targetTemp;
     }
     return json;
+  }
+
+  /// Coerce this event's `type` to agree with [scheduleMode] (`HEAT`/`COOL`/
+  /// `RANGE`). The device ignores a schedule whose events contradict its
+  /// `schedule_mode`, so written payloads must be internally consistent.
+  ///
+  /// - Matching type: returned unchanged.
+  /// - `HEAT` ↔ `COOL`: the single setpoint carries over.
+  /// - `RANGE` → `HEAT` keeps the low bound ("at least this warm");
+  ///   `RANGE` → `COOL` keeps the high bound ("at most this warm").
+  /// - Single → `RANGE`: a ±1°C band around the setpoint, clamped to the
+  ///   4.5–32°C bounds (DESIGN §16.5).
+  ScheduleEvent conformedTo(String scheduleMode) {
+    if (type == scheduleMode) return this;
+    switch (scheduleMode) {
+      case 'HEAT':
+      case 'COOL':
+        final temp = type == 'RANGE'
+            ? (scheduleMode == 'HEAT' ? targetTempLow : targetTempHigh)
+            : targetTemp;
+        return copyWith(
+          type: scheduleMode,
+          targetTemp: temp,
+          nullifyTargetTemp: temp == null,
+          nullifyTargetTempLow: true,
+          nullifyTargetTempHigh: true,
+        );
+      case 'RANGE':
+        final base = targetTemp ?? 20.0;
+        return copyWith(
+          type: 'RANGE',
+          nullifyTargetTemp: true,
+          targetTempLow: (base - 1.0).clamp(4.5, 32.0),
+          targetTempHigh: (base + 1.0).clamp(4.5, 32.0),
+        );
+    }
+    return this;
   }
 
   @override
@@ -168,14 +212,16 @@ class Schedule {
   /// }
   /// ```
   ///
-  /// Tolerant of the asymmetric NLE wire shapes. The `set_schedule` WRITE
-  /// payload's docs example shows each day's value as an array of events,
+  /// Tolerant of the asymmetric NLE wire shapes. The upstream docs'
+  /// `set_schedule` example shows each day's value as an array of events,
   /// but the live `GET /api/schedule` READ wraps each day's events in a
   /// map keyed by string index (`{"0": event, "1": event, …}`). We accept
-  /// both. We also drop `entry_type: "continuation"` entries — those are
-  /// server-generated carry-overs from the previous day's last setpoint,
-  /// not user-authored events; they re-appear automatically server-side
-  /// after a `set_schedule` write.
+  /// both on read — but note WRITES must use the map shape; Gen 2 firmware
+  /// ignores array-shaped buckets (see [toJson]). We also drop
+  /// `entry_type: "continuation"` entries — those are server-generated
+  /// carry-overs from the previous day's last setpoint, not user-authored
+  /// events; they re-appear automatically server-side after a
+  /// `set_schedule` write.
   factory Schedule.fromJson(Map<String, dynamic> json) {
     // NLE wire key is `ver`; accept legacy `version` for resilience.
     final version =
@@ -239,21 +285,55 @@ class Schedule {
     );
   }
 
-  /// Serialize back to the NLE wire shape used by `POST /command set_schedule`.
-  /// Per the Control API spec the value is `{ver, schedule_mode, days}` —
-  /// `version`/`name`/`mode` are NOT recognized by the server. All seven days
-  /// are emitted, even empty ones (DESIGN §6.7 — empty list is a valid day).
-  Map<String, dynamic> toJson() {
-    final days = <String, List<Map<String, dynamic>>>{};
+  /// Serialize to the wire shape used by `POST /command set_schedule`.
+  ///
+  /// Gen 2 firmware silently ignores the whole bucket unless ALL of these hold
+  /// (Issue #93 live ablation against the maintainer's device, 2026-07-18 —
+  /// note the upstream Control API docs' array-shaped write example does NOT
+  /// work):
+  ///
+  /// - each day's events are wrapped in a map keyed by string index
+  ///   (`{"0": ev0, "1": ev1}`) in time-sorted order, all seven days present
+  ///   (empty day → empty map, DESIGN §6.7);
+  /// - a top-level `name` is present (preserved from the last read, else
+  ///   `"Current Schedule"`);
+  /// - every event carries `entry_type: "setpoint"` (see
+  ///   [ScheduleEvent.toJson]).
+  ///
+  /// [scheduleMode] is a required, deliberate input (derived from the device's
+  /// operating mode by the save path — never a silent fallback) because the
+  /// device also ignores the schedule when it disagrees with the shared
+  /// bucket's `schedule_mode`; callers keep the two in sync via
+  /// `set_schedule_mode`.
+  Map<String, dynamic> toJson({required String scheduleMode}) {
+    final days = <String, Map<String, dynamic>>{};
     for (var i = 0; i < 7; i++) {
-      final list = events[i] ?? const <ScheduleEvent>[];
-      days['$i'] = [for (final e in list) e.toJson()];
+      final list = [...(events[i] ?? const <ScheduleEvent>[])]
+        ..sort((a, b) => a.minutesOfDay.compareTo(b.minutesOfDay));
+      days['$i'] = <String, dynamic>{
+        for (var j = 0; j < list.length; j++) '$j': list[j].toJson(),
+      };
     }
     return <String, dynamic>{
       'ver': version ?? 2,
-      'schedule_mode': mode ?? 'HEAT',
+      'schedule_mode': scheduleMode,
+      'name': name ?? 'Current Schedule',
       'days': days,
     };
+  }
+
+  /// Return a copy whose every event agrees with [scheduleMode], coercing any
+  /// stale entries (e.g. COOL events left over from before a device-mode
+  /// switch) via [ScheduleEvent.conformedTo]. Days already consistent are
+  /// reused as-is.
+  Schedule conformedTo(String scheduleMode) {
+    final next = <int, List<ScheduleEvent>>{};
+    for (final entry in events.entries) {
+      next[entry.key] = [
+        for (final e in entry.value) e.conformedTo(scheduleMode),
+      ];
+    }
+    return copyWith(events: next, mode: scheduleMode);
   }
 
   /// Add [event] to its `dayIndex`. Returns a new [Schedule]; sorts the

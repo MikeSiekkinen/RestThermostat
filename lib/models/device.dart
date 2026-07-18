@@ -25,6 +25,19 @@ enum DeviceMode {
     heatCool => 'heat-cool',
     emergency => 'emergency',
   };
+
+  /// The schedule-bucket `schedule_mode` this operating mode implies
+  /// (`HEAT`/`COOL`/`RANGE`), used to keep `set_schedule` payloads and the
+  /// shared bucket in sync (Issue #93). Emergency heat is still heating, so it
+  /// derives `HEAT`. `off` returns `null` — there is nothing to derive; the
+  /// save path keeps the last stored `schedule_mode` and does not issue
+  /// `set_schedule_mode`.
+  String? get scheduleWireMode => switch (this) {
+    heat || emergency => 'HEAT',
+    cool => 'COOL',
+    heatCool => 'RANGE',
+    off => null,
+  };
 }
 
 class HvacState {
