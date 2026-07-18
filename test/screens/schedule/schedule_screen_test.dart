@@ -9,15 +9,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
 
 import 'package:rest_thermostat/models/auth_config.dart';
+import 'package:rest_thermostat/models/device.dart';
 import 'package:rest_thermostat/screens/schedule/schedule_screen.dart';
 import 'package:rest_thermostat/services/nle_api_client.dart';
 import 'package:rest_thermostat/state/providers.dart';
+import 'package:rest_thermostat/theme/colors.dart';
 
 class _Harness {
   final Widget widget;
   final DioAdapter adapter;
 
-  _Harness({required this.widget, required this.adapter});
+  /// The device handed to [ScheduleScreen]. Tests mutate this to simulate a
+  /// poll delivering changed device state (e.g. a new `targetTemperature`)
+  /// through a parent rebuild.
+  final ValueNotifier<Device?> device;
+
+  _Harness({required this.widget, required this.adapter, required this.device});
 }
 
 _Harness _setup({
@@ -25,9 +32,12 @@ _Harness _setup({
   String temperatureScale = 'F',
   Locale locale = const Locale('en', 'GB'),
   bool use24Hour = false,
+  Device? device,
+  DateTime Function()? now,
 }) {
   final dio = Dio(BaseOptions(baseUrl: 'http://test.local:8082'));
   final adapter = DioAdapter(dio: dio);
+  final deviceNotifier = ValueNotifier<Device?>(device);
 
   final widget = ProviderScope(
     overrides: [
@@ -47,15 +57,20 @@ _Harness _setup({
       supportedLocales: const [Locale('en', 'GB'), Locale('en', 'US')],
       home: MediaQuery(
         data: MediaQueryData(alwaysUse24HourFormat: use24Hour),
-        child: ScheduleScreen(
-          serial: serial,
-          temperatureScale: temperatureScale,
+        child: ValueListenableBuilder<Device?>(
+          valueListenable: deviceNotifier,
+          builder: (_, device, _) => ScheduleScreen(
+            serial: serial,
+            temperatureScale: temperatureScale,
+            device: device,
+            now: now ?? DateTime.now,
+          ),
         ),
       ),
     ),
   );
 
-  return _Harness(widget: widget, adapter: adapter);
+  return _Harness(widget: widget, adapter: adapter, device: deviceNotifier);
 }
 
 class _SeedActiveServer extends ActiveServerNotifier {
@@ -370,5 +385,303 @@ void main() {
     );
 
     await _disposeTree(tester);
+  });
+
+  group('schedule-in-control background tint (Issue #97)', () {
+    // Fixed clock: Wednesday 2026-05-13 12:00 local → internal day index 2.
+    final wedNoon = DateTime(2026, 5, 13, 12, 0, 0);
+
+    Device device({required double target, String ecoMode = 'schedule'}) {
+      final raw = File('test/fixtures/devices_one.json').readAsStringSync();
+      final entry = Map<String, dynamic>.from(
+        (jsonDecode(raw) as Map<String, dynamic>)['devices'][0]
+            as Map<String, dynamic>,
+      );
+      entry['target_temperature'] = target;
+      entry['eco_mode'] = ecoMode;
+      return Device.fromJson(entry);
+    }
+
+    /// Wire-shaped schedule response with [wednesdayEvents] on day 2 and all
+    /// other days empty.
+    Map<String, dynamic> wireSchedule(
+      List<Map<String, dynamic>> wednesdayEvents, {
+      String mode = 'HEAT',
+    }) => {
+      'serial': 'abc',
+      'schedule': {
+        'ver': 2,
+        'name': 'Current Schedule',
+        'schedule_mode': mode,
+        'days': {
+          for (var d = 0; d < 7; d++)
+            '$d': d == 2
+                ? {
+                    for (var i = 0; i < wednesdayEvents.length; i++)
+                      '$i': wednesdayEvents[i],
+                  }
+                : <String, dynamic>{},
+        },
+      },
+    };
+
+    /// The tint layer's target gradient start color — [Colors.transparent]
+    /// with zero alpha when no tint applies.
+    Color tintColor(WidgetTester tester) {
+      final container = tester.widget<AnimatedContainer>(
+        find.byKey(const ValueKey('schedule-tint')),
+      );
+      final gradient =
+          (container.decoration! as BoxDecoration).gradient! as RadialGradient;
+      return gradient.colors.first;
+    }
+
+    void expectNoTint(WidgetTester tester) {
+      expect(tintColor(tester).a, 0.0);
+    }
+
+    testWidgets('active HEAT event matching the target tints heat red', (
+      tester,
+    ) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 20.0),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'HEAT',
+              'time': 28800,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+          ]),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expect(tintColor(tester), EmberColors.heatGlow.withValues(alpha: 0.18));
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('active COOL event matching the target tints cool blue', (
+      tester,
+    ) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 22.0),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'COOL',
+              'time': 28800,
+              'temp': 22.0,
+              'entry_type': 'setpoint',
+            },
+          ], mode: 'COOL'),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expect(tintColor(tester), EmberColors.coolGlow.withValues(alpha: 0.18));
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('manual override (target differs) keeps the default '
+        'background', (tester) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 25.0),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'HEAT',
+              'time': 28800,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+          ]),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expectNoTint(tester);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('active RANGE event keeps the default background even when a '
+        'bound matches (documented v1 policy)', (tester) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 20.0),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'RANGE',
+              'time': 28800,
+              'temp-min': 20.0,
+              'temp-max': 24.0,
+              'entry_type': 'setpoint',
+            },
+          ], mode: 'RANGE'),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expectNoTint(tester);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('away mode keeps the default background even when the active '
+        'event matches', (tester) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 20.0, ecoMode: 'manual-eco'),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'HEAT',
+              'time': 28800,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+          ]),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expectNoTint(tester);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('schedule fetch error keeps the default background', (
+      tester,
+    ) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 20.0),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(500, {'error': 'boom'}),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expectNoTint(tester);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('no device handed in keeps the default background', (
+      tester,
+    ) async {
+      final h = _setup(serial: 'abc', now: () => wedNoon);
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'HEAT',
+              'time': 28800,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+          ]),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expectNoTint(tester);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('a rebuild delivering a changed targetTemperature flips the '
+        'tint off', (tester) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 20.0),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'HEAT',
+              'time': 28800,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+          ]),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+      expect(tintColor(tester), EmberColors.heatGlow.withValues(alpha: 0.18));
+
+      // Simulate the next poll reporting a manual dial turn.
+      h.device.value = device(target: 25.0);
+      await tester.pumpAndSettle();
+
+      expectNoTint(tester);
+
+      await _disposeTree(tester);
+    });
   });
 }
