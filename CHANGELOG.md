@@ -7,8 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.1.1] - 2026-06-01
-
 ### Added
 
 - Cloudflare Access service-token authentication. The Advanced auth picker on
@@ -21,24 +19,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Connection errors now report the specific cause instead of a single
-  "Couldn't reach server." Timeouts, refused connections, DNS failures, and TLS
-  failures each get distinct copy that includes the `host:port` the attempt was
-  aimed at, and the diagnostics log records the target and the underlying socket
-  reason (no credentials). Shared by onboarding and the Settings connection
-  editor.
+  "Couldn't reach server." Timeouts, refused connections, DNS failures, TLS
+  failures, and redirects each get distinct copy that includes the `host:port`
+  the attempt was aimed at, and the diagnostics log records the target and the
+  underlying socket reason (no credentials). Shared by onboarding and the
+  Settings connection editor.
 
 ### Fixed
 
 - URL normalization now uses a scheme-aware default port: `https` URLs without
   an explicit port default to `:443` instead of `:8082`. Forcing `:8082` onto
   `https` addresses made Cloudflare-fronted (and other reverse-proxied)
-  deployments unreachable ("Couldn't reach server"). See `docs/DESIGN.md` §7.5.
-- HTTP redirects (3xx) are no longer misreported as a network failure. The API
-  client no longer follows redirects, and a 3xx is classified as an
-  access-gate auth failure; a redirect to Cloudflare Access (or a
-  `WWW-Authenticate: Cloudflare-Access` challenge) shows specific guidance to
-  add a service token. Previously a Cloudflare Access redirect surfaced as
-  "Couldn't reach …:443. Check your network."
+  deployments unreachable with the generic "Couldn't reach server." Note:
+  addresses saved before this fix keep their stored `:8082` port — re-enter
+  the address in Settings → Connection to pick up the new default.
+- The API client no longer follows HTTP redirects. On an `https` target, a
+  redirect to Cloudflare Access (or a `WWW-Authenticate: Cloudflare-Access`
+  challenge) is classified as an access-gate auth failure with specific
+  guidance to add a service token; any other redirect gets its own
+  "server redirected" copy naming the target instead of being misreported as
+  a network or authentication failure.
+
+## [1.1.0] - 2026-07-04
+
+### Added
+
+- Details screen now shows the thermostat's **Local IP** and **MAC address**
+  in the System section, when the NLE server provides them. Requires an
+  NLE-SelfHosted server running a build newer than 2026-06-29 (upstream
+  [PR #24](https://github.com/codykociemba/NoLongerEvil-SelfHosted/pull/24));
+  on older servers the rows are hidden and the screen is unchanged.
+
+### Changed
+
+- Bumped dependencies: `package_info_plus` 10.1.0 → 10.2.0, `share_plus`
+  13.1.0 → 13.2.0, `shared_preferences_android` 2.4.23 → 2.4.26 (all three
+  migrated off applying the Kotlin Gradle Plugin, which a future Flutter
+  release makes a build failure), plus transitive updates including `dio`
+  5.9.2 → 5.10.0.
+- Raised the minimum Flutter SDK to `>=3.44.0` (required by
+  `shared_preferences_android` 2.4.26).
+- Command retry/error classification now covers dio 5.10's new
+  `transformTimeout` exception type (treated as a transient timeout).
 
 ## [1.0.1] - 2026-05-29
 
@@ -94,7 +116,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Project documentation: `README.md`, `LICENSE` (MIT), `CHANGELOG.md`, and
   `docs/IOS_BUILD.md` build-from-source guide.
 
-[Unreleased]: https://github.com/MikeSiekkinen/RestThermostat/compare/v1.1.1...HEAD
-[1.1.1]: https://github.com/MikeSiekkinen/RestThermostat/compare/v1.0.1...v1.1.1
+[Unreleased]: https://github.com/MikeSiekkinen/RestThermostat/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/MikeSiekkinen/RestThermostat/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/MikeSiekkinen/RestThermostat/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/MikeSiekkinen/RestThermostat/releases/tag/v1.0.0

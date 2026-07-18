@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/gen/app_localizations.dart';
 import '../../models/device.dart';
+import '../../services/mac_formatter.dart';
 import '../../services/setpoint_source.dart';
 import '../../state/providers.dart';
 import '../../theme/colors.dart';
@@ -15,7 +16,8 @@ import '../../widgets/temperature_dial.dart';
 /// - **Stats grid**: humidity (with comfort label) and current setpoint (with
 ///   derived source — Away / Scheduled / Manual).
 /// - **System info**: connection status, server URL, NLE firmware version,
-///   last sync time (relative; absolute on long-press).
+///   local IP + MAC address (only when the server reports them), last sync
+///   time (relative; absolute on long-press).
 ///
 /// Setpoint source derivation is pure: see [deriveSetpointSource]. The
 /// "Source" label exposes a `(Derived)` tooltip on long-press to remind the
@@ -94,6 +96,12 @@ class DetailsScreen extends ConsumerWidget {
               ? l.detailsLastSyncEmpty
               : device.softwareVersion,
         ),
+        // Only servers running NLE-SelfHosted main newer than 2026-06-29
+        // report these; hide the rows entirely (no placeholder) elsewhere.
+        if (device.localIp case final String ip when ip.isNotEmpty)
+          _InfoRow(label: l.detailsLocalIp, value: ip),
+        if (device.macAddress case final String mac when mac.isNotEmpty)
+          _InfoRow(label: l.detailsMacAddress, value: formatMacAddress(mac)),
         _LastSyncRow(lastSyncAt: lastSyncAt, now: now),
       ],
     );

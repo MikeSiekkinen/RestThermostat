@@ -1054,6 +1054,18 @@ abstract class AppLocalizations {
   /// **'FIRMWARE'**
   String get detailsFirmware;
 
+  /// Row label for the thermostat's LAN IP address. Row is hidden when the server doesn't report one (pre-2026-06-29 NLE servers).
+  ///
+  /// In en, this message translates to:
+  /// **'LOCAL IP'**
+  String get detailsLocalIp;
+
+  /// Row label for the thermostat's MAC address. Row is hidden when the server doesn't report one (pre-2026-06-29 NLE servers).
+  ///
+  /// In en, this message translates to:
+  /// **'MAC ADDRESS'**
+  String get detailsMacAddress;
+
   /// Row label for the last-successful-poll timestamp.
   ///
   /// In en, this message translates to:

@@ -95,6 +95,8 @@ class NleApiLoggingInterceptor extends Interceptor {
         return 'send-timeout';
       case DioExceptionType.receiveTimeout:
         return 'receive-timeout';
+      case DioExceptionType.transformTimeout:
+        return 'transform-timeout';
       case DioExceptionType.badCertificate:
         return 'bad-certificate';
       case DioExceptionType.badResponse:

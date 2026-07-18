@@ -149,6 +149,12 @@ class Device {
   final double backplateTemperature;
   final int subscriptionCount;
 
+  /// LAN IP / MAC of the thermostat. Only present on NLE-SelfHosted servers
+  /// running main newer than 2026-06-29 (upstream PR #24); null on all tagged
+  /// releases up to v1.0.1, so absence is the common case.
+  final String? localIp;
+  final String? macAddress;
+
   const Device({
     required this.serial,
     required this.apiKey,
@@ -179,6 +185,8 @@ class Device {
     required this.structureId,
     required this.backplateTemperature,
     required this.subscriptionCount,
+    required this.localIp,
+    required this.macAddress,
   });
 
   /// Whether the device is currently in manual-away (a.k.a. eco) mode.
@@ -232,5 +240,7 @@ class Device {
     structureId: json['structure_id'] as String?,
     backplateTemperature: (json['backplate_temperature'] as num).toDouble(),
     subscriptionCount: json['subscription_count'] as int,
+    localIp: json['local_ip'] as String?,
+    macAddress: json['mac_address'] as String?,
   );
 }

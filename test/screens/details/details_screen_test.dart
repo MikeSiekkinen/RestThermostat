@@ -18,6 +18,8 @@ Device _device({
   String unit = 'F',
   String firmware = '5.9.3-9',
   bool isAvailable = true,
+  String? localIp,
+  String? macAddress,
 }) {
   final raw = File('test/fixtures/devices_one.json').readAsStringSync();
   final entry = Map<String, dynamic>.from(
@@ -30,6 +32,10 @@ Device _device({
   entry['temperature_scale'] = unit;
   entry['software_version'] = firmware;
   entry['is_available'] = isAvailable;
+  // The fixture predates upstream local_ip/mac_address support, so leaving
+  // these unset exercises the pre-release-server (absent-keys) path.
+  if (localIp != null) entry['local_ip'] = localIp;
+  if (macAddress != null) entry['mac_address'] = macAddress;
   return Device.fromJson(entry);
 }
 
@@ -172,6 +178,61 @@ void main() {
     testWidgets('Last sync renders em-dash when never synced', (tester) async {
       await _pumpHost(tester, device: _device(target: 22.0));
       expect(find.textContaining('—'), findsWidgets);
+    });
+  });
+
+  group('DetailsScreen — network rows (local_ip / mac_address)', () {
+    testWidgets('renders IP and formatted MAC when server provides them', (
+      tester,
+    ) async {
+      await _pumpHost(
+        tester,
+        device: _device(
+          target: 22.0,
+          localIp: '192.168.1.50',
+          macAddress: '18b430aabbcc',
+        ),
+      );
+      expect(find.text('LOCAL IP'), findsOneWidget);
+      expect(find.text('192.168.1.50'), findsOneWidget);
+      expect(find.text('MAC ADDRESS'), findsOneWidget);
+      expect(find.text('18:b4:30:aa:bb:cc'), findsOneWidget);
+    });
+
+    testWidgets('hides both rows when the server omits the fields', (
+      tester,
+    ) async {
+      await _pumpHost(tester, device: _device(target: 22.0));
+      expect(find.text('LOCAL IP'), findsNothing);
+      expect(find.text('MAC ADDRESS'), findsNothing);
+    });
+
+    testWidgets('renders one row independently of the other', (tester) async {
+      await _pumpHost(
+        tester,
+        device: _device(target: 22.0, localIp: '10.0.0.7'),
+      );
+      expect(find.text('LOCAL IP'), findsOneWidget);
+      expect(find.text('10.0.0.7'), findsOneWidget);
+      expect(find.text('MAC ADDRESS'), findsNothing);
+    });
+
+    testWidgets('malformed MAC renders verbatim', (tester) async {
+      await _pumpHost(
+        tester,
+        device: _device(target: 22.0, macAddress: 'not-a-mac'),
+      );
+      expect(find.text('MAC ADDRESS'), findsOneWidget);
+      expect(find.text('not-a-mac'), findsOneWidget);
+    });
+
+    testWidgets('empty-string fields hide their rows', (tester) async {
+      await _pumpHost(
+        tester,
+        device: _device(target: 22.0, localIp: '', macAddress: ''),
+      );
+      expect(find.text('LOCAL IP'), findsNothing);
+      expect(find.text('MAC ADDRESS'), findsNothing);
     });
   });
 }

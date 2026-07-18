@@ -51,6 +51,8 @@ void main() {
         structureId: base.structureId,
         backplateTemperature: base.backplateTemperature,
         subscriptionCount: base.subscriptionCount,
+        localIp: base.localIp,
+        macAddress: base.macAddress,
       ),
     ];
 
