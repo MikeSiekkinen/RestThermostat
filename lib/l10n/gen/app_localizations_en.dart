@@ -494,6 +494,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editEventRetryAction => 'Retry';
 
   @override
+  String get editEventTempEntryTitle => 'Set temperature';
+
+  @override
+  String get editEventTempEntryConfirm => 'Set';
+
+  @override
   String get detailsSectionCurrent => 'CURRENT';
 
   @override

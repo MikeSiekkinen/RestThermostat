@@ -191,39 +191,67 @@ class _EmberTimeFieldsState extends State<EmberTimeFields> {
     required bool hasError,
   }) {
     final errorColor = Theme.of(context).colorScheme.error;
+    // Full-perimeter rounded border (replaces the old underline). Resting = a
+    // subtle tertiary outline; focused = the primary accent; error = red.
+    OutlineInputBorder border(Color color, double width) => OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: color, width: width),
+    );
     // Flexible + a max-width cap: the fields sit at 88px when there's room but
     // shrink rather than overflow when a large accessibility text scale grows
     // the colon and AM/PM labels past the available row width.
     return Flexible(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 88),
-        child: TextField(
-          key: key,
-          controller: controller,
-          keyboardType: TextInputType.number,
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(2),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // The label rides centered above its box (was a left-aligned
+            // floating label). Excluded from semantics because the field below
+            // carries the same name for screen readers.
+            ExcludeSemantics(
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: hasError ? errorColor : EmberColors.textSecondary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Semantics(
+              label: label,
+              child: TextField(
+                key: key,
+                controller: controller,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(2),
+                ],
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: EmberColors.textPrimary,
+                ),
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 8,
+                  ),
+                  enabledBorder: border(
+                    hasError ? errorColor : EmberColors.textTertiary,
+                    hasError ? 2 : 1,
+                  ),
+                  focusedBorder: border(
+                    hasError ? errorColor : EmberColors.textPrimary,
+                    2,
+                  ),
+                ),
+                onChanged: (_) => _emit(),
+              ),
+            ),
           ],
-          textAlign: TextAlign.center,
-          style: Theme.of(
-            context,
-          ).textTheme.headlineMedium?.copyWith(color: EmberColors.textPrimary),
-          decoration: InputDecoration(
-            labelText: label,
-            floatingLabelBehavior: FloatingLabelBehavior.always,
-            enabledBorder: hasError
-                ? UnderlineInputBorder(
-                    borderSide: BorderSide(color: errorColor),
-                  )
-                : null,
-            focusedBorder: hasError
-                ? UnderlineInputBorder(
-                    borderSide: BorderSide(color: errorColor, width: 2),
-                  )
-                : null,
-          ),
-          onChanged: (_) => _emit(),
         ),
       ),
     );

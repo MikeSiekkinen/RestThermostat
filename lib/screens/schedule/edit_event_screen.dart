@@ -181,11 +181,14 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
     final l = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
+        centerTitle: true,
         leading: TextButton(
           onPressed: _saving ? null : () => Navigator.of(context).pop(),
-          child: Text(l.editEventCancel),
+          child: Text(l.editEventCancel, maxLines: 1, softWrap: false),
         ),
-        leadingWidth: 84,
+        // Wide enough that "Cancel" (and longer localized equivalents) render
+        // on a single line instead of wrapping to "Cance\nl".
+        leadingWidth: 100,
         title: Text(widget.isNew ? l.editEventTitleNew : l.editEventTitleEdit),
         actions: [
           TextButton(
@@ -586,12 +589,22 @@ class _TempStepper extends StatelessWidget {
               onPressed: () => onChanged(_decrement(valueC, scale)),
             ),
             const SizedBox(width: 16),
-            SizedBox(
-              width: 120,
-              child: Text(
-                _format(valueC, scale),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineLarge,
+            // Tapping the value opens a keyboard entry dialog — an alternative
+            // to the +/- steppers for setting a temperature directly.
+            InkWell(
+              key: ValueKey('temp-value-$label'),
+              onTap: () => _editViaKeyboard(context),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: SizedBox(
+                  width: 120,
+                  child: Text(
+                    _format(valueC, scale),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineLarge,
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 16),
@@ -606,6 +619,67 @@ class _TempStepper extends StatelessWidget {
       ],
     );
   }
+
+  /// Prompt for a temperature via the keyboard as an alternative to the +/-
+  /// steppers. The user types in the device's display unit; the parsed value is
+  /// converted back to Celsius and clamped to [_minTempC, _maxTempC] — matching
+  /// the steppers' clamp — before it reaches [onChanged]. Non-numeric or empty
+  /// input leaves the value unchanged.
+  Future<void> _editViaKeyboard(BuildContext context) async {
+    final l = AppLocalizations.of(context);
+    final isF = scale.toUpperCase() != 'C';
+    final unit = isF ? '°F' : '°C';
+    final controller = TextEditingController(
+      text: isF ? (valueC * 9 / 5 + 32).round().toString() : _trimC(valueC),
+    );
+    final minD = isF ? (_minTempC * 9 / 5 + 32).round().toString() : _trimC(_minTempC);
+    final maxD = isF ? (_maxTempC * 9 / 5 + 32).round().toString() : _trimC(_maxTempC);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l.editEventTempEntryTitle),
+        content: TextField(
+          key: const ValueKey('temp-entry-field'),
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.numberWithOptions(decimal: !isF),
+          textAlign: TextAlign.center,
+          style: Theme.of(ctx).textTheme.headlineMedium,
+          decoration: InputDecoration(
+            suffixText: unit,
+            helperText: '$minD–$maxD $unit',
+          ),
+          onSubmitted: (_) => Navigator.of(ctx).pop(true),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l.editEventCancel),
+          ),
+          TextButton(
+            key: const ValueKey('temp-entry-confirm'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l.editEventTempEntryConfirm),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final raw = double.tryParse(controller.text.trim());
+      if (raw != null) {
+        final celsius = isF ? (raw - 32) * 5 / 9 : raw;
+        onChanged(celsius.clamp(_minTempC, _maxTempC).toDouble());
+      }
+    }
+    controller.dispose();
+  }
+
+  /// Format a Celsius value for prefill: drop a trailing `.0` (20.0 → "20") but
+  /// keep a real fraction (20.5 → "20.5").
+  static String _trimC(double c) =>
+      c == c.roundToDouble() ? c.round().toString() : c.toString();
 
   static String _format(double celsius, String scale) {
     if (scale.toUpperCase() == 'C') return '${celsius.round()}°C';

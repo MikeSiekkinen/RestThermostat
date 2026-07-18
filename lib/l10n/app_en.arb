@@ -397,6 +397,8 @@
   "editEventSavedSnack": "Schedule saved",
   "editEventSaveFailedSnack": "Couldn't save schedule. Retry?",
   "editEventRetryAction": "Retry",
+  "editEventTempEntryTitle": "Set temperature",
+  "editEventTempEntryConfirm": "Set",
   "@editEventTitleNew": { "description": "AppBar title when creating a new schedule event." },
   "@editEventTitleEdit": { "description": "AppBar title when editing an existing schedule event." },
   "@editEventCancel": { "description": "AppBar leading button on the edit-event screen." },
@@ -417,6 +419,8 @@
   "@editEventSavedSnack": { "description": "Snackbar shown after a successful set_schedule write." },
   "@editEventSaveFailedSnack": { "description": "Snackbar shown when set_schedule fails — pairs with the Retry action." },
   "@editEventRetryAction": { "description": "Action button on the save-failed snackbar that re-issues set_schedule." },
+  "@editEventTempEntryTitle": { "description": "Title of the dialog for typing a schedule event's temperature directly." },
+  "@editEventTempEntryConfirm": { "description": "Confirm action in the type-a-temperature dialog." },
 
   "detailsSectionCurrent": "CURRENT",
   "detailsSectionSystem": "SYSTEM",

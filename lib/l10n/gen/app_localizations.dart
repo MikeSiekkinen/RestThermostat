@@ -952,6 +952,18 @@ abstract class AppLocalizations {
   /// **'Retry'**
   String get editEventRetryAction;
 
+  /// Title of the dialog for typing a schedule event's temperature directly.
+  ///
+  /// In en, this message translates to:
+  /// **'Set temperature'**
+  String get editEventTempEntryTitle;
+
+  /// Confirm action in the type-a-temperature dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Set'**
+  String get editEventTempEntryConfirm;
+
   /// Section header above the current humidity + setpoint tiles on the Details tab.
   ///
   /// In en, this message translates to:
