@@ -30,8 +30,9 @@ enum DeviceMode {
   /// (`HEAT`/`COOL`/`RANGE`), used to keep `set_schedule` payloads and the
   /// shared bucket in sync (Issue #93). Emergency heat is still heating, so it
   /// derives `HEAT`. `off` returns `null` — there is nothing to derive; the
-  /// save path keeps the last stored `schedule_mode` and does not issue
-  /// `set_schedule_mode`.
+  /// save path falls back to the stored `schedule_mode` when set (and then
+  /// skips `set_schedule_mode`), else to a capability-derived mode which it
+  /// does sync (DESIGN §6.6).
   String? get scheduleWireMode => switch (this) {
     heat || emergency => 'HEAT',
     cool => 'COOL',

@@ -294,14 +294,40 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
   }) async {
     setState(() => _saving = true);
     final l = AppLocalizations.of(context);
+    // The container outlives this State — the optimistic pop below unmounts
+    // us before the network calls settle, at which point `ref.*` would throw.
+    final container = ProviderScope.containerOf(context);
     // Belt-and-braces: coerce any stale events (left over from before a
     // device-mode switch) so the payload can never contradict its
     // `schedule_mode` (Issue #93).
     final conformed = next.conformedTo(_wireMode);
     // Optimistic dismiss — DESIGN §6.5 #2.
     navigator.pop(conformed);
+    await _pushAndReport(
+      client: client,
+      container: container,
+      messenger: messenger,
+      l: l,
+      schedule: conformed,
+    );
+  }
+
+  /// Run [_push] and surface the outcome. The parent screen refetches the
+  /// schedule the moment the editor pops, racing the still-in-flight write
+  /// (near-deterministically losing when `set_schedule_mode` goes first), so
+  /// both outcomes invalidate [scheduleProvider] again once the write has
+  /// settled. Retry re-enters this method so a failed retry re-surfaces the
+  /// snackbar instead of dying silently.
+  Future<void> _pushAndReport({
+    required NleApiClient client,
+    required ProviderContainer container,
+    required ScaffoldMessengerState? messenger,
+    required AppLocalizations l,
+    required Schedule schedule,
+  }) async {
     try {
-      await _push(client, conformed);
+      await _push(client, schedule);
+      container.invalidate(scheduleProvider(widget.serial));
       // Schedule save success — medium-impact haptic per DESIGN §11.5.
       HapticFeedback.mediumImpact();
       messenger?.showSnackBar(
@@ -312,13 +338,19 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
       );
     } catch (_) {
       // Revert: re-fetch from server so the Schedule screen reflects truth.
-      ref.invalidate(scheduleProvider(widget.serial));
+      container.invalidate(scheduleProvider(widget.serial));
       messenger?.showSnackBar(
         SnackBar(
           content: Text(l.editEventSaveFailedSnack),
           action: SnackBarAction(
             label: l.editEventRetryAction,
-            onPressed: () => _push(client, conformed),
+            onPressed: () => _pushAndReport(
+              client: client,
+              container: container,
+              messenger: messenger,
+              l: l,
+              schedule: schedule,
+            ),
           ),
         ),
       );
@@ -329,11 +361,34 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
   /// `schedule_mode` when it disagrees with the mode we're writing — the
   /// device silently ignores the schedule otherwise (Issue #93). Re-sending
   /// `set_schedule_mode` on the retry path is harmless (idempotent).
+  ///
+  /// The two commands are not transactional. If the mode change lands but the
+  /// schedule write fails, the device would be left with a shared-bucket mode
+  /// that mismatches its stored schedule — which silently disables the whole
+  /// schedule — so the failure path rolls the mode back (best-effort) before
+  /// rethrowing; Retry re-runs the full sequence.
   Future<void> _push(NleApiClient client, Schedule schedule) async {
-    if (_wireMode != widget.storedScheduleMode) {
+    final stored = widget.storedScheduleMode;
+    final syncMode = _wireMode != stored;
+    if (syncMode) {
       await client.setScheduleMode(widget.serial, _wireMode);
     }
-    await client.setSchedule(widget.serial, schedule, scheduleMode: _wireMode);
+    try {
+      await client.setSchedule(
+        widget.serial,
+        schedule,
+        scheduleMode: _wireMode,
+      );
+    } catch (_) {
+      if (syncMode && stored != null) {
+        try {
+          await client.setScheduleMode(widget.serial, stored);
+        } catch (_) {
+          // Rollback is best-effort; the original failure is what we report.
+        }
+      }
+      rethrow;
+    }
   }
 
   ScheduleEvent? _buildEvent() {

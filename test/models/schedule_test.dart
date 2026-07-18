@@ -274,6 +274,46 @@ void main() {
       expect(cool.targetTemp, 23.0);
     });
 
+    test('conformedTo falls back to the other bound when the preferred one '
+        'is missing, and never emits a temp-less setpoint', () {
+      // fromJson tolerates one-bound RANGE events (e.g. only temp-max), so
+      // coercion must not strand a setpoint with no temperature at all —
+      // the server rejects it, or worse, the device silently ignores the
+      // whole bucket.
+      const onlyHigh = ScheduleEvent(
+        dayIndex: 0,
+        hour: 6,
+        minute: 0,
+        type: 'RANGE',
+        targetTempHigh: 24.0,
+      );
+      final heat = onlyHigh.conformedTo('HEAT');
+      expect(heat.type, 'HEAT');
+      expect(heat.targetTemp, 24.0, reason: 'falls back to the high bound');
+
+      const onlyLow = ScheduleEvent(
+        dayIndex: 0,
+        hour: 6,
+        minute: 0,
+        type: 'RANGE',
+        targetTempLow: 18.0,
+      );
+      final cool = onlyLow.conformedTo('COOL');
+      expect(cool.type, 'COOL');
+      expect(cool.targetTemp, 18.0, reason: 'falls back to the low bound');
+
+      // Fully degenerate event (no temps at all) → editor defaults.
+      const bare = ScheduleEvent(dayIndex: 0, hour: 6, minute: 0, type: 'COOL');
+      expect(bare.conformedTo('HEAT').targetTemp, 20.0);
+      const bareHeat = ScheduleEvent(
+        dayIndex: 0,
+        hour: 6,
+        minute: 0,
+        type: 'HEAT',
+      );
+      expect(bareHeat.conformedTo('COOL').targetTemp, 24.0);
+    });
+
     test('conformedTo single→RANGE builds a ±1°C band around the setpoint', () {
       const e = ScheduleEvent(
         dayIndex: 0,

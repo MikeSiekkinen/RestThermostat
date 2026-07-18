@@ -129,18 +129,27 @@ class ScheduleEvent {
   ///   `RANGE` → `COOL` keeps the high bound ("at most this warm").
   /// - Single → `RANGE`: a ±1°C band around the setpoint, clamped to the
   ///   4.5–32°C bounds (DESIGN §16.5).
+  ///
+  /// The result always carries a temperature: `fromJson` tolerates events
+  /// with a missing bound (e.g. a RANGE event with only `temp-max`), so the
+  /// coercion falls back to the other bound and finally to the same
+  /// comfortable defaults the editor uses — a `setpoint` without a temp key
+  /// would be rejected by the server or, worse, silently ignored on-device.
   ScheduleEvent conformedTo(String scheduleMode) {
     if (type == scheduleMode) return this;
     switch (scheduleMode) {
       case 'HEAT':
       case 'COOL':
-        final temp = type == 'RANGE'
-            ? (scheduleMode == 'HEAT' ? targetTempLow : targetTempHigh)
-            : targetTemp;
+        final preferred = scheduleMode == 'HEAT'
+            ? targetTempLow
+            : targetTempHigh;
+        final other = scheduleMode == 'HEAT' ? targetTempHigh : targetTempLow;
+        final temp =
+            (type == 'RANGE' ? (preferred ?? other) : targetTemp) ??
+            (scheduleMode == 'HEAT' ? 20.0 : 24.0);
         return copyWith(
           type: scheduleMode,
           targetTemp: temp,
-          nullifyTargetTemp: temp == null,
           nullifyTargetTempLow: true,
           nullifyTargetTempHigh: true,
         );

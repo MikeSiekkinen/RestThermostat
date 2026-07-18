@@ -15,6 +15,7 @@ import 'package:rest_thermostat/state/providers.dart';
 
 class _Harness {
   final Widget widget;
+  final Dio dio;
   final DioAdapter adapter;
   final ValueNotifier<Schedule?> result;
 
@@ -25,6 +26,7 @@ class _Harness {
 
   _Harness({
     required this.widget,
+    required this.dio,
     required this.adapter,
     required this.result,
     required this.requests,
@@ -135,6 +137,7 @@ _Harness _setup({
 
   return _Harness(
     widget: widget,
+    dio: dio,
     adapter: adapter,
     result: result,
     requests: requests,
@@ -605,6 +608,61 @@ void main() {
       expect(find.byKey(const ValueKey('mode-pill-COOL')), findsOneWidget);
       expect(find.byKey(const ValueKey('mode-pill-HEAT')), findsNothing);
       expect(find.byKey(const ValueKey('temp-up-COOL')), findsOneWidget);
+    });
+
+    testWidgets('set_schedule failure after a successful mode change rolls the '
+        'shared-bucket mode back', (tester) async {
+      // Mode differs (stored HEAT, device cool) so the save sends
+      // set_schedule_mode COOL first. The set_schedule that follows is
+      // forced to fail with a non-transient 400; without a rollback the
+      // device would be stranded with bucket mode COOL against its stored
+      // HEAT schedule — which the firmware answers by ignoring the whole
+      // schedule.
+      final h = _setup(
+        schedule: _emptyWeek(),
+        deviceMode: DeviceMode.cool,
+        storedScheduleMode: 'HEAT',
+      );
+      h.adapter.onPost(
+        '/command',
+        (s) => s.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+      // Registered after the harness's capture interceptor, so the body is
+      // recorded before the rejection fires.
+      h.dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            final data = options.data;
+            if (data is Map<String, dynamic> &&
+                data['command'] == 'set_schedule') {
+              handler.reject(
+                DioException(
+                  requestOptions: options,
+                  type: DioExceptionType.badResponse,
+                  response: Response(requestOptions: options, statusCode: 400),
+                ),
+              );
+              return;
+            }
+            handler.next(options);
+          },
+        ),
+      );
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      final commands = [for (final r in h.requests) r['command']];
+      expect(commands, [
+        'set_schedule_mode', // sync to the derived mode
+        'set_schedule', // fails with 400 (no retry on 4xx)
+        'set_schedule_mode', // best-effort rollback to the stored mode
+      ]);
+      expect(h.requests.first['value'], 'COOL');
+      expect(h.requests.last['value'], 'HEAT');
     });
   });
 }
