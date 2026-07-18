@@ -592,9 +592,9 @@ GitHub Actions, free for public repos:
 
 **MIT.**
 
-### 13.6 Time picker — custom Ember-themed
+### 13.6 Time entry — hour/minute text fields
 
-Not platform-adaptive. PRD's "native iOS/Android time wheel" is overridden in favor of a custom Ember-themed picker that matches the app's visual vocabulary on both platforms.
+Not platform-adaptive, and not a wheel. PRD's "native iOS/Android time wheel" is overridden in favor of direct text entry: two Ember-themed numeric fields (hour, minute) with an AM/PM selector shown only in 12-hour mode (`MediaQueryData.alwaysUse24HourFormat` is the format source). Out-of-range or empty input disables Save with an inline error — never silently clamped. This supersedes the earlier custom wheel picker (`EmberTimePicker`), removed in Issue #96; the maintainer reversed that decision in favor of faster direct entry.
 
 ### 13.7 Icons and splash
 
@@ -763,7 +763,7 @@ Where this document deviates from `PRD.md` literal text:
 | §5.5 Edit Event | No per-event name field; no repeat-days circles on Edit Event (creation-only repeat). |
 | §5.6 Settings | No temperature unit toggle (server is source of truth). |
 | §5.2, §5.3 Stats | No outside temp slot; no runtime slot. |
-| §5.5 Time picker | Custom Ember-themed, not platform-native. |
+| §5.5 Time picker | Hour/minute text inputs (12/24h-aware), not a platform-native wheel — nor the custom wheel this row previously recorded. |
 | §7 App icon | Concentric arcs, not "silver fan blade or stylized flame." |
 | §9 Q1 (auth) | Resolved: no auth default, optional reverse-proxy Basic/Bearer. |
 | §9 Q4 (weather) | Resolved: NLE doesn't expose weather to clients; feature dropped. |
