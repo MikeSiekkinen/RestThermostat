@@ -73,6 +73,8 @@ class _MainShellState extends State<MainShell> {
             deviceMode: widget.device.mode,
             scheduleMode: widget.device.scheduleMode,
             capabilities: widget.device.capabilities,
+            device: widget.device,
+            now: widget.now,
           ),
           DetailsScreen(
             device: widget.device,

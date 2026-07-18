@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/gen/app_localizations.dart';
 import '../../models/device.dart';
 import '../../models/schedule.dart';
+import '../../services/schedule_helpers.dart';
+import '../../services/setpoint_source.dart';
 import '../../state/providers.dart';
 import '../../theme/colors.dart';
 import 'day_index.dart';
@@ -40,12 +42,24 @@ class ScheduleScreen extends ConsumerStatefulWidget {
   /// is needed alongside `set_schedule` (Issue #93).
   final String? scheduleMode;
 
+  /// The resolved active device — feeds `deriveSetpointSource` (its
+  /// `targetTemperature` and away state) for the background tint (Issue #97).
+  /// Nullable for callers without a full `Device` (tests, mostly); the tint
+  /// simply stays off then.
+  final Device? device;
+
+  /// Clock injection so the tint's active-event derivation is deterministic
+  /// in tests. Production callers use the [DateTime.now] default.
+  final DateTime Function() now;
+
   const ScheduleScreen({
     super.key,
     required this.serial,
     this.temperatureScale = 'F',
     this.deviceMode = DeviceMode.heat,
     this.scheduleMode,
+    this.device,
+    this.now = DateTime.now,
     this.capabilities = const Capabilities(
       canHeat: true,
       canCool: false,
@@ -66,13 +80,82 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
   /// move this around.
   int _selectedDay = weekdayToIndex(DateTime.now().weekday);
 
+  /// Tint color when the active scheduled event is what's driving the
+  /// current setpoint (Issue #97): heat red for an active HEAT event, cool
+  /// blue for COOL, `null` (default background) otherwise — manual override,
+  /// away, no/failed schedule, or an active RANGE event (which
+  /// `deriveSetpointSource` deliberately never matches, DESIGN §9.5).
+  ///
+  /// Reuses `deriveSetpointSource` unchanged so this always agrees with the
+  /// Details screen's Scheduled/Manual row by construction.
+  Color? _activeScheduleTint(Schedule? schedule) {
+    final device = widget.device;
+    if (device == null || schedule == null) return null;
+    final now = widget.now();
+    final source = deriveSetpointSource(
+      device: device,
+      schedule: schedule,
+      now: now,
+    );
+    if (source != SetpointSource.scheduled) return null;
+    return switch (findActiveEvent(schedule, now)?.type) {
+      'HEAT' => EmberColors.heatGlow,
+      'COOL' => EmberColors.coolGlow,
+      _ => null,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final locale = Localizations.maybeLocaleOf(context) ?? const Locale('en');
     final order = localeDayOrder(locale);
     final labels = displayDayLabels(locale);
     final asyncSchedule = ref.watch(scheduleProvider(widget.serial));
+    // A failed refetch keeps its previous data in `AsyncValue.value`, but the
+    // screen shows the error view then — keep the tint in agreement with what
+    // is actually visible by treating any error as "no schedule".
+    final tint = _activeScheduleTint(
+      asyncSchedule.hasError ? null : asyncSchedule.value,
+    );
+    // Mirrors EmberBackground's glow overlay (alpha 0.18 → 0.0 radial) so the
+    // tint reads as the same visual vocabulary; both stops go fully
+    // transparent when no tint applies so gradient-to-gradient animation
+    // fades smoothly instead of snapping.
+    final glow = tint ?? Colors.transparent;
 
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: IgnorePointer(
+            child: AnimatedContainer(
+              key: const ValueKey('schedule-tint'),
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOutCubic,
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(0.0, -0.3),
+                  radius: 0.9,
+                  colors: [
+                    glow.withValues(alpha: tint == null ? 0.0 : 0.18),
+                    glow.withValues(alpha: 0.0),
+                  ],
+                  stops: const [0.0, 1.0],
+                ),
+              ),
+            ),
+          ),
+        ),
+        _buildScaffold(context, order, labels, asyncSchedule),
+      ],
+    );
+  }
+
+  Scaffold _buildScaffold(
+    BuildContext context,
+    List<int> order,
+    List<String> labels,
+    AsyncValue<Schedule?> asyncSchedule,
+  ) {
     return Scaffold(
       appBar: AppBar(
         title: Text(AppLocalizations.of(context).scheduleTitle),
