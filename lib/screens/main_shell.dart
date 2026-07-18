@@ -71,6 +71,7 @@ class _MainShellState extends State<MainShell> {
             serial: widget.device.serial,
             temperatureScale: widget.device.temperatureScale,
             deviceMode: widget.device.mode,
+            scheduleMode: widget.device.scheduleMode,
             capabilities: widget.device.capabilities,
           ),
           DetailsScreen(

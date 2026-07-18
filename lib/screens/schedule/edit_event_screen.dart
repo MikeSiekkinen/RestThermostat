@@ -33,6 +33,18 @@ class EditEventScreen extends ConsumerStatefulWidget {
   final String temperatureScale;
   final Schedule currentSchedule;
 
+  /// The device's current operating mode — the written schedule's
+  /// `schedule_mode` is derived from it (Issue #93): heat/emergency → HEAT,
+  /// cool → COOL, heat-cool → RANGE. `off` derives nothing; the stored mode
+  /// is kept.
+  final DeviceMode deviceMode;
+
+  /// The shared bucket's `schedule_mode` as last read from `/api/devices`
+  /// (`Device.scheduleMode`). When the derived mode differs from this, the
+  /// save path issues `set_schedule_mode` before `set_schedule` — the device
+  /// ignores a schedule whose mode disagrees with the shared bucket.
+  final String? storedScheduleMode;
+
   /// The event being edited. `null` for "new" mode.
   final ScheduleEvent? existingEvent;
 
@@ -48,6 +60,8 @@ class EditEventScreen extends ConsumerStatefulWidget {
     required this.temperatureScale,
     required this.currentSchedule,
     required this.defaultDayIndex,
+    this.deviceMode = DeviceMode.heat,
+    this.storedScheduleMode,
     this.existingEvent,
   });
 
@@ -80,10 +94,34 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
 
   bool _saving = false;
 
+  /// The `schedule_mode` this save will write, resolved once. Derived from
+  /// the device's operating mode; a device in `off` (nothing to derive) falls
+  /// back to the stored shared-bucket mode, then to what the capabilities
+  /// support. Always one of `HEAT`/`COOL`/`RANGE`.
+  late final String _wireMode = _resolveWireMode();
+
+  String _resolveWireMode() {
+    final caps = widget.capabilities;
+    final capable = <String>[
+      if (caps.canHeat) 'HEAT',
+      if (caps.canCool) 'COOL',
+      if (caps.canHeat && caps.canCool) 'RANGE',
+    ];
+    final derived = widget.deviceMode.scheduleWireMode;
+    for (final candidate in [derived, widget.storedScheduleMode]) {
+      if (candidate != null && capable.contains(candidate)) return candidate;
+    }
+    return capable.isEmpty ? 'HEAT' : capable.first;
+  }
+
   @override
   void initState() {
     super.initState();
-    final existing = widget.existingEvent;
+    // Coerce a pre-existing event whose type predates the current schedule
+    // mode (e.g. a HEAT event after the device switched to cool) so the
+    // editor prefills within the allowed type — written payloads must never
+    // contain an event whose type conflicts with `schedule_mode` (Issue #93).
+    final existing = widget.existingEvent?.conformedTo(_wireMode);
     if (existing != null) {
       _type = existing.type;
       _targetTemp = existing.targetTemp;
@@ -93,19 +131,12 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
       _minute = existing.minute;
       _selectedDays = {existing.dayIndex};
     } else {
-      _type = _defaultType();
+      _type = _wireMode;
       _hour = 7;
       _minute = 0;
       _selectedDays = {widget.defaultDayIndex};
       _applyDefaultsForType();
     }
-  }
-
-  String _defaultType() {
-    final caps = widget.capabilities;
-    if (caps.canHeat) return 'HEAT';
-    if (caps.canCool) return 'COOL';
-    return 'HEAT';
   }
 
   /// Set the appropriate temp slots for the active type, leaving the others
@@ -130,18 +161,12 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
     }
   }
 
-  /// Mode-selector options derived directly from the device's capabilities.
-  /// Mirrors what #8 will eventually centralize: heat-only devices don't see
-  /// COOL or RANGE; cool-only devices don't see HEAT or RANGE; RANGE requires
-  /// both.
-  List<String> _allowedTypes() {
-    final caps = widget.capabilities;
-    final types = <String>[];
-    if (caps.canHeat) types.add('HEAT');
-    if (caps.canCool) types.add('COOL');
-    if (caps.canHeat && caps.canCool) types.add('RANGE');
-    return types;
-  }
+  /// Event-type options are constrained to the single type matching the
+  /// derived schedule mode (Issue #93): the device ignores a schedule whose
+  /// events contradict its `schedule_mode`, so a HEAT schedule takes only
+  /// HEAT events, a RANGE schedule only RANGE events, etc. Capability gating
+  /// is already folded into [_resolveWireMode].
+  List<String> _allowedTypes() => [_wireMode];
 
   @override
   Widget build(BuildContext context) {
@@ -269,10 +294,14 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
   }) async {
     setState(() => _saving = true);
     final l = AppLocalizations.of(context);
+    // Belt-and-braces: coerce any stale events (left over from before a
+    // device-mode switch) so the payload can never contradict its
+    // `schedule_mode` (Issue #93).
+    final conformed = next.conformedTo(_wireMode);
     // Optimistic dismiss — DESIGN §6.5 #2.
-    navigator.pop(next);
+    navigator.pop(conformed);
     try {
-      await client.setSchedule(widget.serial, next);
+      await _push(client, conformed);
       // Schedule save success — medium-impact haptic per DESIGN §11.5.
       HapticFeedback.mediumImpact();
       messenger?.showSnackBar(
@@ -289,11 +318,22 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
           content: Text(l.editEventSaveFailedSnack),
           action: SnackBarAction(
             label: l.editEventRetryAction,
-            onPressed: () => client.setSchedule(widget.serial, next),
+            onPressed: () => _push(client, conformed),
           ),
         ),
       );
     }
+  }
+
+  /// Write the schedule to the device, first aligning the shared bucket's
+  /// `schedule_mode` when it disagrees with the mode we're writing — the
+  /// device silently ignores the schedule otherwise (Issue #93). Re-sending
+  /// `set_schedule_mode` on the retry path is harmless (idempotent).
+  Future<void> _push(NleApiClient client, Schedule schedule) async {
+    if (_wireMode != widget.storedScheduleMode) {
+      await client.setScheduleMode(widget.serial, _wireMode);
+    }
+    await client.setSchedule(widget.serial, schedule, scheduleMode: _wireMode);
   }
 
   ScheduleEvent? _buildEvent() {

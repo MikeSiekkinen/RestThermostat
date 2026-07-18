@@ -34,11 +34,18 @@ class ScheduleScreen extends ConsumerStatefulWidget {
   /// caller doesn't have a `Device` handy (tests, mostly).
   final Capabilities capabilities;
 
+  /// The device's shared-bucket `schedule_mode` as last read from
+  /// `/api/devices` (`Device.scheduleMode`, nullable). Forwarded to Edit
+  /// Event so its save path can decide whether a `set_schedule_mode` command
+  /// is needed alongside `set_schedule` (Issue #93).
+  final String? scheduleMode;
+
   const ScheduleScreen({
     super.key,
     required this.serial,
     this.temperatureScale = 'F',
     this.deviceMode = DeviceMode.heat,
+    this.scheduleMode,
     this.capabilities = const Capabilities(
       canHeat: true,
       canCool: false,
@@ -120,10 +127,12 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
   /// minimal empty schedule. `set_schedule` is full-replace so an empty 7-day
   /// payload is valid (DESIGN §6.7).
   Schedule _scheduleOrEmpty(Schedule? existing) {
+    // No `mode` on the synthesized schedule: the written `schedule_mode` is
+    // derived from the device's operating mode at save time (Issue #93), so
+    // a hardcoded default here would only mislead.
     return existing ??
-        Schedule(
-          events: const {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []},
-          mode: 'HEAT',
+        const Schedule(
+          events: {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []},
         );
   }
 
@@ -136,6 +145,8 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
           temperatureScale: widget.temperatureScale,
           currentSchedule: _scheduleOrEmpty(schedule),
           defaultDayIndex: _selectedDay,
+          deviceMode: widget.deviceMode,
+          storedScheduleMode: widget.scheduleMode,
         ),
       ),
     );
@@ -157,6 +168,8 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
           temperatureScale: widget.temperatureScale,
           currentSchedule: _scheduleOrEmpty(schedule),
           defaultDayIndex: event.dayIndex,
+          deviceMode: widget.deviceMode,
+          storedScheduleMode: widget.scheduleMode,
           existingEvent: event,
         ),
       ),
