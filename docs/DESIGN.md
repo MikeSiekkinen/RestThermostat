@@ -232,6 +232,12 @@ Gen 2 firmware silently ignores the **entire** schedule bucket unless all of the
 - Every event carries **`entry_type: "setpoint"`** (`continuation` entries are server-generated; they're dropped on read and never written back).
 - The payload's `schedule_mode` matches the shared bucket's `schedule_mode` (synced via `set_schedule_mode`, §6.5–6.6).
 
+### 6.9 Schedule-in-control background tint (Issue #97)
+
+While the Schedule tab is visible and the [§9.5](#95-setpoint-source-details-screen) derivation returns `scheduled`, the screen tints its background with the active event's glow color — `HEAT` → heat red, `COOL` → cool blue (the standard `EmberColors` glow family). Every other state — `manual`, `away`, no schedule loaded, fetch error, or an active `RANGE` event (which §9.5 deliberately never matches in v1; maintainer reaffirmed 2026-07-18) — keeps the default background.
+
+The tint is a Schedule-screen-local layer under its transparent Scaffold — the app-level `EmberBackground` is untouched, so Home and Details are unaffected. It reuses `deriveSetpointSource` unchanged, keeping the tint and the Details screen's Scheduled/Manual row in agreement by construction, and animates between states with the app's standard 300ms `easeInOutCubic` idiom (§4.3). It recomputes on rebuild (each poll, refetch, or provider invalidation); there is no dedicated timer for the moment the clock crosses into a new event.
+
 ---
 
 ## 7. Setup and auth
