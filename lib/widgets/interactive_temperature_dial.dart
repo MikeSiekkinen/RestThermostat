@@ -265,6 +265,7 @@ class _InteractiveTemperatureDialState
       onIncrease: () => _bump(1),
       onDecrease: () => _bump(-1),
       numeralStyle: ref.watch(numeralFontProvider).style,
+      humidityPercent: widget.device.humidity,
     );
   }
 }

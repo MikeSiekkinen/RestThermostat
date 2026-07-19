@@ -868,17 +868,21 @@ abstract class AppLocalizations {
   /// **'Currently active. {event}'**
   String scheduleActiveEventSemanticLabel(String event);
 
-  /// Schedule header line showing the scheduled device's current measured and target temperatures (Issue #100). Both values arrive pre-formatted with their unit.
+  /// Schedule header line showing the scheduled device's current measured temperature, relative humidity, and target temperature (Issue #100). The temperatures arrive pre-formatted with their unit; humidity arrives pre-formatted with a percent sign.
   ///
   /// In en, this message translates to:
-  /// **'Now {measured} • Set {target}'**
-  String scheduleHeaderTemps(String measured, String target);
+  /// **'Now {measured} · {humidity} • Set {target}'**
+  String scheduleHeaderTemps(String measured, String humidity, String target);
 
-  /// Screen-reader version of the Schedule header temperatures (Issue #100), spelled out rather than using the middot separator.
+  /// Screen-reader version of the Schedule header line (Issue #100), spelled out rather than using the middot separators.
   ///
   /// In en, this message translates to:
-  /// **'Now {measured}, set to {target}'**
-  String scheduleHeaderTempsSemantics(String measured, String target);
+  /// **'Now {measured}, humidity {humidity}, set to {target}'**
+  String scheduleHeaderTempsSemantics(
+    String measured,
+    String humidity,
+    String target,
+  );
 
   /// AppBar title when creating a new schedule event.
   ///

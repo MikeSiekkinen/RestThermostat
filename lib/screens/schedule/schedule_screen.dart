@@ -198,6 +198,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
       widget.temperatureScale,
     );
     final target = _headerTarget(device);
+    final humidity = '${device.humidity}%';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -205,13 +206,17 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
         Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
         const SizedBox(height: 2),
         Text(
-          l.scheduleHeaderTemps(measured, target),
+          l.scheduleHeaderTemps(measured, humidity, target),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(
             context,
           ).textTheme.labelSmall?.copyWith(color: EmberColors.textSecondary),
-          semanticsLabel: l.scheduleHeaderTempsSemantics(measured, target),
+          semanticsLabel: l.scheduleHeaderTempsSemantics(
+            measured,
+            humidity,
+            target,
+          ),
         ),
       ],
     );

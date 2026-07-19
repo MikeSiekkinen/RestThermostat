@@ -847,6 +847,8 @@ void main() {
 
       expect(find.text('Upstairs'), findsOneWidget);
       expect(find.textContaining('Now 77°F'), findsOneWidget);
+      // Humidity (60% in the fixture) sits between the measured temp and Set.
+      expect(find.textContaining('· 60%'), findsOneWidget);
       expect(find.textContaining('Set 76°F'), findsOneWidget);
       // The plain "Schedule" title is replaced when a device is present.
       expect(find.text('Schedule'), findsNothing);
@@ -957,7 +959,10 @@ void main() {
 
       // Screen readers get the comma-form label, not the middot visual string.
       // (AppBar may merge the title's child nodes, so match the substring.)
-      expect(find.bySemanticsLabel(RegExp('Now 77°F, set to 76°F')), findsOne);
+      expect(
+        find.bySemanticsLabel(RegExp('Now 77°F, humidity 60%, set to 76°F')),
+        findsOne,
+      );
 
       await _disposeTree(tester);
     });

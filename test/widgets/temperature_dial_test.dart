@@ -227,6 +227,25 @@ void main() {
       expect(find.text('Currently 18°'), findsOneWidget);
     });
 
+    testWidgets('appends the humidity reading to the current label when '
+        'humidityPercent is set', (tester) async {
+      await tester.pumpWidget(
+        _host(
+          const TemperatureDial(
+            currentTemperatureCelsius: 18.0,
+            targetTemperatureCelsius: 20.0,
+            mode: DeviceMode.heat,
+            displayUnit: 'C',
+            capabilities: _allCapable,
+            humidityPercent: 45,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Currently 18° · 45%'), findsOneWidget);
+    });
+
     testWidgets('mounts a CustomPaint for the dial drawing', (tester) async {
       await tester.pumpWidget(
         _host(

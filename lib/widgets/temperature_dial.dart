@@ -112,6 +112,10 @@ class TemperatureDial extends StatefulWidget {
   /// display style. Null keeps the theme's Fraunces display face.
   final TextStyle? numeralStyle;
 
+  /// Current relative humidity as a whole percent, shown beside the measured
+  /// temperature in the "Currently …" line. Null hides the humidity readout.
+  final int? humidityPercent;
+
   const TemperatureDial({
     super.key,
     required this.currentTemperatureCelsius,
@@ -119,6 +123,7 @@ class TemperatureDial extends StatefulWidget {
     required this.mode,
     required this.displayUnit,
     required this.capabilities,
+    this.humidityPercent,
     this.animationDuration = const Duration(milliseconds: 400),
     this.animationCurve = Curves.easeInOutCubic,
     this.onTargetDragUpdate,
@@ -306,7 +311,9 @@ class _TemperatureDialState extends State<TemperatureDial> {
     );
 
     final targetLabel = '${targetDisplay.round()}°';
-    final currentLabel = 'Currently ${currentDisplay.round()}°';
+    final currentLabel = widget.humidityPercent != null
+        ? 'Currently ${currentDisplay.round()}° · ${widget.humidityPercent}%'
+        : 'Currently ${currentDisplay.round()}°';
 
     // Screen-reader announcement: TalkBack/VoiceOver reads the label, then the
     // value, then "tap to adjust" implicit on the slider role. The
@@ -314,10 +321,14 @@ class _TemperatureDialState extends State<TemperatureDial> {
     final semanticUnit = widget.displayUnit.toUpperCase() == 'F'
         ? 'Fahrenheit'
         : 'Celsius';
+    final humiditySemantics = widget.humidityPercent != null
+        ? ' Humidity ${widget.humidityPercent} percent.'
+        : '';
     final semanticLabel =
         'Target temperature, '
         'currently set to ${targetDisplay.round()} $semanticUnit. '
-        'Current temperature ${currentDisplay.round()} $semanticUnit.';
+        'Current temperature ${currentDisplay.round()} $semanticUnit.'
+        '$humiditySemantics';
 
     return TweenAnimationBuilder<double>(
       // TweenAnimationBuilder tracks the previously-rendered value as the new
@@ -370,7 +381,9 @@ class _TemperatureDialState extends State<TemperatureDial> {
                         const SizedBox(height: 8),
                         Text(
                           currentLabel,
-                          style: EmberTypography.bodyMediumItalic(),
+                          style: EmberTypography.bodyMedium(
+                            color: EmberColors.textSecondary,
+                          ),
                         ),
                       ],
                     ),
