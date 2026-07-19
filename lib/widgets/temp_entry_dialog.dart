@@ -63,6 +63,39 @@ class TempEntryDialog extends StatefulWidget {
   static String _trim(double c) =>
       c == c.roundToDouble() ? c.round().toString() : c.toString();
 
+  /// The prefill string for a field, in the display unit. Whole degrees when
+  /// [allowDecimal] is false; otherwise a trimmed fraction. Shared with
+  /// [RangeEntryDialog] so both dialogs seed their fields identically.
+  static String prefillText(
+    double celsius, {
+    required bool isF,
+    required bool allowDecimal,
+  }) {
+    final display = isF ? celsius * 9 / 5 + 32 : celsius;
+    return allowDecimal ? _trim(display) : display.round().toString();
+  }
+
+  /// Parse a field's [text] to a clamped Celsius value, or `null` if the input
+  /// is empty/non-numeric. A locale-comma decimal ("20,5") is normalized so it
+  /// parses, and `NaN` is rejected — `double.nan` would otherwise survive
+  /// [num.clamp] as the upper limit and silently commit the ceiling. When
+  /// [allowDecimal] is false the value is rounded to a whole display-unit
+  /// degree first, so a pasted fraction can't produce an off-grid setpoint.
+  /// Shared with [RangeEntryDialog] so both dialogs parse/clamp identically.
+  static double? tryParseCelsius(
+    String text, {
+    required bool isF,
+    required bool allowDecimal,
+    required double minCelsius,
+    required double maxCelsius,
+  }) {
+    final raw = double.tryParse(text.trim().replaceAll(',', '.'));
+    if (raw == null || raw.isNaN) return null;
+    final value = allowDecimal ? raw : raw.roundToDouble();
+    final celsius = isF ? (value - 32) * 5 / 9 : value;
+    return celsius.clamp(minCelsius, maxCelsius).toDouble();
+  }
+
   @override
   State<TempEntryDialog> createState() => _TempEntryDialogState();
 }
@@ -70,15 +103,12 @@ class TempEntryDialog extends StatefulWidget {
 class _TempEntryDialogState extends State<TempEntryDialog> {
   late final bool _isF = widget.scale.toUpperCase() != 'C';
 
-  /// The current value expressed in the display unit.
-  late final double _displayValue = _isF
-      ? widget.valueC * 9 / 5 + 32
-      : widget.valueC;
-
   late final TextEditingController _controller = TextEditingController(
-    text: widget.allowDecimal
-        ? TempEntryDialog._trim(_displayValue)
-        : _displayValue.round().toString(),
+    text: TempEntryDialog.prefillText(
+      widget.valueC,
+      isF: _isF,
+      allowDecimal: widget.allowDecimal,
+    ),
   );
 
   @override
@@ -88,23 +118,17 @@ class _TempEntryDialogState extends State<TempEntryDialog> {
   }
 
   /// Parse the field and pop the clamped Celsius value, or `null` if the input
-  /// is empty/non-numeric (leave the current value unchanged). A locale-comma
-  /// decimal ("20,5") is normalized to a period so it parses, and `NaN` is
-  /// rejected — `double.nan` would otherwise survive [num.clamp] as the upper
-  /// limit and silently commit the ceiling temperature. When [allowDecimal] is
-  /// false the value is rounded to a whole display-unit degree first, so a
-  /// pasted fraction can't produce an off-grid setpoint.
+  /// is empty/non-numeric (leave the current value unchanged). Delegates to the
+  /// shared [TempEntryDialog.tryParseCelsius].
   void _commit() {
-    final raw = double.tryParse(_controller.text.trim().replaceAll(',', '.'));
-    if (raw == null || raw.isNaN) {
-      Navigator.of(context).pop();
-      return;
-    }
-    final value = widget.allowDecimal ? raw : raw.roundToDouble();
-    final celsius = _isF ? (value - 32) * 5 / 9 : value;
-    Navigator.of(
-      context,
-    ).pop(celsius.clamp(widget.minCelsius, widget.maxCelsius).toDouble());
+    final celsius = TempEntryDialog.tryParseCelsius(
+      _controller.text,
+      isF: _isF,
+      allowDecimal: widget.allowDecimal,
+      minCelsius: widget.minCelsius,
+      maxCelsius: widget.maxCelsius,
+    );
+    Navigator.of(context).pop(celsius);
   }
 
   @override
