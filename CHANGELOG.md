@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-18
+
 ### Added
 
 - Cloudflare Access service-token authentication. The Advanced auth picker on
@@ -15,6 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CF-Access-Client-Secret` header pair so the app can reach an NLE proxy
   fronted by Cloudflare Access. Credentials are stored in secure storage under
   `auth_cf_client_id` / `auth_cf_client_secret`. See `docs/DESIGN.md` §7.2/§7.3.
+  (Community contribution, [#69](https://github.com/MikeSiekkinen/RestThermostat/pull/69).)
+- Numeral-font picker in Settings → Appearance (Oswald / Anton / JetBrains
+  Mono), applied to the Home dial and the schedule numerics. ([#103](https://github.com/MikeSiekkinen/RestThermostat/issues/103))
+- Current relative humidity is shown next to the temperature on the Home dial
+  and in the Schedule "Now" header. ([#104](https://github.com/MikeSiekkinen/RestThermostat/issues/104))
+- The Schedule header now shows the scheduled thermostat's name with its
+  current measured and target temperatures. ([#100](https://github.com/MikeSiekkinen/RestThermostat/issues/100))
+- The Edit Event time-field color can be set to match the event mode or stay
+  neutral (Settings → Appearance). ([#105](https://github.com/MikeSiekkinen/RestThermostat/issues/105))
+- Repeat-day selection shows weekday + next-occurrence date panels, and New
+  Event gains a day/date context header. ([#106](https://github.com/MikeSiekkinen/RestThermostat/issues/106))
+- The scheduled event currently driving the setpoint is highlighted in the
+  schedule list. ([#97](https://github.com/MikeSiekkinen/RestThermostat/issues/97))
 
 ### Changed
 
@@ -23,22 +38,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   failures, and redirects each get distinct copy that includes the `host:port`
   the attempt was aimed at, and the diagnostics log records the target and the
   underlying socket reason (no credentials). Shared by onboarding and the
-  Settings connection editor.
+  Settings connection editor. ([#69](https://github.com/MikeSiekkinen/RestThermostat/pull/69))
+- Edit Event time entry replaces the wheel picker with hour/minute text inputs
+  and tap-to-type temperature. ([#96](https://github.com/MikeSiekkinen/RestThermostat/issues/96))
+- The Home dial's current-temperature line drops the "Currently" label and
+  italic and adopts the chosen numeral font. ([#104](https://github.com/MikeSiekkinen/RestThermostat/issues/104))
 
 ### Fixed
 
+- **Schedules now execute.** `set_schedule` writes are conformed to the Gen 2
+  device bucket contract (map-not-array entries, required `name` /
+  `entry_type`, `schedule_mode` gating), fixing scheduled setpoints that the
+  device silently ignored. ([#93](https://github.com/MikeSiekkinen/RestThermostat/issues/93))
+- Switching the device mode no longer leaves the Schedule tab showing the
+  previous mode's events; a spinner holds until the device publishes the
+  new-mode schedule. ([#107](https://github.com/MikeSiekkinen/RestThermostat/issues/107))
 - URL normalization now uses a scheme-aware default port: `https` URLs without
   an explicit port default to `:443` instead of `:8082`. Forcing `:8082` onto
   `https` addresses made Cloudflare-fronted (and other reverse-proxied)
   deployments unreachable with the generic "Couldn't reach server." Note:
   addresses saved before this fix keep their stored `:8082` port — re-enter
   the address in Settings → Connection to pick up the new default.
+  ([#69](https://github.com/MikeSiekkinen/RestThermostat/pull/69))
 - The API client no longer follows HTTP redirects. On an `https` target, a
   redirect to Cloudflare Access (or a `WWW-Authenticate: Cloudflare-Access`
   challenge) is classified as an access-gate auth failure with specific
   guidance to add a service token; any other redirect gets its own
   "server redirected" copy naming the target instead of being misreported as
-  a network or authentication failure.
+  a network or authentication failure. ([#69](https://github.com/MikeSiekkinen/RestThermostat/pull/69))
 
 ## [1.1.0] - 2026-07-04
 
@@ -116,7 +143,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Project documentation: `README.md`, `LICENSE` (MIT), `CHANGELOG.md`, and
   `docs/IOS_BUILD.md` build-from-source guide.
 
-[Unreleased]: https://github.com/MikeSiekkinen/RestThermostat/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/MikeSiekkinen/RestThermostat/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/MikeSiekkinen/RestThermostat/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/MikeSiekkinen/RestThermostat/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/MikeSiekkinen/RestThermostat/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/MikeSiekkinen/RestThermostat/releases/tag/v1.0.0
