@@ -287,30 +287,35 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
     );
   }
 
-  /// Section header above the time fields. Names the event's weekday and, as a
-  /// reminder, appends the next calendar date that weekday falls on — e.g.
-  /// "Monday (Jul 20)". Edit mode always resolves to the event's single day. New
-  /// mode uses the day(s) picked in the repeat row below: one selected → that
-  /// day's date; none or several → the generic "Time" (a single date would
-  /// misrepresent a multi-day repeat).
+  /// Section header above the time fields. Names each day and, as a reminder,
+  /// appends the next calendar date it falls on — e.g. "Monday (Jul 20)". Edit
+  /// mode resolves to the event's single day. New mode uses the day(s) picked in
+  /// the repeat row below: one → that day; several → the span from the soonest
+  /// to the furthest upcoming day, e.g. "Monday (Jul 20) – Friday (Jul 24)";
+  /// none → the generic "Time".
   String _timeSectionHeader(BuildContext context, AppLocalizations l) {
-    final int dayIndex;
-    if (widget.isNew) {
-      if (_selectedDays.length != 1) return l.editEventTimeLabel;
-      dayIndex = _selectedDays.first;
-    } else {
-      dayIndex = widget.existingEvent!.dayIndex;
-    }
+    final Iterable<int> days = widget.isNew
+        ? _selectedDays
+        : [widget.existingEvent!.dayIndex];
+    if (days.isEmpty) return l.editEventTimeLabel;
+
     final now = DateTime.now();
-    // dayIndex is Mon=0..Sun=6; DateTime.weekday is Mon=1..Sun=7.
-    final delta = (dayIndex + 1 - now.weekday) % 7; // Dart % is non-negative
-    final next = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ).add(Duration(days: delta));
-    final dateStr = MaterialLocalizations.of(context).formatShortMonthDay(next);
-    return '${fullDayNames[dayIndex]} ($dateStr)';
+    final today = DateTime(now.year, now.month, now.day);
+    // dayIndex is Mon=0..Sun=6; DateTime.weekday is Mon=1..Sun=7. Dart's % is
+    // non-negative, so this is the days until the next occurrence (0 = today).
+    DateTime nextFor(int dayIndex) =>
+        today.add(Duration(days: (dayIndex + 1 - now.weekday) % 7));
+    final ml = MaterialLocalizations.of(context);
+    String label(int dayIndex) =>
+        '${fullDayNames[dayIndex]} (${ml.formatShortMonthDay(nextFor(dayIndex))})';
+
+    // Sort by the actual next date so the range reads chronologically, not by
+    // Mon–Sun index (a lower index isn't necessarily sooner from today).
+    final sorted = days.toList()
+      ..sort((a, b) => nextFor(a).compareTo(nextFor(b)));
+    return sorted.length == 1
+        ? label(sorted.first)
+        : '${label(sorted.first)} – ${label(sorted.last)}';
   }
 
   Future<void> _save() async {
