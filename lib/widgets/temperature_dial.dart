@@ -312,8 +312,8 @@ class _TemperatureDialState extends State<TemperatureDial> {
 
     final targetLabel = '${targetDisplay.round()}°';
     final currentLabel = widget.humidityPercent != null
-        ? 'Currently ${currentDisplay.round()}° · ${widget.humidityPercent}%'
-        : 'Currently ${currentDisplay.round()}°';
+        ? '${currentDisplay.round()}° · ${widget.humidityPercent}%'
+        : '${currentDisplay.round()}°';
 
     // Screen-reader announcement: TalkBack/VoiceOver reads the label, then the
     // value, then "tap to adjust" implicit on the slider role. The
@@ -383,7 +383,7 @@ class _TemperatureDialState extends State<TemperatureDial> {
                           currentLabel,
                           style: EmberTypography.bodyMedium(
                             color: EmberColors.textSecondary,
-                          ),
+                          ).merge(widget.numeralStyle),
                         ),
                       ],
                     ),

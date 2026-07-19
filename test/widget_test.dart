@@ -57,7 +57,7 @@ void main() {
     expect(find.text('Upstairs'), findsOneWidget);
     expect(find.byType(TemperatureDial), findsOneWidget);
     expect(find.text('76°'), findsOneWidget);
-    expect(find.text('Currently 77° · 60%'), findsOneWidget);
+    expect(find.text('77° · 60%'), findsOneWidget);
   });
 
   testWidgets('incomplete onboarding lands on Welcome screen', (tester) async {
