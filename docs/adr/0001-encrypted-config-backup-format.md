@@ -60,7 +60,7 @@ Backed up: `server_url`; auth type + credentials (Basic user/pass, Bearer token,
 ## Consequences
 
 - **Positive:** survives Keystore loss; no plaintext secret ever leaves the app; no native toolchain in CI; old backups keep working as params/keys evolve.
-- **Negative:** ~1 s Argon2id unlock on device (mitigated by isolate + spinner); adds two compiled deps (`cryptography`, `file_selector`) → a `pubspec.lock` change and a build-number bump (DESIGN §13.4).
+- **Negative:** ~1 s Argon2id unlock on device (mitigated by isolate + spinner); adds two compiled deps (`cryptography`, `file_picker`) → a `pubspec.lock` change and a build-number bump (DESIGN §13.4). `file_picker` (chosen for its real filesystem save-document dialog, vs a share sheet that can't save to a chosen folder) needs a `dependency_overrides: win32: ^6.0.1` to co-resolve with `share_plus` — harmless, as win32 is Windows-only and this app targets Android/iOS.
 - **Open / follow-up:** confirm on-device Argon2id latency at the chosen params on the min-spec target; if unacceptable, revisit `sodium` (this ADR would be superseded).
 
 ## Testing

@@ -1,9 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../services/backup/backup_errors.dart';
@@ -18,8 +18,9 @@ const _backupFileName = 'rest-thermostat-backup.json';
 /// entry points behave identically.
 
 /// Export flow: prompt for a new passphrase (with confirm + "no recovery"
-/// warning) → encrypt off the UI thread behind a spinner → hand the file to the
-/// system share sheet. No-ops silently if the user cancels the passphrase step.
+/// warning) → encrypt off the UI thread behind a spinner → write the file to a
+/// user-chosen filesystem location via the OS "save document" dialog. No-ops
+/// silently if the user cancels either the passphrase or the save step.
 Future<void> runBackupExport(
   BuildContext context,
   BackupService service,
@@ -44,18 +45,23 @@ Future<void> runBackupExport(
   }
 
   final bytes = Uint8List.fromList(utf8.encode(envelope));
-  await SharePlus.instance.share(
-    ShareParams(
-      files: [
-        XFile.fromData(
-          bytes,
-          mimeType: 'application/json',
-          name: _backupFileName,
-        ),
-      ],
-      fileNameOverrides: const [_backupFileName],
-    ),
-  );
+  final String? savedPath;
+  try {
+    // Opens the system create-document dialog (Android SAF) and writes the
+    // bytes to the user-chosen location; returns null if they back out.
+    savedPath = await FlutterFileDialog.saveFile(
+      params: SaveFileDialogParams(
+        data: bytes,
+        fileName: _backupFileName,
+        mimeTypesFilter: const ['application/json'],
+      ),
+    );
+  } catch (e) {
+    if (context.mounted) _snack(context, l.backupExportFailed(e));
+    return;
+  }
+  if (savedPath == null || !context.mounted) return;
+  _snack(context, l.backupExportedSnack);
 }
 
 /// Import flow: pick a file → reject foreign/too-new/damaged files *before*
@@ -70,18 +76,24 @@ Future<bool> runBackupImport(
 }) async {
   final l = AppLocalizations.of(context);
 
-  const typeGroup = XTypeGroup(
-    label: 'Rest Thermostat backup',
-    extensions: ['json'],
-    mimeTypes: ['application/json'],
-    uniformTypeIdentifiers: ['public.json'],
-  );
-  final file = await openFile(acceptedTypeGroups: [typeGroup]);
-  if (file == null || !context.mounted) return false;
+  final String? pickedPath;
+  try {
+    pickedPath = await FlutterFileDialog.pickFile(
+      params: const OpenFileDialogParams(
+        dialogType: OpenFileDialogType.document,
+        fileExtensionsFilter: ['json'],
+        mimeTypesFilter: ['application/json'],
+      ),
+    );
+  } catch (e) {
+    if (context.mounted) _snack(context, l.backupRestoreFailed(e));
+    return false;
+  }
+  if (pickedPath == null || !context.mounted) return false;
 
   final String text;
   try {
-    text = await file.readAsString();
+    text = await File(pickedPath).readAsString();
   } catch (_) {
     if (context.mounted) _snack(context, l.backupErrorMalformed);
     return false;

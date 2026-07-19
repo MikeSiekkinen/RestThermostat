@@ -509,6 +509,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get backupImportAction => 'Continue';
 
   @override
+  String get backupExportedSnack => 'Backup saved.';
+
+  @override
   String get backupEncrypting => 'Encrypting…';
 
   @override

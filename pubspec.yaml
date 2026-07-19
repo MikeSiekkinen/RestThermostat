@@ -35,11 +35,12 @@ dependencies:
   share_plus: ^13.1.0
   # Encrypted config backup/restore (Issue #109, ADR-0001). `cryptography` is
   # pure-Dart (no NDK/CMake weight on the signed APK): Argon2id KDF +
-  # XChaCha20-Poly1305 AEAD. `file_selector` (Flutter-team, share_plus-aligned
-  # win32) opens the backup file on import; file_picker was rejected — it caps
-  # win32 below what share_plus requires.
+  # XChaCha20-Poly1305 AEAD. `flutter_file_dialog` gives a real filesystem
+  # save/open dialog (Android SAF) with no `win32` dependency — `file_picker`
+  # pins win32 5.x and collides with `share_plus`'s win32 6.x, and
+  # `share_plus`'s share sheet can't save to a user-chosen folder anyway.
   cryptography: ^2.9.0
-  file_selector: ^1.1.0
+  flutter_file_dialog: ^3.3.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

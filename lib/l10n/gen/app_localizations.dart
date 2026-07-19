@@ -976,6 +976,12 @@ abstract class AppLocalizations {
   /// **'Continue'**
   String get backupImportAction;
 
+  /// Snackbar confirming the backup file was written to the chosen location.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup saved.'**
+  String get backupExportedSnack;
+
   /// Progress caption shown while the export is being encrypted (Argon2id).
   ///
   /// In en, this message translates to:
