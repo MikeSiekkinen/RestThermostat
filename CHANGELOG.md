@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-07-19
+
+### Added
+
+- Current temperature tile on the Details tab, beside humidity and
+  setpoint, formatted to the device's temperature scale. (#122)
+
+### Changed
+
+- Details tab header now shows the selected thermostat's name and mode
+  (e.g. "Upstairs · Cool") in place of the static "Current" label; the
+  stat-tile numbers use the configured Schedule numeral font, footer
+  labels are no longer italic, and the stats are laid out in two rows
+  (temperature + humidity, then a full-width setpoint). (#122)
+
 ## [1.2.1] - 2026-07-19
 
 ### Added
