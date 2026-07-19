@@ -6,10 +6,12 @@ import '../../l10n/gen/app_localizations.dart';
 import '../../models/device.dart';
 import '../../models/schedule.dart';
 import '../../services/nle_api_client.dart';
+import '../../settings/time_field_palette.dart';
 import '../../state/providers.dart';
 import '../../theme/colors.dart';
 import '../../widgets/ember_time_fields.dart';
 import '../../widgets/repeat_days_row.dart';
+import 'day_index.dart';
 
 /// Per `docs/DESIGN.md` §6 / PRD §5.5 (with DESIGN §18 divergences).
 ///
@@ -179,6 +181,9 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
     final mediaQuery = MediaQuery.of(context);
     final locale = Localizations.maybeLocaleOf(context) ?? const Locale('en');
     final l = AppLocalizations.of(context);
+    final timeColors = ref.watch(timeFieldPaletteProvider) == TimeFieldPalette.neutral
+        ? TimeFieldColors.neutral
+        : TimeFieldColors.accented(_tintFor(_type));
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
@@ -222,7 +227,7 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
             ),
             const SizedBox(height: 32),
             Text(
-              l.editEventTimeLabel,
+              _timeSectionHeader(context, l),
               style: Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(height: 12),
@@ -231,6 +236,7 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
               initialHour: _hour ?? 7,
               initialMinute: _minute ?? 0,
               use24Hour: mediaQuery.alwaysUse24HourFormat,
+              colors: timeColors,
               onChanged: (h, m) => setState(() {
                 _hour = h;
                 _minute = m;
@@ -268,6 +274,26 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
         ),
       ),
     );
+  }
+
+  /// Section header above the time fields. In new-event mode the repeat-days
+  /// row below picks the day(s), so this stays the generic "Time". In edit
+  /// mode the event lives on one weekday, so we name it and, as a reminder,
+  /// append the next calendar date that weekday falls on — e.g. "Monday
+  /// (Jul 20)".
+  String _timeSectionHeader(BuildContext context, AppLocalizations l) {
+    if (widget.isNew) return l.editEventTimeLabel;
+    final dayIndex = widget.existingEvent!.dayIndex;
+    final now = DateTime.now();
+    // dayIndex is Mon=0..Sun=6; DateTime.weekday is Mon=1..Sun=7.
+    final delta = (dayIndex + 1 - now.weekday) % 7; // Dart % is non-negative
+    final next = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).add(Duration(days: delta));
+    final dateStr = MaterialLocalizations.of(context).formatShortMonthDay(next);
+    return '${fullDayNames[dayIndex]} ($dateStr)';
   }
 
   Future<void> _save() async {

@@ -10,6 +10,7 @@ import '../services/nle_error.dart';
 import '../services/onboarding_store.dart';
 import '../services/url_normalizer.dart';
 import '../state/providers.dart';
+import 'time_field_palette.dart';
 
 /// GitHub repo link shown in the About section. Centralized so tests can
 /// assert against it without re-typing the URL.
@@ -322,6 +323,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     const Divider(),
                     _buildDiagnosticsSection(context),
                     const Divider(),
+                    _buildAppearanceSection(context),
+                    const Divider(),
                     _buildAboutSection(context),
                     const Divider(),
                     _buildDangerZone(context),
@@ -554,6 +557,48 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 context,
               ).push(MaterialPageRoute(builder: (_) => const LogsScreen()));
             },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppearanceSection(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final palette = ref.watch(timeFieldPaletteProvider);
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SectionHeader(text: l.settingsAppearanceSection),
+          Text(
+            l.settingsTimeFieldPaletteLabel,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            l.settingsTimeFieldPaletteHelp,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SegmentedButton<TimeFieldPalette>(
+            segments: [
+              ButtonSegment(
+                value: TimeFieldPalette.matchMode,
+                label: Text(l.settingsTimeFieldPaletteMatchMode),
+              ),
+              ButtonSegment(
+                value: TimeFieldPalette.neutral,
+                label: Text(l.settingsTimeFieldPaletteNeutral),
+              ),
+            ],
+            selected: {palette},
+            onSelectionChanged: (selection) => ref
+                .read(timeFieldPaletteProvider.notifier)
+                .set(selection.first),
           ),
         ],
       ),

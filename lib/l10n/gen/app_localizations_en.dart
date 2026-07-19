@@ -337,6 +337,22 @@ class AppLocalizationsEn extends AppLocalizations {
       'In-memory diagnostic log of recent app activity.';
 
   @override
+  String get settingsAppearanceSection => 'Appearance';
+
+  @override
+  String get settingsTimeFieldPaletteLabel => 'Schedule time boxes';
+
+  @override
+  String get settingsTimeFieldPaletteHelp =>
+      'How the Hour/Minute boxes on Edit Event are colored.';
+
+  @override
+  String get settingsTimeFieldPaletteMatchMode => 'Match mode';
+
+  @override
+  String get settingsTimeFieldPaletteNeutral => 'Neutral';
+
+  @override
   String get settingsAboutSection => 'About';
 
   @override

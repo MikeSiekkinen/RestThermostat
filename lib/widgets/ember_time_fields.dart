@@ -4,6 +4,35 @@ import 'package:flutter/services.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../theme/colors.dart';
 
+/// Resolved border/cursor colors for the time-entry boxes. Chosen upstream from
+/// the `TimeFieldPalette` setting so this widget stays provider-free.
+class TimeFieldColors {
+  final Color restingBorder;
+  final Color focusedBorder;
+  final Color cursor;
+
+  const TimeFieldColors({
+    required this.restingBorder,
+    required this.focusedBorder,
+    required this.cursor,
+  });
+
+  /// Mode-agnostic gray with a de-warmed cursor — the default treatment.
+  static const TimeFieldColors neutral = TimeFieldColors(
+    restingBorder: EmberColors.textTertiary,
+    focusedBorder: EmberColors.textPrimary,
+    cursor: EmberColors.textSecondary,
+  );
+
+  /// Boxes tinted by [accent] (an event's mode glow): a dimmed resting outline,
+  /// the full accent when focused, and an accent cursor.
+  factory TimeFieldColors.accented(Color accent) => TimeFieldColors(
+    restingBorder: accent.withValues(alpha: 0.55),
+    focusedBorder: accent,
+    cursor: accent,
+  );
+}
+
 /// Hour/minute text entry per `docs/DESIGN.md` §13.6.
 ///
 /// Two numeric text fields (hour, minute) honoring the device's 12/24-hour
@@ -21,12 +50,17 @@ class EmberTimeFields extends StatefulWidget {
   final bool use24Hour;
   final void Function(int? hour, int? minute) onChanged;
 
+  /// Border/cursor treatment for the two boxes. Defaults to the neutral gray
+  /// scheme; callers pass an accented set to tint the boxes by event mode.
+  final TimeFieldColors colors;
+
   const EmberTimeFields({
     super.key,
     required this.initialHour,
     required this.initialMinute,
     required this.onChanged,
     this.use24Hour = false,
+    this.colors = TimeFieldColors.neutral,
   });
 
   @override
@@ -230,6 +264,7 @@ class _EmberTimeFieldsState extends State<EmberTimeFields> {
                   LengthLimitingTextInputFormatter(2),
                 ],
                 textAlign: TextAlign.center,
+                cursorColor: widget.colors.cursor,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   color: EmberColors.textPrimary,
                 ),
@@ -240,11 +275,11 @@ class _EmberTimeFieldsState extends State<EmberTimeFields> {
                     horizontal: 8,
                   ),
                   enabledBorder: border(
-                    hasError ? errorColor : EmberColors.textTertiary,
+                    hasError ? errorColor : widget.colors.restingBorder,
                     hasError ? 2 : 1,
                   ),
                   focusedBorder: border(
-                    hasError ? errorColor : EmberColors.textPrimary,
+                    hasError ? errorColor : widget.colors.focusedBorder,
                     2,
                   ),
                 ),

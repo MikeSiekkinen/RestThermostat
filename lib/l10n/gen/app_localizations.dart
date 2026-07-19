@@ -682,6 +682,36 @@ abstract class AppLocalizations {
   /// **'In-memory diagnostic log of recent app activity.'**
   String get settingsViewLogsSubtitle;
 
+  /// Settings section header for appearance/theme options.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get settingsAppearanceSection;
+
+  /// Label for the time-box color-scheme selector in Settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule time boxes'**
+  String get settingsTimeFieldPaletteLabel;
+
+  /// Helper text under the time-box color-scheme selector.
+  ///
+  /// In en, this message translates to:
+  /// **'How the Hour/Minute boxes on Edit Event are colored.'**
+  String get settingsTimeFieldPaletteHelp;
+
+  /// Segmented-button option: tint the time boxes by the event's mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Match mode'**
+  String get settingsTimeFieldPaletteMatchMode;
+
+  /// Segmented-button option: keep the time boxes a mode-agnostic gray.
+  ///
+  /// In en, this message translates to:
+  /// **'Neutral'**
+  String get settingsTimeFieldPaletteNeutral;
+
   /// Settings section header for the About/version/credit block.
   ///
   /// In en, this message translates to:
