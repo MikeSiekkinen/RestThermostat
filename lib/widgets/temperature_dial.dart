@@ -116,6 +116,17 @@ class TemperatureDial extends StatefulWidget {
   /// temperature in the "Currently …" line. Null hides the humidity readout.
   final int? humidityPercent;
 
+  /// Called when the large target-temperature readout is tapped, to open the
+  /// keyboard-entry alternative to the ring. When `null`, the readout is not
+  /// tappable (read-only renderings, and the ring's tap-to-jump is unaffected).
+  /// Only the target number carries this — the "Currently …" line stays a
+  /// plain readout.
+  final VoidCallback? onTargetTextTap;
+
+  /// Accessible label for the [onTargetTextTap] button (e.g. "Set
+  /// temperature"). Required in practice whenever [onTargetTextTap] is set.
+  final String? targetTapSemanticLabel;
+
   const TemperatureDial({
     super.key,
     required this.currentTemperatureCelsius,
@@ -132,7 +143,13 @@ class TemperatureDial extends StatefulWidget {
     this.onIncrease,
     this.onDecrease,
     this.numeralStyle,
-  });
+    this.onTargetTextTap,
+    this.targetTapSemanticLabel,
+  }) : assert(
+         onTargetTextTap == null || targetTapSemanticLabel != null,
+         'targetTapSemanticLabel is required when onTargetTextTap is set, '
+         'so the tappable readout has an accessible name.',
+       );
 
   bool get _interactive =>
       onTargetDragUpdate != null ||
@@ -196,8 +213,9 @@ class TemperatureDial extends StatefulWidget {
     return celsius;
   }
 
-  /// Pick the mode-appropriate gradient stops for active ticks.
-  @visibleForTesting
+  /// Pick the mode-appropriate gradient stops for active ticks. Also reused by
+  /// [InteractiveTemperatureDial] to derive a mode-matched accent for the
+  /// keyboard-entry dialog.
   static List<Color> gradientColorsFor(DeviceMode mode) {
     switch (mode) {
       case DeviceMode.heat:
@@ -253,6 +271,30 @@ class _TemperatureDialState extends State<TemperatureDial> {
     // callbacks as a single user intent.
     widget.onTargetDragUpdate?.call(celsius);
     widget.onTargetTap?.call(celsius);
+  }
+
+  /// The large target readout. When [TemperatureDial.onTargetTextTap] is set
+  /// (interactive Home), wrap it as a tappable "set temperature" button: a
+  /// nested [GestureDetector] wins the tap over the ring's ancestor tap-to-jump
+  /// while pans still fall through to the ring, and the [Semantics] node gives
+  /// screen-reader users a typed-entry action alongside the adjustable slider.
+  /// With no callback it's a plain readout (read-only renderings).
+  Widget _buildTargetLabel(String targetLabel) {
+    final text = Text(
+      targetLabel,
+      style: EmberTypography.displayLarge().merge(widget.numeralStyle),
+    );
+    final onTap = widget.onTargetTextTap;
+    if (onTap == null) return text;
+    return Semantics(
+      button: true,
+      label: widget.targetTapSemanticLabel,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: text,
+      ),
+    );
   }
 
   void _maybeHaptic(int tick) {
@@ -372,12 +414,7 @@ class _TemperatureDialState extends State<TemperatureDial> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          targetLabel,
-                          style: EmberTypography.displayLarge().merge(
-                            widget.numeralStyle,
-                          ),
-                        ),
+                        _buildTargetLabel(targetLabel),
                         const SizedBox(height: 8),
                         Text(
                           currentLabel,

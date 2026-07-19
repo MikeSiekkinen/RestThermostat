@@ -36,6 +36,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'Active device changed — it wasn\'t in the latest device list.';
 
   @override
+  String get homeSetTemperature => 'Set temperature';
+
+  @override
+  String get homeTempEntryTitle => 'Set temperature';
+
+  @override
+  String get homeTempEntryConfirm => 'Set';
+
+  @override
+  String get homeTempEntryCancel => 'Cancel';
+
+  @override
   String get deviceUnnamedFallback => 'unnamed';
 
   @override
