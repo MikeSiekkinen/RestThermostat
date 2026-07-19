@@ -1387,12 +1387,6 @@ abstract class AppLocalizations {
   /// **'Set'**
   String get editEventTempEntryConfirm;
 
-  /// Section header above the current humidity + setpoint tiles on the Details tab.
-  ///
-  /// In en, this message translates to:
-  /// **'CURRENT'**
-  String get detailsSectionCurrent;
-
   /// Section header above the system-info rows on the Details tab.
   ///
   /// In en, this message translates to:
@@ -1404,6 +1398,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'HUMIDITY'**
   String get detailsHumidity;
+
+  /// Label for the current-temperature stat tile (abbreviated to fit three tiles across).
+  ///
+  /// In en, this message translates to:
+  /// **'TEMP'**
+  String get detailsTemperature;
 
   /// Label for the setpoint stat tile.
   ///

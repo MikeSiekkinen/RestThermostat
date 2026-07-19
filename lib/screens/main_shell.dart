@@ -83,6 +83,7 @@ class _MainShellState extends State<MainShell> {
             device: widget.device,
             lastSyncAt: widget.lastSyncAt,
             now: widget.now,
+            overrides: widget.overrides,
           ),
         ],
       ),

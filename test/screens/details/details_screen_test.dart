@@ -9,6 +9,7 @@ import 'package:rest_thermostat/models/auth_config.dart';
 import 'package:rest_thermostat/models/device.dart';
 import 'package:rest_thermostat/models/schedule.dart';
 import 'package:rest_thermostat/screens/details/details_screen.dart';
+import 'package:rest_thermostat/settings/numeral_font.dart';
 import 'package:rest_thermostat/state/providers.dart';
 
 Device _device({
@@ -18,6 +19,7 @@ Device _device({
   String unit = 'F',
   String firmware = '5.9.3-9',
   bool isAvailable = true,
+  String? mode,
   String? localIp,
   String? macAddress,
 }) {
@@ -32,6 +34,7 @@ Device _device({
   entry['temperature_scale'] = unit;
   entry['software_version'] = firmware;
   entry['is_available'] = isAvailable;
+  if (mode != null) entry['mode'] = mode;
   // The fixture predates upstream local_ip/mac_address support, so leaving
   // these unset exercises the pre-release-server (absent-keys) path.
   if (localIp != null) entry['local_ip'] = localIp;
@@ -45,6 +48,8 @@ Future<void> _pumpHost(
   Schedule? schedule,
   DateTime? lastSyncAt,
   DateTime? now,
+  Map<String, String> overrides = const {},
+  NumeralFont? numeralFont,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -53,6 +58,10 @@ Future<void> _pumpHost(
         // The Details screen reads `activeServerProvider` for the URL row;
         // give it a fixed value.
         activeServerProvider.overrideWith(_FakeServer.new),
+        if (numeralFont != null)
+          numeralFontProvider.overrideWith(
+            () => _FixedNumeralFont(numeralFont),
+          ),
       ],
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -62,6 +71,7 @@ Future<void> _pumpHost(
             device: device,
             lastSyncAt: lastSyncAt,
             now: () => now ?? DateTime(2026, 5, 13, 12, 0, 0),
+            overrides: overrides,
           ),
         ),
       ),
@@ -74,6 +84,15 @@ class _FakeServer extends ActiveServerNotifier {
   @override
   ActiveServer? build() =>
       (url: 'http://nest.home:8082', auth: const AuthNone());
+}
+
+/// Pins the numeral font without touching SharedPreferences (the real notifier
+/// hydrates asynchronously), so tests can assert the selected face deterministically.
+class _FixedNumeralFont extends NumeralFontNotifier {
+  _FixedNumeralFont(this._font);
+  final NumeralFont _font;
+  @override
+  NumeralFont build() => _font;
 }
 
 void main() {
@@ -233,6 +252,76 @@ void main() {
       );
       expect(find.text('LOCAL IP'), findsNothing);
       expect(find.text('MAC ADDRESS'), findsNothing);
+    });
+  });
+
+  group('DetailsScreen — current header (name + mode)', () {
+    testWidgets('shows device name and mode, first-letter-uppercase', (
+      tester,
+    ) async {
+      // Fixture device is named "Upstairs" with mode "cool".
+      await _pumpHost(tester, device: _device(target: 22.0));
+      expect(find.text('Upstairs · Cool'), findsOneWidget);
+      // The old static section label is gone.
+      expect(find.text('CURRENT'), findsNothing);
+    });
+
+    testWidgets('a rename override wins over the server name', (tester) async {
+      final device = _device(target: 22.0);
+      await _pumpHost(
+        tester,
+        device: device,
+        overrides: {device.serial: 'Living Room'},
+      );
+      expect(find.textContaining('Living Room · '), findsOneWidget);
+    });
+
+    testWidgets('heat-cool renders as Auto', (tester) async {
+      await _pumpHost(tester, device: _device(target: 22.0, mode: 'heat-cool'));
+      expect(find.text('Upstairs · Auto'), findsOneWidget);
+    });
+
+    testWidgets('off renders as Off', (tester) async {
+      await _pumpHost(tester, device: _device(target: 22.0, mode: 'off'));
+      expect(find.text('Upstairs · Off'), findsOneWidget);
+    });
+
+    testWidgets('emergency (no v1 pill) falls back to Heat', (tester) async {
+      await _pumpHost(tester, device: _device(target: 22.0, mode: 'emergency'));
+      expect(find.text('Upstairs · Heat'), findsOneWidget);
+    });
+  });
+
+  group('DetailsScreen — temperature tile', () {
+    testWidgets('renders a TEMP tile with the current temperature', (
+      tester,
+    ) async {
+      // Fixture current_temperature is 24.76999°C → 77°F.
+      await _pumpHost(tester, device: _device(target: 20.0, unit: 'F'));
+      expect(find.text('TEMP'), findsOneWidget);
+      expect(find.text('77°'), findsOneWidget);
+      // Setpoint (20°C = 68°F) stays distinct from the current temp.
+      expect(find.text('68°'), findsOneWidget);
+    });
+  });
+
+  group('DetailsScreen — tile styling', () {
+    testWidgets('footer sub-labels are not italic', (tester) async {
+      await _pumpHost(tester, device: _device(target: 22.0, humidity: 40));
+      final comfort = tester.widget<Text>(find.text('Comfortable'));
+      expect(comfort.style?.fontStyle, isNot(FontStyle.italic));
+      final source = tester.widget<Text>(find.text('Manual'));
+      expect(source.style?.fontStyle, isNot(FontStyle.italic));
+    });
+
+    testWidgets('tile values use the configured numeral font', (tester) async {
+      await _pumpHost(
+        tester,
+        device: _device(target: 22.0, humidity: 42),
+        numeralFont: NumeralFont.anton,
+      );
+      final humidity = tester.widget<Text>(find.text('42%'));
+      expect(humidity.style?.fontFamily, 'Anton');
     });
   });
 }
