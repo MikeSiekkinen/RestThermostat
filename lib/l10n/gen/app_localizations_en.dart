@@ -677,8 +677,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String scheduleHeaderTemps(String measured, String humidity, String target) {
-    return 'Now $measured · $humidity • Set $target';
+  String scheduleHeaderNow(String measured, String humidity) {
+    return 'Now $measured · $humidity';
+  }
+
+  @override
+  String scheduleHeaderSet(String target) {
+    return 'Set $target';
   }
 
   @override

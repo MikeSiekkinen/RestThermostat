@@ -199,23 +199,38 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
     );
     final target = _headerTarget(device);
     final humidity = '${device.humidity}%';
+    // The summary is split across two lines (Issue #115): "Now …" over "Set …",
+    // so the Auto low–high band never has to share a single line with the
+    // measured temp (it used to ellipsize). Both lines carry the same style.
+    final summaryStyle = Theme.of(
+      context,
+    ).textTheme.labelSmall?.copyWith(color: EmberColors.textSecondary);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
         const SizedBox(height: 2),
+        // The first visible line carries the full spelled-out semantics for the
+        // whole summary so screen readers announce one coherent sentence; the
+        // "Set" line below is excluded from semantics to avoid a double read.
         Text(
-          l.scheduleHeaderTemps(measured, humidity, target),
+          l.scheduleHeaderNow(measured, humidity),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: Theme.of(
-            context,
-          ).textTheme.labelSmall?.copyWith(color: EmberColors.textSecondary),
+          style: summaryStyle,
           semanticsLabel: l.scheduleHeaderTempsSemantics(
             measured,
             humidity,
             target,
+          ),
+        ),
+        ExcludeSemantics(
+          child: Text(
+            l.scheduleHeaderSet(target),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: summaryStyle,
           ),
         ),
       ],
@@ -254,9 +269,10 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        // Scale the two-line header's height with the text scale so a large
-        // accessibility font grows the toolbar instead of clipping it.
-        toolbarHeight: MediaQuery.textScalerOf(context).scale(72),
+        // Scale the three-line header's height (name + "Now …" + "Set …",
+        // Issue #115) with the text scale so a large accessibility font grows
+        // the toolbar instead of clipping it.
+        toolbarHeight: MediaQuery.textScalerOf(context).scale(90),
         title: _buildHeaderTitle(context),
         actions: [
           IconButton(

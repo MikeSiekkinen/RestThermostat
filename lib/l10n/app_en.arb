@@ -546,7 +546,8 @@
   "scheduleEventTypeRange": "RANGE",
   "scheduleEventSemanticLabel": "Event at {time}, {temp} {modeLower}, tap to edit.",
   "scheduleActiveEventSemanticLabel": "Currently active. {event}",
-  "scheduleHeaderTemps": "Now {measured} · {humidity} • Set {target}",
+  "scheduleHeaderNow": "Now {measured} · {humidity}",
+  "scheduleHeaderSet": "Set {target}",
   "scheduleHeaderTempsSemantics": "Now {measured}, humidity {humidity}, set to {target}",
   "@scheduleTitle": { "description": "AppBar title on the Schedule screen." },
   "@scheduleAddEventTooltip": { "description": "Tooltip on the AppBar + IconButton that opens the new-event editor." },
@@ -573,11 +574,16 @@
       "event": { "type": "String", "example": "Event at 2:25 PM, 72°F cool, tap to edit." }
     }
   },
-  "@scheduleHeaderTemps": {
-    "description": "Schedule header line showing the scheduled device's current measured temperature, relative humidity, and target temperature (Issue #100). The temperatures arrive pre-formatted with their unit; humidity arrives pre-formatted with a percent sign.",
+  "@scheduleHeaderNow": {
+    "description": "First line of the Schedule header (Issue #100/#115): the scheduled device's current measured temperature and relative humidity. The temperature arrives pre-formatted with its unit; humidity arrives pre-formatted with a percent sign. The 'Set' target is rendered on its own line below via scheduleHeaderSet.",
     "placeholders": {
       "measured": { "type": "String", "example": "77°F" },
-      "humidity": { "type": "String", "example": "45%" },
+      "humidity": { "type": "String", "example": "45%" }
+    }
+  },
+  "@scheduleHeaderSet": {
+    "description": "Second line of the Schedule header (Issue #115): the target setpoint, stacked below scheduleHeaderNow so the Auto low–high band never truncates. The target arrives pre-formatted with its unit (a single value, or a 'low – high' band in heat-cool).",
+    "placeholders": {
       "target": { "type": "String", "example": "72°F" }
     }
   },
