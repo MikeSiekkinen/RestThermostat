@@ -1,11 +1,18 @@
 version: 2
 updates:
   # Dart/Flutter dependencies (pubspec.yaml + pubspec.lock at repo root).
+  # Grouped into a single PR per interval: every pubspec.lock change requires a
+  # build-number bump (DESIGN §13.4), so N separate PRs would need N sequential
+  # bumps and rebases. One grouped PR needs exactly one +N commit.
   - package-ecosystem: "pub"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    groups:
+      pub-dependencies:
+        patterns:
+          - "*"
 
   # GitHub Actions used by workflows under .github/workflows/.
   # With actions pinned to commit SHAs, Dependabot is what keeps them current.
