@@ -10,6 +10,7 @@ import 'package:http_mock_adapter/http_mock_adapter.dart';
 import 'package:rest_thermostat/main.dart';
 import 'package:rest_thermostat/services/nle_api_client.dart';
 import 'package:rest_thermostat/state/providers.dart';
+import 'package:rest_thermostat/widgets/ember_background.dart';
 import 'package:rest_thermostat/widgets/temperature_dial.dart';
 
 import 'onboarding/fake_onboarding_store.dart';
@@ -65,5 +66,25 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Get started'), findsOneWidget);
+  });
+
+  testWidgets('onboarding renders on an opaque EmberBackground (Issue #70)', (
+    tester,
+  ) async {
+    // Regression: the ember theme makes every Scaffold transparent
+    // (scaffoldBackgroundColor + canvasColor = transparent), so each screen
+    // must sit on an EmberBackground that paints an opaque gradient. The
+    // onboarding flow was mounted without one, rendering see-through on iOS.
+    await tester.pumpWidget(_wrap(store: FakeOnboardingStore(), dio: Dio()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Get started'), findsOneWidget);
+    expect(
+      find.ancestor(
+        of: find.text('Get started'),
+        matching: find.byType(EmberBackground),
+      ),
+      findsOneWidget,
+    );
   });
 }

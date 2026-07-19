@@ -49,6 +49,28 @@ void main() {
     expect(restored, isTrue);
   });
 
+  testWidgets('auth type dropdown uses an opaque menu color (Issue #70)', (
+    tester,
+  ) async {
+    // Regression: the ember theme sets canvasColor: transparent, which the
+    // dropdown menu popup inherits — rendering the auth picker see-through.
+    // The picker must pin an opaque dropdownColor.
+    await tester.pumpWidget(
+      host(onConnect: (_, _) async => const ConnectSuccess()),
+    );
+    await tester.tap(find.text('Advanced'));
+    await tester.pumpAndSettle();
+
+    // DropdownButtonFormField forwards dropdownColor to an inner DropdownButton,
+    // which is where the menu popup color actually lives.
+    final dropdown = tester.widget(
+      find.byWidgetPredicate((w) => w is DropdownButton),
+    );
+    final color = (dropdown as dynamic).dropdownColor as Color?;
+    expect(color, isNotNull, reason: 'auth dropdown needs an opaque menu color');
+    expect(color!.a, greaterThan(0.99), reason: 'menu color must be opaque');
+  });
+
   testWidgets('rejects empty URL with inline validation', (tester) async {
     await tester.pumpWidget(
       host(onConnect: (_, _) async => const ConnectSuccess()),

@@ -172,6 +172,11 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                   children: [
                     DropdownButtonFormField<_AuthChoice>(
                       initialValue: _authChoice,
+                      // The ember theme's canvasColor is transparent, which the
+                      // dropdown menu popup would otherwise inherit and render
+                      // see-through (Issue #70). Pin the app's opaque menu
+                      // surface (matches device_picker_sheet).
+                      dropdownColor: const Color(0xFF111114),
                       decoration: InputDecoration(labelText: l.authChoiceLabel),
                       items: [
                         DropdownMenuItem(

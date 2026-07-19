@@ -70,6 +70,18 @@ class RestThermostatApp extends StatelessWidget {
       darkTheme: emberTheme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      // App-level opaque background behind the whole Navigator. The ember theme
+      // makes every Scaffold transparent (scaffoldBackgroundColor + canvasColor
+      // = transparent) so the mode-aware EmberBackground on Home can show
+      // through; but every OTHER route (onboarding, settings, logs, schedule)
+      // then had nothing opaque behind it and rendered see-through — most
+      // visibly on iOS, where route compositing exposes it (Issue #70). This
+      // neutral base guarantees an opaque backdrop for every route and during
+      // transitions; Home paints its own mode-colored EmberBackground on top.
+      builder: (context, child) => EmberBackground(
+        mode: DeviceMode.off,
+        child: child ?? const SizedBox.shrink(),
+      ),
       home: _Bootstrap(store: store ?? FlutterOnboardingStore()),
     );
   }
