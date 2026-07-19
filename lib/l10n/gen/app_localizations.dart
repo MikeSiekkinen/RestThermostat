@@ -712,6 +712,12 @@ abstract class AppLocalizations {
   /// **'Neutral'**
   String get settingsTimeFieldPaletteNeutral;
 
+  /// Loading caption shown on the Schedule tab after a mode switch, while waiting for the device to push the new mode's schedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Updating schedule for the new mode…'**
+  String get scheduleSyncing;
+
   /// Label for the numeral-font selector in Settings.
   ///
   /// In en, this message translates to:

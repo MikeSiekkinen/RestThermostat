@@ -353,6 +353,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsTimeFieldPaletteNeutral => 'Neutral';
 
   @override
+  String get scheduleSyncing => 'Updating schedule for the new mode…';
+
+  @override
   String get settingsNumeralFontLabel => 'Schedule numerals';
 
   @override

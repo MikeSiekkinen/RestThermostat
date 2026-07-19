@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -88,10 +90,76 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
   /// tint share one notion of "now"); user taps on the tab strip move it.
   late int _selectedDay;
 
+  /// While the loaded schedule is stale for the current mode (see
+  /// [_scheduleMatchesMode]), we refetch on this cadence until the device
+  /// pushes the new mode's bucket. One-shot, re-armed from `build` each time a
+  /// stale result comes back, and cancelled the moment a matching schedule
+  /// arrives — so it stops on its own.
+  Timer? _staleRetryTimer;
+  int _staleRetries = 0;
+  static const _maxStaleRetries = 24;
+  static const _staleRetryInterval = Duration(seconds: 8);
+
+  /// True from the moment the device's mode changes until a schedule that
+  /// matches the new mode arrives. Only while this is set do we hold the
+  /// spinner over a mode-mismatched (stale) schedule — outside the switch
+  /// window we trust the served data, so a steady-state screen never gates.
+  bool _awaitingModeSync = false;
+
   @override
   void initState() {
     super.initState();
     _selectedDay = weekdayToIndex(widget.now().weekday);
+  }
+
+  @override
+  void didUpdateWidget(ScheduleScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Mode was switched (e.g. on Home). Our cached schedule is now for the old
+    // mode; drop it so the sanity gate shows the spinner and refetch the new
+    // mode's schedule. `_maxStaleRetries` resets so the fresh switch gets a
+    // full retry budget.
+    if (oldWidget.device?.mode != widget.device?.mode) {
+      _awaitingModeSync = true;
+      _staleRetries = 0;
+      _cancelStaleRetry();
+      ref.invalidate(scheduleProvider(widget.serial));
+    }
+  }
+
+  @override
+  void dispose() {
+    _cancelStaleRetry();
+    super.dispose();
+  }
+
+  /// True when [schedule] is the schedule the device's current [expected] wire
+  /// mode should show. A stale bucket (the previous mode's, still served until
+  /// the device pushes) fails this: either its top-level `schedule_mode` or one
+  /// of its event `type`s will disagree. `null` expected (device off) never
+  /// gates — there's no mode to check against.
+  bool _scheduleMatchesMode(Schedule schedule, String? expected) {
+    if (expected == null) return true;
+    if (schedule.mode != null && schedule.mode != expected) return false;
+    for (final event in schedule.events.values.expand((day) => day)) {
+      if (event.type != expected) return false;
+    }
+    return true;
+  }
+
+  void _armStaleRetry() {
+    if (_staleRetryTimer != null || _staleRetries >= _maxStaleRetries) return;
+    _staleRetryTimer = Timer(_staleRetryInterval, () {
+      _staleRetryTimer = null;
+      if (!mounted) return;
+      _staleRetries++;
+      ref.invalidate(scheduleProvider(widget.serial));
+    });
+  }
+
+  void _cancelStaleRetry() {
+    _staleRetryTimer?.cancel();
+    _staleRetryTimer = null;
   }
 
   /// The scheduled event currently driving the setpoint, whose row gets the
@@ -207,6 +275,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
             Expanded(
               child: RefreshIndicator(
                 onRefresh: () async {
+                  _staleRetries = 0;
                   ref.invalidate(scheduleProvider(widget.serial));
                   // Wait for the next value so RefreshIndicator can dismiss
                   // its spinner only when fresh data has arrived.
@@ -214,15 +283,41 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                 },
                 child: asyncSchedule.when(
                   loading: () =>
-                      const Center(child: CircularProgressIndicator()),
+                      _ScheduleLoadingView(accent: _modeTint(widget.deviceMode)),
                   error: (e, _) => _ErrorView(error: e),
-                  data: (schedule) => _DayEventList(
-                    events: schedule?.eventsForDay(_selectedDay) ?? const [],
-                    temperatureScale: widget.temperatureScale,
-                    activeEvent: activeEvent,
-                    numeralStyle: ref.watch(numeralFontProvider).style,
-                    onTapEvent: (event) => _openEditEvent(schedule, event),
-                  ),
+                  data: (schedule) {
+                    // After a mode switch the server keeps serving the previous
+                    // mode's bucket until the device pushes the new one (NLE
+                    // per-mode-bucket model). While awaiting that sync, hold the
+                    // spinner over any schedule that doesn't match the new mode
+                    // and keep refetching — so the old mode's events never flash.
+                    final expectedWireMode =
+                        widget.device?.mode.scheduleWireMode;
+                    final matches =
+                        schedule == null ||
+                        expectedWireMode == null ||
+                        _scheduleMatchesMode(schedule, expectedWireMode);
+                    if (_awaitingModeSync) {
+                      if (matches || _staleRetries >= _maxStaleRetries) {
+                        // Synced (or gave up) — stop gating and render.
+                        _awaitingModeSync = false;
+                        _cancelStaleRetry();
+                      } else {
+                        _armStaleRetry();
+                        return _ScheduleLoadingView(
+                          accent: _modeTint(widget.deviceMode),
+                          message: AppLocalizations.of(context).scheduleSyncing,
+                        );
+                      }
+                    }
+                    return _DayEventList(
+                      events: schedule?.eventsForDay(_selectedDay) ?? const [],
+                      temperatureScale: widget.temperatureScale,
+                      activeEvent: activeEvent,
+                      numeralStyle: ref.watch(numeralFontProvider).style,
+                      onTapEvent: (event) => _openEditEvent(schedule, event),
+                    );
+                  },
                 ),
               ),
             ),
@@ -642,6 +737,53 @@ String _convertTemp(double? celsius, String scale) {
   }
   final f = celsius * 9 / 5 + 32;
   return '${f.round()}°F';
+}
+
+/// Centered, mode-tinted loading spinner for the schedule body — shown on the
+/// first load and while a post-mode-switch schedule is still syncing. Wrapped
+/// in a scrollable list so pull-to-refresh keeps working underneath it.
+class _ScheduleLoadingView extends StatelessWidget {
+  final Color accent;
+  final String? message;
+  const _ScheduleLoadingView({required this.accent, this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        const SizedBox(height: 88),
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 34,
+                height: 34,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  valueColor: AlwaysStoppedAnimation<Color>(accent),
+                ),
+              ),
+              if (message != null) ...[
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Text(
+                    message!,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: EmberColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _ErrorView extends StatelessWidget {
