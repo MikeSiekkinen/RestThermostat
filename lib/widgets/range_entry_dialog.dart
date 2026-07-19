@@ -115,22 +115,20 @@ class _RangeEntryDialogState extends State<RangeEntryDialog> {
         maxCelsius: widget.maxCelsius,
       );
 
-  /// True once both fields parse and the deadband is satisfied. The epsilon
+  /// True once both bounds parse and the deadband is satisfied. The epsilon
   /// absorbs the float error from the °F→°C round-trip so an exactly-on-the-gap
   /// pair still saves.
-  bool get _deadbandSatisfied {
-    final low = _parse(_heatController);
-    final high = _parse(_coolController);
-    if (low == null || high == null) return false;
-    return high - low >= widget.deadbandCelsius - 1e-6;
-  }
+  bool _deadbandSatisfied(double? low, double? high) =>
+      low != null &&
+      high != null &&
+      high - low >= widget.deadbandCelsius - 1e-6;
 
   void _confirm() {
     final low = _parse(_heatController);
     final high = _parse(_coolController);
     // The button is disabled unless this holds, but guard anyway so a stray
     // programmatic call can't pop an invalid pair.
-    if (low == null || high == null || !_deadbandSatisfied) return;
+    if (low == null || high == null || !_deadbandSatisfied(low, high)) return;
     Navigator.of(context).pop(RangeEntryResult(lowC: low, highC: high));
   }
 
@@ -166,12 +164,13 @@ class _RangeEntryDialogState extends State<RangeEntryDialog> {
 
   @override
   Widget build(BuildContext context) {
-    // Show the inline error only once both fields parse but the gap is too
-    // small — an incomplete field just leaves confirm disabled without shouting.
+    // Parse each field once; derive the gate and the error from those values.
     final low = _parse(_heatController);
     final high = _parse(_coolController);
-    final showError = low != null && high != null && !_deadbandSatisfied;
-    final canSave = _deadbandSatisfied;
+    final canSave = _deadbandSatisfied(low, high);
+    // Show the inline error only once both fields parse but the gap is too
+    // small — an incomplete field just leaves confirm disabled without shouting.
+    final showError = low != null && high != null && !canSave;
 
     return AlertDialog(
       title: Text(widget.title),

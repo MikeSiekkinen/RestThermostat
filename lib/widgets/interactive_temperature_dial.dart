@@ -495,11 +495,13 @@ class _InteractiveTemperatureDialState
         targetTapSemanticLabel: l.homeSetTemperature,
         rangeHeatLabel: l.homeDialHeatLabel,
         rangeCoolLabel: l.homeDialCoolLabel,
+        // Always announce humidity, matching the always-visible "· NN%" on the
+        // current-temp line (the single-marker dial does the same).
         rangeSemanticLabel: l.homeDialRangeSemantics(
           _fmt(low),
           _fmt(high),
           _fmt(device.currentTemperature),
-          device.humidity > 0 ? ' Humidity ${device.humidity} percent.' : '',
+          ' Humidity ${device.humidity} percent.',
         ),
       );
     }

@@ -832,6 +832,19 @@ class _DialBand {
   final double lowIndex;
   final double highIndex;
   const _DialBand(this.lowIndex, this.highIndex);
+
+  // Value equality so TweenAnimationBuilder only re-animates on a real setpoint
+  // change (it compares the target with `!=`); without this the identity
+  // compare restarts the tween on every unrelated rebuild, as Tween<double>
+  // (the single-marker path) never does.
+  @override
+  bool operator ==(Object other) =>
+      other is _DialBand &&
+      other.lowIndex == lowIndex &&
+      other.highIndex == highIndex;
+
+  @override
+  int get hashCode => Object.hash(lowIndex, highIndex);
 }
 
 class _DialBandTween extends Tween<_DialBand> {
