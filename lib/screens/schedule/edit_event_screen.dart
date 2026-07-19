@@ -287,14 +287,20 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
     );
   }
 
-  /// Section header above the time fields. In new-event mode the repeat-days
-  /// row below picks the day(s), so this stays the generic "Time". In edit
-  /// mode the event lives on one weekday, so we name it and, as a reminder,
-  /// append the next calendar date that weekday falls on — e.g. "Monday
-  /// (Jul 20)".
+  /// Section header above the time fields. Names the event's weekday and, as a
+  /// reminder, appends the next calendar date that weekday falls on — e.g.
+  /// "Monday (Jul 20)". Edit mode always resolves to the event's single day. New
+  /// mode uses the day(s) picked in the repeat row below: one selected → that
+  /// day's date; none or several → the generic "Time" (a single date would
+  /// misrepresent a multi-day repeat).
   String _timeSectionHeader(BuildContext context, AppLocalizations l) {
-    if (widget.isNew) return l.editEventTimeLabel;
-    final dayIndex = widget.existingEvent!.dayIndex;
+    final int dayIndex;
+    if (widget.isNew) {
+      if (_selectedDays.length != 1) return l.editEventTimeLabel;
+      dayIndex = _selectedDays.first;
+    } else {
+      dayIndex = widget.existingEvent!.dayIndex;
+    }
     final now = DateTime.now();
     // dayIndex is Mon=0..Sun=6; DateTime.weekday is Mon=1..Sun=7.
     final delta = (dayIndex + 1 - now.weekday) % 7; // Dart % is non-negative
