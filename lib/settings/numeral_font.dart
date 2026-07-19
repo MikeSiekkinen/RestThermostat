@@ -43,7 +43,9 @@ enum NumeralFont {
 /// widget tree. Hydrates asynchronously; until the stored value loads the
 /// default ([NumeralFont.oswald]) is used.
 class NumeralFontNotifier extends Notifier<NumeralFont> {
-  static const _key = 'numeralFont';
+  /// SharedPreferences key. Public so the config backup/restore layer
+  /// (`lib/services/backup/`) can read/write it without duplicating the string.
+  static const prefsKey = 'numeralFont';
 
   @override
   NumeralFont build() {
@@ -53,7 +55,7 @@ class NumeralFontNotifier extends Notifier<NumeralFont> {
 
   Future<void> _hydrate() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key);
+    final raw = prefs.getString(prefsKey);
     final restored = NumeralFont.values.where((f) => f.name == raw).firstOrNull;
     if (restored != null && restored != state) state = restored;
   }
@@ -61,7 +63,7 @@ class NumeralFontNotifier extends Notifier<NumeralFont> {
   Future<void> set(NumeralFont font) async {
     state = font;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, font.name);
+    await prefs.setString(prefsKey, font.name);
   }
 }
 

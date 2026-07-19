@@ -16,7 +16,9 @@ enum TimeFieldPalette { matchMode, neutral }
 /// value loads, the default ([TimeFieldPalette.matchMode]) is used — a brief
 /// cold-start flash that's acceptable for a dev-eval toggle.
 class TimeFieldPaletteNotifier extends Notifier<TimeFieldPalette> {
-  static const _key = 'timeFieldPalette';
+  /// SharedPreferences key. Public so the config backup/restore layer
+  /// (`lib/services/backup/`) can read/write it without duplicating the string.
+  static const prefsKey = 'timeFieldPalette';
 
   @override
   TimeFieldPalette build() {
@@ -26,7 +28,7 @@ class TimeFieldPaletteNotifier extends Notifier<TimeFieldPalette> {
 
   Future<void> _hydrate() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key);
+    final raw = prefs.getString(prefsKey);
     final restored = TimeFieldPalette.values
         .where((p) => p.name == raw)
         .firstOrNull;
@@ -36,7 +38,7 @@ class TimeFieldPaletteNotifier extends Notifier<TimeFieldPalette> {
   Future<void> set(TimeFieldPalette palette) async {
     state = palette;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, palette.name);
+    await prefs.setString(prefsKey, palette.name);
   }
 }
 
