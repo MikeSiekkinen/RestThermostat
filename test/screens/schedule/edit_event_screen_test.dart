@@ -1020,5 +1020,50 @@ void main() {
         findsOneWidget,
       );
     });
+
+    testWidgets('°F input converts back to Celsius on commit', (tester) async {
+      final h = editHarness(temperatureScale: 'F');
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      // The 20°C seed displays as 68°F; enter 70°F.
+      expect(
+        find.descendant(of: find.byKey(tempValue), matching: find.text('68°F')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(tempValue));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(entryField), '70');
+      await tester.tap(find.byKey(confirm));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // 70°F round-trips through Celsius storage back to a 70°F display.
+      expect(
+        find.descendant(of: find.byKey(tempValue), matching: find.text('70°F')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('out-of-range input clamps to the max setpoint', (
+      tester,
+    ) async {
+      final h = editHarness();
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      // Enter well above the 32°C ceiling; commit should clamp it.
+      await tester.tap(find.byKey(tempValue));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(entryField), '99');
+      await tester.tap(find.byKey(confirm));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.descendant(of: find.byKey(tempValue), matching: find.text('32°C')),
+        findsOneWidget,
+      );
+    });
   });
 }
