@@ -234,87 +234,83 @@ void main() {
     await _disposeTree(tester);
   });
 
-  testWidgets(
-    'selected day is shared across devices — carries over on swipe',
-    (tester) async {
-      final dio = Dio(BaseOptions(baseUrl: 'http://test.local:8082'));
-      final adapter = DioAdapter(dio: dio);
-      // Same schedule for both devices; Thursday (index 3) is the only day
-      // that renders RANGE + COOL, so it's an unambiguous "which day" probe.
-      for (final serial in const ['A', 'B']) {
-        adapter.onGet(
-          '/api/schedule',
-          (s) => s.reply(200, _scheduleFixture()),
-          queryParameters: {'serial': serial},
-        );
-      }
-
-      // Pin "today" to a Monday so the default selected day shows HEAT (not
-      // RANGE/COOL) — the Thursday switch is then observable.
-      DateTime monday() => DateTime(2024, 1, 1);
-
-      // A single ScheduleScreen whose serial flips — mimics the PageView
-      // handing the active tab to a different device on swipe. The per-serial
-      // ValueKey (as in the real PageView) destroys and recreates the screen's
-      // State on the flip, so if the selected day survives it can only be
-      // because it lives in the shared scheduleSelectedDayProvider, not in
-      // per-instance state.
-      final serial = ValueNotifier<String>('A');
-      final widget = ProviderScope(
-        overrides: [
-          clientFactoryProvider.overrideWithValue(
-            (url, auth) => NleApiClient(dio: dio),
-          ),
-          activeServerProvider.overrideWith(
-            () => _SeedActiveServer((
-              url: 'http://test.local:8082',
-              auth: const AuthNone(),
-            )),
-          ),
-        ],
-        child: MaterialApp(
-          locale: const Locale('en', 'GB'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: const [Locale('en', 'GB'), Locale('en', 'US')],
-          home: ValueListenableBuilder<String>(
-            valueListenable: serial,
-            builder: (_, s, _) => ScheduleScreen(
-              key: ValueKey(s),
-              serial: s,
-              now: monday,
-            ),
-          ),
-        ),
+  testWidgets('selected day is shared across devices — carries over on swipe', (
+    tester,
+  ) async {
+    final dio = Dio(BaseOptions(baseUrl: 'http://test.local:8082'));
+    final adapter = DioAdapter(dio: dio);
+    // Same schedule for both devices; Thursday (index 3) is the only day
+    // that renders RANGE + COOL, so it's an unambiguous "which day" probe.
+    for (final serial in const ['A', 'B']) {
+      adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(200, _scheduleFixture()),
+        queryParameters: {'serial': serial},
       );
+    }
 
-      await tester.pumpWidget(widget);
-      await tester.pumpAndSettle();
+    // Pin "today" to a Monday so the default selected day shows HEAT (not
+    // RANGE/COOL) — the Thursday switch is then observable.
+    DateTime monday() => DateTime(2024, 1, 1);
 
-      // Device A starts on today (Monday) — HEAT, no RANGE.
-      expect(find.text('RANGE'), findsNothing);
-
-      // Pick Thursday (index 3) on device A → RANGE + COOL.
-      await tester.tap(
-        find.ancestor(
-          of: find.byKey(const ValueKey('day-underline-3')),
-          matching: find.byType(InkWell),
+    // A single ScheduleScreen whose serial flips — mimics the PageView
+    // handing the active tab to a different device on swipe. The per-serial
+    // ValueKey (as in the real PageView) destroys and recreates the screen's
+    // State on the flip, so if the selected day survives it can only be
+    // because it lives in the shared scheduleSelectedDayProvider, not in
+    // per-instance state.
+    final serial = ValueNotifier<String>('A');
+    final widget = ProviderScope(
+      overrides: [
+        clientFactoryProvider.overrideWithValue(
+          (url, auth) => NleApiClient(dio: dio),
         ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('RANGE'), findsOneWidget);
-      expect(find.text('COOL'), findsOneWidget);
+        activeServerProvider.overrideWith(
+          () => _SeedActiveServer((
+            url: 'http://test.local:8082',
+            auth: const AuthNone(),
+          )),
+        ),
+      ],
+      child: MaterialApp(
+        locale: const Locale('en', 'GB'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: const [Locale('en', 'GB'), Locale('en', 'US')],
+        home: ValueListenableBuilder<String>(
+          valueListenable: serial,
+          builder: (_, s, _) =>
+              ScheduleScreen(key: ValueKey(s), serial: s, now: monday),
+        ),
+      ),
+    );
 
-      // "Swipe" to device B.
-      serial.value = 'B';
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(widget);
+    await tester.pumpAndSettle();
 
-      // Carry-over: device B opens on Thursday too, not back on today/Monday.
-      expect(find.text('RANGE'), findsOneWidget);
-      expect(find.text('COOL'), findsOneWidget);
+    // Device A starts on today (Monday) — HEAT, no RANGE.
+    expect(find.text('RANGE'), findsNothing);
 
-      await _disposeTree(tester);
-    },
-  );
+    // Pick Thursday (index 3) on device A → RANGE + COOL.
+    await tester.tap(
+      find.ancestor(
+        of: find.byKey(const ValueKey('day-underline-3')),
+        matching: find.byType(InkWell),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('RANGE'), findsOneWidget);
+    expect(find.text('COOL'), findsOneWidget);
+
+    // "Swipe" to device B.
+    serial.value = 'B';
+    await tester.pumpAndSettle();
+
+    // Carry-over: device B opens on Thursday too, not back on today/Monday.
+    expect(find.text('RANGE'), findsOneWidget);
+    expect(find.text('COOL'), findsOneWidget);
+
+    await _disposeTree(tester);
+  });
 
   testWidgets('renders 24h time when device locale uses 24h format', (
     tester,

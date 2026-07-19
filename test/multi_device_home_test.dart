@@ -141,7 +141,11 @@ void main() {
 
     // Swipe left on the Home PageView (first in tree order) → advance to
     // device index 1.
-    await tester.fling(find.byType(PageView).first, const Offset(-400, 0), 1200);
+    await tester.fling(
+      find.byType(PageView).first,
+      const Offset(-400, 0),
+      1200,
+    );
     await _pumpUntilStable(tester);
 
     expect(store.activeSerial, '02BB02BD041404KL');
@@ -180,7 +184,11 @@ void main() {
       expect(topLevel().mode, DeviceMode.cool);
 
       // Swipe to advance to the heat-mode device (Home PageView is first).
-      await tester.fling(find.byType(PageView).first, const Offset(-400, 0), 1200);
+      await tester.fling(
+        find.byType(PageView).first,
+        const Offset(-400, 0),
+        1200,
+      );
       await _pumpUntilStable(tester);
 
       expect(topLevel().mode, DeviceMode.heat);
