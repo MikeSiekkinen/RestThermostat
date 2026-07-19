@@ -287,12 +287,17 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
     );
   }
 
-  /// Section header above the time fields. Names each day and, as a reminder,
-  /// appends the next calendar date it falls on — e.g. "Monday (Jul 20)". Edit
-  /// mode resolves to the event's single day. New mode uses the day(s) picked in
-  /// the repeat row below: one → that day; several → the span from the soonest
-  /// to the furthest upcoming day, e.g. "Monday (Jul 20) – Friday (Jul 24)";
-  /// none → the generic "Time".
+  /// Section header above the time fields, as a reminder of when the event
+  /// runs. Edit mode resolves to the event's single day; new mode uses the
+  /// day(s) picked in the repeat row below.
+  ///
+  /// - none selected → the generic "Time".
+  /// - one day → the compact next-occurrence form, e.g. "Monday (Jul 20)".
+  /// - several days (an arbitrary set, not a range) → each day on its own line
+  ///   with its last and next occurrence, e.g. "Monday (Jul 13, Jul 20)",
+  ///   sorted chronologically by next occurrence.
+  ///
+  /// A day that lands on today renders "(Jul 18 today)" instead of dates.
   String _timeSectionHeader(BuildContext context, AppLocalizations l) {
     final Iterable<int> days = widget.isNew
         ? _selectedDays
@@ -301,21 +306,29 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
+    final ml = MaterialLocalizations.of(context);
     // dayIndex is Mon=0..Sun=6; DateTime.weekday is Mon=1..Sun=7. Dart's % is
     // non-negative, so this is the days until the next occurrence (0 = today).
     DateTime nextFor(int dayIndex) =>
         today.add(Duration(days: (dayIndex + 1 - now.weekday) % 7));
-    final ml = MaterialLocalizations.of(context);
-    String label(int dayIndex) =>
-        '${fullDayNames[dayIndex]} (${ml.formatShortMonthDay(nextFor(dayIndex))})';
+    String fmt(DateTime d) => ml.formatShortMonthDay(d);
 
-    // Sort by the actual next date so the range reads chronologically, not by
-    // Mon–Sun index (a lower index isn't necessarily sooner from today).
     final sorted = days.toList()
       ..sort((a, b) => nextFor(a).compareTo(nextFor(b)));
-    return sorted.length == 1
-        ? label(sorted.first)
-        : '${label(sorted.first)} – ${label(sorted.last)}';
+
+    if (sorted.length == 1) {
+      final next = nextFor(sorted.first);
+      final paren = next == today ? '${fmt(today)} today' : fmt(next);
+      return '${fullDayNames[sorted.first]} ($paren)';
+    }
+
+    return sorted.map((dayIndex) {
+      final next = nextFor(dayIndex);
+      final paren = next == today
+          ? '${fmt(today)} today'
+          : '${fmt(next.subtract(const Duration(days: 7)))}, ${fmt(next)}';
+      return '${fullDayNames[dayIndex]} ($paren)';
+    }).join('\n');
   }
 
   Future<void> _save() async {
