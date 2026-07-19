@@ -166,6 +166,53 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get homeTempEntryCancel;
 
+  /// Label above the low (heat) setpoint in the Home dial's stacked heat-cool readout (Issue #116).
+  ///
+  /// In en, this message translates to:
+  /// **'HEAT'**
+  String get homeDialHeatLabel;
+
+  /// Label below the high (cool) setpoint in the Home dial's stacked heat-cool readout (Issue #116).
+  ///
+  /// In en, this message translates to:
+  /// **'COOL'**
+  String get homeDialCoolLabel;
+
+  /// Screen-reader announcement for the Home dial in heat-cool mode (Issue #116). Temperatures arrive pre-formatted with their unit; humidity is a full pre-formatted clause or empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Temperature range: heat set to {low}, cool set to {high}. Current temperature {current}.{humidity} Tap to type a new range.'**
+  String homeDialRangeSemantics(
+    String low,
+    String high,
+    String current,
+    String humidity,
+  );
+
+  /// Title of the Home dial's dual-field dialog for typing the heat and cool setpoints (Issue #116).
+  ///
+  /// In en, this message translates to:
+  /// **'Set temperature range'**
+  String get homeRangeEntryTitle;
+
+  /// Field label for the low (heat) setpoint input in the Home dial's range-entry dialog (Issue #116).
+  ///
+  /// In en, this message translates to:
+  /// **'Heat'**
+  String get homeRangeEntryHeatField;
+
+  /// Field label for the high (cool) setpoint input in the Home dial's range-entry dialog (Issue #116).
+  ///
+  /// In en, this message translates to:
+  /// **'Cool'**
+  String get homeRangeEntryCoolField;
+
+  /// Inline validation error in the range-entry dialog (Issue #116) shown until the heat and cool setpoints are at least the deadband apart. The gap arrives pre-formatted in the display unit.
+  ///
+  /// In en, this message translates to:
+  /// **'Heat must be at least {gap} below cool.'**
+  String homeRangeEntryDeadbandError(String gap);
+
   /// Display name used when a device's server-side name is null or empty AND no local override exists.
   ///
   /// In en, this message translates to:

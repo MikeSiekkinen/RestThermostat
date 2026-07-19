@@ -440,6 +440,12 @@ A circular ring composed of 60–80 discrete tick marks, progressively filled to
 
 Ticks light up sequentially on temperature changes for a satisfying animation.
 
+**Heat-cool dual band (Issue #116, ADR-0002).** In `heat-cool` mode with both bounds reported, the dial shows **two** setpoints instead of one:
+
+- **Two markers** — a HEAT (low) and a COOL (high) handle — with the active fill painted **only between them** (not from tick 0), as a **warm→cool gradient** (`heatGradient`-warm at HEAT → `coolGradient`-cool at COOL). Ticks outside the band are inactive.
+- **Stacked center readout:** `HEAT` label / value / divider / value / `COOL` label, sized so the pair is ≈ the single-setpoint number's height. The whole stack is one tap target opening the dual-field range dialog (§11.3).
+- **Fallback:** a heat-cool device that reports a **null** bound falls back to the single-marker rendering (the neutral grey gradient of §10.3), i.e. today's behavior.
+
 ### 10.4 App icon — concentric arcs
 
 Abstract geometric mark: two or three concentric arc segments forming a partial circle, in Ember-orange-to-blue gradient on dark. Recognizable as "thermostat-ish" without referencing Nest. Generated for both platforms via `flutter_launcher_icons`.
@@ -480,6 +486,13 @@ Bundle .ttf files for: Fraunces (300, 400, 500), Geist (400, 500, 700), JetBrain
 - **Tick-snap haptic:** `HapticFeedback.selectionClick()` per tick crossed, throttled to ≤30/sec.
 - **POST debouncing:** issue `set_temperature` only on `onPanEnd` (and at least 250ms of stillness). Optimistic update during drag.
 - **Range:** clamp to NLE's 4.5°C–32°C (40°F–90°F). Above/below: ticks light but value stays clamped with a subtle resistance animation.
+
+**Heat-cool dual band (Issue #116, ADR-0002).** The single-target gesture above generalizes to two markers:
+
+- **Grab + push:** the gesture grabs whichever marker is **nearest** the touch (tie → HEAT), resolved once at `onPanStart` and held for the drag. Moving one marker into the **deadband** (a single app-wide **1.5°C ≈ 3°F** constant, `TemperatureDial.deadbandCelsius`, shared with the Schedule Auto editor #102) **shoves the other** to preserve the gap; when the shoved marker hits a 4.5/32°C rail the dragged one stops too. One drag may therefore write **both** bounds. Per-tick selection-click haptics fire on the moving marker.
+- **Explicit write:** heat-cool commits POST the explicit `{"low": l, "high": h}` the user set — the pre-#116 nearest-bound heuristic is dropped for the dual path (it survives only for the null-bound fallback).
+- **Paired optimistic + reconciliation:** the optimistic override is a `(low, high)` pair; the +1/+3/+7s confirm-watch reconciles **both** bounds (±½-tick each) against the snapshot's `targetTemperatureLow`/`targetTemperatureHigh`, and a POST failure reverts **both**. Both markers tween together (one `_DialBand` tween) so reduced-motion and reconciliation move them in lockstep.
+- **Keyboard entry:** tapping the stacked readout opens a **dual-field `RangeEntryDialog`** (Heat + Cool, integer, unit-aware — reuses `TempEntryDialog`'s parse/clamp/°C-°F helpers). The deadband is enforced **in the form**: Set is disabled with an inline error until `heat + 1.5°C ≤ cool`; both values commit together. Single-setpoint modes keep the single `TempEntryDialog`.
 
 ### 11.4 Animation specs
 

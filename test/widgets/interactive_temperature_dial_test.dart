@@ -44,6 +44,10 @@ class _StubSource implements DeviceStateSource {
   @override
   void refresh() => refreshCount++;
 
+  /// Push a reconciliation snapshot through the devices stream (Issue #116
+  /// dual confirm-watch tests).
+  void emit(DevicesSnapshot snapshot) => _controller.add(snapshot);
+
   @override
   bool get isStale => false;
 
@@ -181,19 +185,28 @@ void main() {
     );
   });
 
-  group('InteractiveTemperatureDial — heat-cool mode', () {
-    testWidgets('writes {high, low} with closer bound replaced', (
+  group('InteractiveTemperatureDial — heat-cool dual band (Issue #116)', () {
+    const heatField = ValueKey('range-entry-heat-field');
+    const coolField = ValueKey('range-entry-cool-field');
+    const rangeConfirm = ValueKey('range-entry-confirm');
+
+    Device dual() =>
+        _device(mode: DeviceMode.heatCool, target: 21.0, low: 18.0, high: 24.0);
+
+    testWidgets('renders the stacked HEAT/COOL readout with both setpoints', (
       tester,
     ) async {
-      final result = await _pumpHost(
-        tester,
-        device: _device(
-          mode: DeviceMode.heatCool,
-          target: 21.0,
-          high: 24.0,
-          low: 18.0,
-        ),
-      );
+      await _pumpHost(tester, device: dual());
+
+      expect(find.text('HEAT'), findsOneWidget);
+      expect(find.text('COOL'), findsOneWidget);
+      expect(find.text('18°'), findsOneWidget);
+      expect(find.text('24°'), findsOneWidget);
+    });
+
+    testWidgets('a ring drag POSTs the explicit {low, high} pair with the '
+        'deadband preserved (no nearest-bound heuristic)', (tester) async {
+      final result = await _pumpHost(tester, device: dual());
       Object? capturedValue;
       result.dio.interceptors.add(
         InterceptorsWrapper(
@@ -221,7 +234,128 @@ void main() {
 
       expect(capturedValue, isA<Map<String, dynamic>>());
       final m = capturedValue! as Map<String, dynamic>;
-      expect(m.keys, containsAll(['high', 'low']));
+      expect(m.keys, containsAll(['low', 'high']));
+      final low = (m['low'] as num).toDouble();
+      final high = (m['high'] as num).toDouble();
+      // The explicit pair always honors the 1.5°C deadband.
+      expect(high - low, greaterThanOrEqualTo(1.5 - 1e-9));
+    });
+
+    testWidgets('tapping the readout opens the dual-field range dialog', (
+      tester,
+    ) async {
+      final result = await _pumpHost(tester, device: dual());
+      _captureSetTemperature(result.dio);
+
+      expect(find.byKey(heatField), findsNothing);
+      await tester.tap(find.bySemanticsLabel(RegExp('Set temperature')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(heatField), findsOneWidget);
+      expect(find.byKey(coolField), findsOneWidget);
+    });
+
+    testWidgets('the range dialog disables Set with an inline error until the '
+        'deadband is satisfied', (tester) async {
+      final result = await _pumpHost(tester, device: dual());
+      final captured = _captureSetTemperature(result.dio);
+
+      await tester.tap(find.bySemanticsLabel(RegExp('Set temperature')));
+      await tester.pumpAndSettle();
+
+      // Shrink the gap below the deadband: heat 18°C, cool 19°C (1°C < 1.5°C).
+      await tester.enterText(find.byKey(coolField), '19');
+      await tester.pump();
+
+      expect(
+        tester.widget<TextButton>(find.byKey(rangeConfirm)).onPressed,
+        isNull,
+        reason: 'Set is disabled while the deadband is violated',
+      );
+      expect(find.textContaining('at least'), findsOneWidget);
+
+      // Widen the gap back out: cool 24°C → Set re-enables, error clears.
+      await tester.enterText(find.byKey(coolField), '24');
+      await tester.pump();
+
+      expect(
+        tester.widget<TextButton>(find.byKey(rangeConfirm)).onPressed,
+        isNotNull,
+      );
+      expect(find.textContaining('at least'), findsNothing);
+
+      await tester.tap(find.byKey(rangeConfirm));
+      await tester.pumpAndSettle();
+
+      // Both bounds commit together as an explicit pair.
+      expect(captured, hasLength(1));
+      final m = captured.single! as Map<String, dynamic>;
+      expect((m['low'] as num).toDouble(), closeTo(18.0, 0.01));
+      expect((m['high'] as num).toDouble(), closeTo(24.0, 0.01));
+    });
+
+    testWidgets('confirm-watch clears the optimistic band when both bounds '
+        'reconcile against the snapshot', (tester) async {
+      final result = await _pumpHost(tester, device: dual());
+      _captureSetTemperature(result.dio);
+
+      // Commit a new band via the dialog: heat 20°C, cool 26°C.
+      await tester.tap(find.bySemanticsLabel(RegExp('Set temperature')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(heatField), '20');
+      await tester.enterText(find.byKey(coolField), '26');
+      await tester.tap(find.byKey(rangeConfirm));
+      await tester.pumpAndSettle();
+
+      // Optimistic band is showing the typed values.
+      expect(find.text('20°'), findsOneWidget);
+      expect(find.text('26°'), findsOneWidget);
+
+      // A snapshot delivering the reconciled bounds releases the override; the
+      // readout returns to the (static) device prop, proving it cleared.
+      result.source.emit(
+        DevicesSnapshot(
+          devices: [
+            _device(
+              mode: DeviceMode.heatCool,
+              target: 21.0,
+              low: 20.0,
+              high: 26.0,
+            ),
+          ],
+          fetchedAt: DateTime.now(),
+          fromCache: false,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('18°'), findsOneWidget); // back to the device prop
+      expect(find.text('20°'), findsNothing); // optimistic override released
+    });
+
+    testWidgets('a failed range POST reverts both optimistic bounds', (
+      tester,
+    ) async {
+      final result = await _pumpHost(tester, device: dual());
+      // A 400 is non-transient, so the write fails fast (no 2s retry delay).
+      DioAdapter(dio: result.dio).onPost(
+        '/command',
+        (server) => server.reply(400, {'error': 'nope'}),
+        data: Matchers.any,
+      );
+
+      await tester.tap(find.bySemanticsLabel(RegExp('Set temperature')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(heatField), '20');
+      await tester.enterText(find.byKey(coolField), '26');
+      await tester.tap(find.byKey(rangeConfirm));
+      await tester.pumpAndSettle();
+
+      // Failure reverts to the original band; a retry snackbar is shown.
+      expect(find.text('18°'), findsOneWidget);
+      expect(find.text('24°'), findsOneWidget);
+      expect(find.text('20°'), findsNothing);
+      expect(find.byType(SnackBar), findsOneWidget);
     });
   });
 
