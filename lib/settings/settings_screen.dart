@@ -11,6 +11,7 @@ import '../services/nle_error_messages.dart';
 import '../services/onboarding_store.dart';
 import '../services/url_normalizer.dart';
 import '../state/providers.dart';
+import '../theme/colors.dart';
 import 'backup_flow.dart';
 import 'numeral_font.dart';
 import 'time_field_palette.dart';
@@ -416,6 +417,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             children: [
               DropdownButtonFormField<_AuthChoice>(
                 initialValue: _authChoice,
+                // Opaque menu surface — without it the popup inherits the
+                // theme's transparent canvasColor and renders see-through
+                // (Issue #70), same as the onboarding auth picker.
+                dropdownColor: EmberColors.menuSurface,
                 decoration: InputDecoration(labelText: l.authChoiceLabel),
                 items: [
                   DropdownMenuItem(
@@ -755,6 +760,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           DropdownButton<NumeralFont>(
             key: const ValueKey('numeral-font-dropdown'),
             isExpanded: true,
+            // Opaque menu surface — see the auth dropdown above (Issue #70).
+            dropdownColor: EmberColors.menuSurface,
             value: numeral,
             items: [
               for (final font in NumeralFont.values)

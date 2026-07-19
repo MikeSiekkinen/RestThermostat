@@ -10,6 +10,7 @@ import 'package:http_mock_adapter/http_mock_adapter.dart';
 import 'package:rest_thermostat/main.dart';
 import 'package:rest_thermostat/services/nle_api_client.dart';
 import 'package:rest_thermostat/state/providers.dart';
+import 'package:rest_thermostat/widgets/ember_background.dart';
 import 'package:rest_thermostat/widgets/temperature_dial.dart';
 
 import 'onboarding/fake_onboarding_store.dart';
@@ -65,5 +66,34 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Get started'), findsOneWidget);
+  });
+
+  testWidgets('onboarding renders on an opaque EmberBackground (Issue #70)', (
+    tester,
+  ) async {
+    // Regression: the ember theme makes every Scaffold transparent
+    // (scaffoldBackgroundColor + canvasColor = transparent), so each screen
+    // must sit on an EmberBackground that paints an opaque gradient. The fix is
+    // the app-level MaterialApp.builder base (see lib/main.dart); onboarding
+    // had no opaque backdrop and rendered see-through on iOS. Assert both that
+    // the backdrop exists AND that its gradient is actually opaque — a
+    // present-but-transparent EmberBackground would still be see-through.
+    await tester.pumpWidget(_wrap(store: FakeOnboardingStore(), dio: Dio()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Get started'), findsOneWidget);
+    final backdrop = find.ancestor(
+      of: find.text('Get started'),
+      matching: find.byType(EmberBackground),
+    );
+    expect(backdrop, findsOneWidget);
+    final colors = EmberBackground.backgroundColorsFor(
+      tester.widget<EmberBackground>(backdrop).mode,
+    );
+    expect(
+      colors.every((c) => c.a > 0.99),
+      isTrue,
+      reason: 'onboarding backdrop gradient must be fully opaque',
+    );
   });
 }

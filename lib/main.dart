@@ -70,6 +70,18 @@ class RestThermostatApp extends StatelessWidget {
       darkTheme: emberTheme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      // App-level opaque background behind the whole Navigator. The ember theme
+      // makes every Scaffold transparent (scaffoldBackgroundColor + canvasColor
+      // = transparent) so the mode-aware EmberBackground on Home can show
+      // through; but every OTHER route (onboarding, settings, logs, schedule)
+      // then had nothing opaque behind it and rendered see-through — most
+      // visibly on iOS, where route compositing exposes it (Issue #70). This
+      // neutral base guarantees an opaque backdrop for every route and during
+      // transitions; Home paints its own mode-colored EmberBackground on top.
+      builder: (context, child) => EmberBackground(
+        mode: DeviceMode.off,
+        child: child ?? const SizedBox.shrink(),
+      ),
       home: _Bootstrap(store: store ?? FlutterOnboardingStore()),
     );
   }
@@ -127,12 +139,12 @@ class _BootstrapState extends ConsumerState<_Bootstrap> {
       future: _configFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const EmberBackground(
-            mode: DeviceMode.off,
-            child: Scaffold(
-              backgroundColor: Colors.transparent,
-              body: Center(child: CircularProgressIndicator()),
-            ),
+          // No EmberBackground here — the app-level MaterialApp.builder base
+          // (mode: off) already paints the identical neutral backdrop behind
+          // this transparent Scaffold.
+          return const Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Center(child: CircularProgressIndicator()),
           );
         }
         final config = snapshot.data!;

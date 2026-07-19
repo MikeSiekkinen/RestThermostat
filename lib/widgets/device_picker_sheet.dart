@@ -35,7 +35,7 @@ class DevicePickerSheet extends StatelessWidget {
   }) {
     return showModalBottomSheet<String>(
       context: context,
-      backgroundColor: const Color(0xFF111114),
+      backgroundColor: EmberColors.menuSurface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),

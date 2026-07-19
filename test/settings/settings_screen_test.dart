@@ -503,6 +503,40 @@ void main() {
     await _disposeTree(tester);
   });
 
+  testWidgets('settings dropdowns use an opaque menu color (Issue #70)', (
+    tester,
+  ) async {
+    final h = _setup(
+      initialUrl: 'http://saved.local:8082',
+      initiallyExpandAuth: true,
+    );
+    h.adapter.onGet('/api/devices', (s) => s.reply(200, _devicesOne()));
+
+    await tester.pumpWidget(h.widget);
+    await _settleAndUnmount(tester);
+
+    // Both the auth picker and the numeral-font picker must pin an opaque
+    // dropdownColor — otherwise the popup inherits the theme's transparent
+    // canvasColor and renders see-through (Issue #70). DropdownButtonFormField
+    // forwards dropdownColor to an inner DropdownButton, so checking every
+    // DropdownButton in the tree covers both pickers.
+    final dropdowns = tester.widgetList(
+      find.byWidgetPredicate((w) => w is DropdownButton),
+    );
+    expect(
+      dropdowns.length,
+      greaterThanOrEqualTo(2),
+      reason: 'expected the auth + numeral-font dropdowns to be built',
+    );
+    for (final d in dropdowns) {
+      final color = (d as dynamic).dropdownColor as Color?;
+      expect(color, isNotNull, reason: 'each dropdown needs an opaque menu');
+      expect(color!.a, greaterThan(0.99), reason: 'menu color must be opaque');
+    }
+
+    await _disposeTree(tester);
+  });
+
   testWidgets('Backup section shows Export and Restore rows', (tester) async {
     final h = _setup(initialUrl: 'http://saved.local:8082');
     h.adapter.onGet('/api/devices', (s) => s.reply(200, _devicesOne()));
