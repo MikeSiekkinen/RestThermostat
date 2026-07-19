@@ -66,7 +66,8 @@ Backed up: `server_url`; auth type + credentials (Basic user/pass, Bearer token,
 
 - **Positive:** survives Keystore loss; no plaintext secret ever leaves the app; no native toolchain in CI; old backups keep working as params/keys evolve.
 - **Negative:** ~1–3 s Argon2id unlock on device (mitigated by isolate + spinner); adds two compiled deps (`cryptography`, `flutter_file_dialog`) → a `pubspec.lock` change and a build-number bump (DESIGN §13.4). Neither needs native build config or a `dependency_overrides` (see *File dialog* above for why `flutter_file_dialog` was chosen over `file_picker`).
-- **Open / follow-up:** confirm on-device Argon2id latency at the chosen params on the min-spec target; if unacceptable, revisit `sodium` (this ADR would be superseded). The iOS `UIDocumentPicker` save/open path is code-correct but not yet exercised on-device (no in-repo iOS build).
+- **On-device verification (Android):** export → restore round-trip confirmed working on a Galaxy S24; the Argon2id unlock is sub-second (spinner barely visible), so the pure-Dart KDF is fast enough and the `sodium` fallback is **not** needed. Min-spec (low-end) latency is still unmeasured, but the isolate + spinner design tolerates a slower unlock there.
+- **Open / follow-up:** measure Argon2id latency on a low-end device if one becomes available. The iOS `UIDocumentPicker` save/open path is code-correct but not yet exercised on-device (no in-repo iOS build).
 
 ## Testing
 
