@@ -1065,5 +1065,46 @@ void main() {
         findsOneWidget,
       );
     });
+
+    testWidgets('a locale-comma decimal separator is accepted', (tester) async {
+      final h = editHarness();
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      // Numeric keyboards on comma-locales emit "25,0"; it must not be dropped.
+      await tester.tap(find.byKey(tempValue));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(entryField), '25,0');
+      await tester.tap(find.byKey(confirm));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.descendant(of: find.byKey(tempValue), matching: find.text('25°C')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('NaN input is rejected and leaves the value unchanged', (
+      tester,
+    ) async {
+      final h = editHarness();
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      // "NaN" parses to double.nan, which would survive clamp() as the ceiling
+      // and silently commit 32°C — reject it and leave the 20°C seed intact.
+      await tester.tap(find.byKey(tempValue));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(entryField), 'NaN');
+      await tester.tap(find.byKey(confirm));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.descendant(of: find.byKey(tempValue), matching: find.text('20°C')),
+        findsOneWidget,
+      );
+    });
   });
 }

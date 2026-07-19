@@ -671,6 +671,10 @@ class _TempStepper extends StatelessWidget {
         numeralStyle: numeralStyle,
       ),
     );
+    // The parent screen sits under the (modal) dialog so it normally stays
+    // mounted, but guard the async gap defensively before the setState-driving
+    // callback in case the route was torn down while the dialog was open.
+    if (!context.mounted) return;
     if (celsius != null) onChanged(celsius);
   }
 
@@ -743,10 +747,13 @@ class _TempEntryDialogState extends State<_TempEntryDialog> {
   }
 
   /// Parse the field and pop the clamped Celsius value, or `null` if the input
-  /// is empty/non-numeric (leave the current value unchanged).
+  /// is empty/non-numeric (leave the current value unchanged). A locale-comma
+  /// decimal ("20,5") is normalized to a period so it parses, and `NaN` is
+  /// rejected — `double.nan` would otherwise survive [num.clamp] as the upper
+  /// limit and silently commit the ceiling temperature.
   void _commit() {
-    final raw = double.tryParse(_controller.text.trim());
-    if (raw == null) {
+    final raw = double.tryParse(_controller.text.trim().replaceAll(',', '.'));
+    if (raw == null || raw.isNaN) {
       Navigator.of(context).pop();
       return;
     }
