@@ -90,4 +90,10 @@ class EmberColors {
 
   /// Surface seed for `ColorScheme.dark` — pure black.
   static const Color surface = Color(0xFF000000);
+
+  /// Opaque surface for floating menus (dropdown popups, bottom sheets) that
+  /// would otherwise inherit the theme's transparent `canvasColor` and render
+  /// see-through (Issue #70). Slightly lifted off pure black so the menu reads
+  /// as elevated against the background gradient.
+  static const Color menuSurface = Color(0xFF111114);
 }

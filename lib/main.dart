@@ -139,12 +139,12 @@ class _BootstrapState extends ConsumerState<_Bootstrap> {
       future: _configFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const EmberBackground(
-            mode: DeviceMode.off,
-            child: Scaffold(
-              backgroundColor: Colors.transparent,
-              body: Center(child: CircularProgressIndicator()),
-            ),
+          // No EmberBackground here — the app-level MaterialApp.builder base
+          // (mode: off) already paints the identical neutral backdrop behind
+          // this transparent Scaffold.
+          return const Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Center(child: CircularProgressIndicator()),
           );
         }
         final config = snapshot.data!;

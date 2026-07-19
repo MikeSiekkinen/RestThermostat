@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/auth_config.dart';
 import '../services/url_normalizer.dart';
+import '../theme/colors.dart';
 import 'connect_outcome.dart';
 
 typedef ConnectFn =
@@ -175,8 +176,8 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                       // The ember theme's canvasColor is transparent, which the
                       // dropdown menu popup would otherwise inherit and render
                       // see-through (Issue #70). Pin the app's opaque menu
-                      // surface (matches device_picker_sheet).
-                      dropdownColor: const Color(0xFF111114),
+                      // surface.
+                      dropdownColor: EmberColors.menuSurface,
                       decoration: InputDecoration(labelText: l.authChoiceLabel),
                       items: [
                         DropdownMenuItem(

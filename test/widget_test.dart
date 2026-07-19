@@ -73,18 +73,27 @@ void main() {
   ) async {
     // Regression: the ember theme makes every Scaffold transparent
     // (scaffoldBackgroundColor + canvasColor = transparent), so each screen
-    // must sit on an EmberBackground that paints an opaque gradient. The
-    // onboarding flow was mounted without one, rendering see-through on iOS.
+    // must sit on an EmberBackground that paints an opaque gradient. The fix is
+    // the app-level MaterialApp.builder base (see lib/main.dart); onboarding
+    // had no opaque backdrop and rendered see-through on iOS. Assert both that
+    // the backdrop exists AND that its gradient is actually opaque — a
+    // present-but-transparent EmberBackground would still be see-through.
     await tester.pumpWidget(_wrap(store: FakeOnboardingStore(), dio: Dio()));
     await tester.pumpAndSettle();
 
     expect(find.text('Get started'), findsOneWidget);
+    final backdrop = find.ancestor(
+      of: find.text('Get started'),
+      matching: find.byType(EmberBackground),
+    );
+    expect(backdrop, findsOneWidget);
+    final colors = EmberBackground.backgroundColorsFor(
+      tester.widget<EmberBackground>(backdrop).mode,
+    );
     expect(
-      find.ancestor(
-        of: find.text('Get started'),
-        matching: find.byType(EmberBackground),
-      ),
-      findsOneWidget,
+      colors.every((c) => c.a > 0.99),
+      isTrue,
+      reason: 'onboarding backdrop gradient must be fully opaque',
     );
   });
 }
