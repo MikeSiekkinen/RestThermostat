@@ -207,7 +207,9 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
         title: Text(widget.isNew ? l.editEventTitleNew : l.editEventTitleEdit),
         actions: [
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: EmberColors.textPrimary),
+            style: TextButton.styleFrom(
+              foregroundColor: EmberColors.textPrimary,
+            ),
             onPressed: (_saving || !_timeValid) ? null : _save,
             child: Text(l.editEventSave),
           ),
@@ -661,8 +663,12 @@ class _TempStepper extends StatelessWidget {
     final controller = TextEditingController(
       text: isF ? (valueC * 9 / 5 + 32).round().toString() : _trimC(valueC),
     );
-    final minD = isF ? (_minTempC * 9 / 5 + 32).round().toString() : _trimC(_minTempC);
-    final maxD = isF ? (_maxTempC * 9 / 5 + 32).round().toString() : _trimC(_maxTempC);
+    final minD = isF
+        ? (_minTempC * 9 / 5 + 32).round().toString()
+        : _trimC(_minTempC);
+    final maxD = isF
+        ? (_maxTempC * 9 / 5 + 32).round().toString()
+        : _trimC(_maxTempC);
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -675,9 +681,8 @@ class _TempStepper extends StatelessWidget {
           keyboardType: TextInputType.numberWithOptions(decimal: !isF),
           textAlign: TextAlign.center,
           cursorColor: accent,
-          style:
-              (Theme.of(ctx).textTheme.headlineMedium ?? const TextStyle())
-                  .merge(numeralStyle),
+          style: (Theme.of(ctx).textTheme.headlineMedium ?? const TextStyle())
+              .merge(numeralStyle),
           decoration: InputDecoration(
             suffixText: unit,
             helperText: '$minD–$maxD $unit',

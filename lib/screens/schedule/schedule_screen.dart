@@ -287,8 +287,9 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                   await ref.read(scheduleProvider(widget.serial).future);
                 },
                 child: asyncSchedule.when(
-                  loading: () =>
-                      _ScheduleLoadingView(accent: _modeTint(widget.deviceMode)),
+                  loading: () => _ScheduleLoadingView(
+                    accent: _modeTint(widget.deviceMode),
+                  ),
                   error: (e, _) => _ErrorView(error: e),
                   data: (schedule) {
                     // After a mode switch the server keeps serving the previous
@@ -651,7 +652,10 @@ class _EventRow extends StatelessWidget {
                         style:
                             (Theme.of(context).textTheme.bodyLarge ??
                                     const TextStyle())
-                                .copyWith(color: tint, fontWeight: FontWeight.w600)
+                                .copyWith(
+                                  color: tint,
+                                  fontWeight: FontWeight.w600,
+                                )
                                 .merge(numeralStyle),
                       ),
                       const SizedBox(height: 2),

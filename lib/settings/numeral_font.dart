@@ -25,10 +25,14 @@ enum NumeralFont {
   /// Family + fixed weight for this face. Merged onto a base display style so
   /// the base's size/color survive; only the family and weight are replaced.
   TextStyle get style => switch (this) {
-    NumeralFont.oswald =>
-      const TextStyle(fontFamily: 'Oswald', fontWeight: FontWeight.w600),
-    NumeralFont.anton =>
-      const TextStyle(fontFamily: 'Anton', fontWeight: FontWeight.w400),
+    NumeralFont.oswald => const TextStyle(
+      fontFamily: 'Oswald',
+      fontWeight: FontWeight.w600,
+    ),
+    NumeralFont.anton => const TextStyle(
+      fontFamily: 'Anton',
+      fontWeight: FontWeight.w400,
+    ),
     NumeralFont.jetBrainsMono => GoogleFonts.jetBrainsMono(
       fontWeight: FontWeight.w500,
     ),
@@ -50,9 +54,7 @@ class NumeralFontNotifier extends Notifier<NumeralFont> {
   Future<void> _hydrate() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key);
-    final restored = NumeralFont.values
-        .where((f) => f.name == raw)
-        .firstOrNull;
+    final restored = NumeralFont.values.where((f) => f.name == raw).firstOrNull;
     if (restored != null && restored != state) state = restored;
   }
 

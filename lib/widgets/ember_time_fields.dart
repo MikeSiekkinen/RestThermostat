@@ -253,58 +253,58 @@ class _EmberTimeFieldsState extends State<EmberTimeFields> {
     return SizedBox(
       width: 88,
       child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // The label rides centered above its box (was a left-aligned
-            // floating label). Excluded from semantics because the field below
-            // carries the same name for screen readers.
-            ExcludeSemantics(
-              child: Text(
-                label,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: hasError ? errorColor : widget.colors.label,
-                ),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // The label rides centered above its box (was a left-aligned
+          // floating label). Excluded from semantics because the field below
+          // carries the same name for screen readers.
+          ExcludeSemantics(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: hasError ? errorColor : widget.colors.label,
               ),
             ),
-            const SizedBox(height: 6),
-            Semantics(
-              label: label,
-              child: TextField(
-                key: key,
-                controller: controller,
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(2),
-                ],
-                textAlign: TextAlign.center,
-                cursorColor: widget.colors.cursor,
-                style:
-                    (Theme.of(context).textTheme.headlineMedium ??
-                            const TextStyle())
-                        .copyWith(color: EmberColors.textPrimary)
-                        .merge(widget.numeralStyle),
-                decoration: InputDecoration(
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(
-                    vertical: 12,
-                    horizontal: 8,
-                  ),
-                  enabledBorder: border(
-                    hasError ? errorColor : widget.colors.restingBorder,
-                    hasError ? 2 : 1,
-                  ),
-                  focusedBorder: border(
-                    hasError ? errorColor : widget.colors.focusedBorder,
-                    2,
-                  ),
+          ),
+          const SizedBox(height: 6),
+          Semantics(
+            label: label,
+            child: TextField(
+              key: key,
+              controller: controller,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(2),
+              ],
+              textAlign: TextAlign.center,
+              cursorColor: widget.colors.cursor,
+              style:
+                  (Theme.of(context).textTheme.headlineMedium ??
+                          const TextStyle())
+                      .copyWith(color: EmberColors.textPrimary)
+                      .merge(widget.numeralStyle),
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 12,
+                  horizontal: 8,
                 ),
-                onChanged: (_) => _emit(),
+                enabledBorder: border(
+                  hasError ? errorColor : widget.colors.restingBorder,
+                  hasError ? 2 : 1,
+                ),
+                focusedBorder: border(
+                  hasError ? errorColor : widget.colors.focusedBorder,
+                  2,
+                ),
               ),
+              onChanged: (_) => _emit(),
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
     );
   }
 }
