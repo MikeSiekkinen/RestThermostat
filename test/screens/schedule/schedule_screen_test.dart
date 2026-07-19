@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:rest_thermostat/l10n/gen/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -847,8 +848,9 @@ void main() {
 
       expect(find.text('Upstairs'), findsOneWidget);
       expect(find.textContaining('Now 77°F'), findsOneWidget);
-      // Humidity (60% in the fixture) sits between the measured temp and Set.
+      // Humidity (60% in the fixture) sits on the "Now" line, after the temp.
       expect(find.textContaining('· 60%'), findsOneWidget);
+      // "Set" is now on its own line below "Now" (Issue #115).
       expect(find.textContaining('Set 76°F'), findsOneWidget);
       // The plain "Schedule" title is replaced when a device is present.
       expect(find.text('Schedule'), findsNothing);
@@ -944,6 +946,37 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('Set 68°F – 75°F'), findsOneWidget);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('renders "Now …" and "Set …" as two separate lines, and the '
+        'Auto band is not truncated at a normal width (Issue #115)', (
+      tester,
+    ) async {
+      final h = _setup(
+        serial: 'abc',
+        device: headerDevice(
+          mode: 'heat-cool',
+          low: 20.0, // 68°F
+          high: 24.0, // 75°F
+        ),
+      );
+      stubSchedule(h);
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      // Two distinct lines: "Now …" (with humidity) and "Set …" (the band).
+      expect(find.text('Now 77°F · 60%'), findsOneWidget);
+      expect(find.text('Set 68°F – 75°F'), findsOneWidget);
+
+      // The band line must not ellipsize at a normal phone width — assert the
+      // rendered paragraph did not exceed its single line.
+      final setParagraph = tester.renderObject<RenderParagraph>(
+        find.text('Set 68°F – 75°F'),
+      );
+      expect(setParagraph.didExceedMaxLines, isFalse);
 
       await _disposeTree(tester);
     });
