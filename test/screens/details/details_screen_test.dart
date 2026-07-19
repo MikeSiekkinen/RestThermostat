@@ -11,6 +11,7 @@ import 'package:rest_thermostat/models/schedule.dart';
 import 'package:rest_thermostat/screens/details/details_screen.dart';
 import 'package:rest_thermostat/settings/numeral_font.dart';
 import 'package:rest_thermostat/state/providers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Device _device({
   required double target,
@@ -96,6 +97,12 @@ class _FixedNumeralFont extends NumeralFontNotifier {
 }
 
 void main() {
+  // DetailsScreen now reads numeralFontProvider, whose real notifier hydrates
+  // from SharedPreferences. Without a mock the platform channel never resolves,
+  // so tests that don't override the provider would depend on an abandoned
+  // pending future. Seed an empty in-memory store to keep hydration deterministic.
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   group('DetailsScreen — setpoint source rendering', () {
     testWidgets('Manual when no schedule loaded', (tester) async {
       await _pumpHost(tester, device: _device(target: 22.0));
@@ -305,6 +312,18 @@ void main() {
     });
   });
 
+  group('DetailsScreen — setpoint range', () {
+    testWidgets('heat-cool renders a low – high range', (tester) async {
+      // Fixture low/high = 20/24°C → 68/75°F; the range is the wide value the
+      // per-tile FittedBox(scaleDown) exists to keep on one line.
+      await _pumpHost(
+        tester,
+        device: _device(target: 22.0, unit: 'F', mode: 'heat-cool'),
+      );
+      expect(find.text('68° – 75°'), findsOneWidget);
+    });
+  });
+
   group('DetailsScreen — tile styling', () {
     testWidgets('footer sub-labels are not italic', (tester) async {
       await _pumpHost(tester, device: _device(target: 22.0, humidity: 40));
@@ -322,6 +341,9 @@ void main() {
       );
       final humidity = tester.widget<Text>(find.text('42%'));
       expect(humidity.style?.fontFamily, 'Anton');
+      // The new temperature tile (24.76999°C → 77°F) carries it too.
+      final temp = tester.widget<Text>(find.text('77°'));
+      expect(temp.style?.fontFamily, 'Anton');
     });
   });
 }
