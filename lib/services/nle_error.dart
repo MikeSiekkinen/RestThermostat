@@ -1,4 +1,4 @@
-import 'dart:io' show HttpDate;
+import 'dart:io' show HandshakeException, HttpDate, SocketException;
 
 import 'package:dio/dio.dart';
 
@@ -38,22 +38,94 @@ sealed class NleError implements Exception {
     final code = response?.statusCode ?? 0;
     final body = response?.data;
     final extracted = _extractServerMessage(body);
+    final cfAccess = _looksLikeCloudflareAccess(response);
     if (code == 401 || code == 403) {
-      return NleAuthError(statusCode: code, serverMessage: extracted);
+      return NleAuthError(
+        statusCode: code,
+        isCloudflareAccess: cfAccess,
+        serverMessage: extracted,
+      );
     }
     if (code == 429) {
       return NleRateLimitError(
-        retryAfter: parseRetryAfter(response?.headers.value('retry-after')),
+        retryAfter: parseRetryAfter(
+          _firstHeader(response?.headers, 'retry-after'),
+        ),
         serverMessage: extracted,
       );
     }
     if (code >= 500 && code < 600) {
       return NleServerError(statusCode: code, serverMessage: extracted);
     }
+    // Redirect-following is disabled on the client (see NleApiClient.create)
+    // so 3xx responses arrive here as `badResponse` with their `Location` /
+    // `WWW-Authenticate` headers intact. A Cloudflare Access gate is an auth
+    // failure — route the user to the service-token fields. Any other
+    // redirect (a reverse proxy's http→https upgrade, a trailing-slash
+    // rewrite) is NOT an auth problem: surface it as a redirect so the user
+    // is told to fix the address, not their credentials.
+    if (code >= 300 && code < 400) {
+      if (cfAccess) {
+        return NleAuthError(
+          statusCode: code,
+          isCloudflareAccess: true,
+          serverMessage: extracted,
+        );
+      }
+      return NleRedirectError(
+        statusCode: code,
+        location: _firstHeader(response?.headers, 'location'),
+        target: _targetOf(response?.requestOptions ?? e.requestOptions),
+      );
+    }
     if (code >= 400 && code < 500) {
       return NleClientError(statusCode: code, serverMessage: extracted);
     }
     return NleNetworkError(cause: e);
+  }
+
+  /// Heuristic: does this response look like a Cloudflare Access challenge?
+  /// Access returns a 302 to `*.cloudflareaccess.com` and tags responses with
+  /// `WWW-Authenticate: Cloudflare-Access`. Lets the UI point the user at the
+  /// service-token fields instead of generic credentials.
+  ///
+  /// Only trusted for `https` targets: a real Access deployment always
+  /// terminates TLS, and over plain http these headers are forgeable by
+  /// anyone on-path — the resulting "add a service token" guidance would be
+  /// an elicitation surface for an org-scoped credential the app then sends
+  /// in cleartext. On http the response falls through to the generic
+  /// auth/redirect handling instead.
+  ///
+  /// Headers are read in list form: `Headers.value()` throws on multi-valued
+  /// headers, and multiple `WWW-Authenticate` challenges are legal, common
+  /// HTTP (`Negotiate` + `NTLM` from corporate proxies).
+  static bool _looksLikeCloudflareAccess(Response<dynamic>? response) {
+    if (response == null) return false;
+    if (response.requestOptions.uri.scheme != 'https') return false;
+    final headers = response.headers;
+    final wwwAuth = (headers['www-authenticate'] ?? const <String>[])
+        .join(', ')
+        .toLowerCase();
+    if (wwwAuth.contains('cloudflare-access')) return true;
+    final location = _firstHeader(headers, 'location');
+    if (location == null || location.isEmpty) return false;
+    final host = Uri.tryParse(location)?.host.toLowerCase() ?? '';
+    return host == 'cloudflareaccess.com' ||
+        host.endsWith('.cloudflareaccess.com');
+  }
+
+  /// First value of [name], or `null`. Multi-value-safe counterpart of
+  /// `Headers.value()`, which throws when a header appears more than once.
+  static String? _firstHeader(Headers? headers, String name) {
+    final values = headers?[name];
+    return (values == null || values.isEmpty) ? null : values.first;
+  }
+
+  /// `host:port` a request was aimed at, or empty when unknown. Safe to
+  /// surface to the user / logs — never contains credentials.
+  static String _targetOf(RequestOptions options) {
+    final uri = options.uri;
+    return uri.host.isEmpty ? '' : '${uri.host}:${uri.port}';
   }
 
   static String? _extractServerMessage(Object? body) {
@@ -85,6 +157,34 @@ sealed class NleError implements Exception {
   }
 }
 
+/// The specific shape of a network failure, derived from the underlying
+/// [DioException]. Lets the UI show a cause-specific message ("connection
+/// refused" vs. "name not found" vs. "timed out") instead of one catch-all.
+enum NleNetworkErrorKind {
+  /// Couldn't establish a TCP connection in time.
+  connectionTimeout,
+
+  /// Connected, but the server didn't send a response in time.
+  receiveTimeout,
+
+  /// Couldn't finish sending the request in time.
+  sendTimeout,
+
+  /// The host actively refused the connection (nothing listening on that
+  /// host:port, or a closed port). The most common "wrong port" symptom.
+  connectionRefused,
+
+  /// DNS lookup failed — the hostname doesn't resolve.
+  dnsFailure,
+
+  /// TLS handshake / certificate failure (e.g. https to a plain-http port,
+  /// or an untrusted/expired certificate).
+  tlsFailure,
+
+  /// Anything else dio couldn't connect for (unreachable network, reset, …).
+  unknown,
+}
+
 /// Indirect network failure: connect/read/send timeout, connection-refused,
 /// DNS, TLS bad-cert, cancellation, or anything else dio surfaces as a
 /// non-`badResponse` exception type. Transient by default — retry the
@@ -93,19 +193,118 @@ class NleNetworkError extends NleError {
   final DioException cause;
   const NleNetworkError({required this.cause, super.serverMessage});
 
-  @override
-  String toString() => 'NleNetworkError(${cause.type}: ${cause.message})';
-}
+  /// Classify [cause] into a [NleNetworkErrorKind]. For connection-level
+  /// failures dio nests the real reason in [DioException.error] (a
+  /// [SocketException] or [HandshakeException]), so we inspect that to tell
+  /// "name not found" apart from "connection refused".
+  NleNetworkErrorKind get kind {
+    switch (cause.type) {
+      case DioExceptionType.connectionTimeout:
+        return NleNetworkErrorKind.connectionTimeout;
+      case DioExceptionType.receiveTimeout:
+      // dio 5.10: the response transformer timed out — the server was slow to
+      // deliver a usable body, so surface it like a receive timeout (main's
+      // retry classification also treats it as a transient timeout).
+      case DioExceptionType.transformTimeout:
+        return NleNetworkErrorKind.receiveTimeout;
+      case DioExceptionType.sendTimeout:
+        return NleNetworkErrorKind.sendTimeout;
+      case DioExceptionType.badCertificate:
+        return NleNetworkErrorKind.tlsFailure;
+      case DioExceptionType.connectionError:
+      case DioExceptionType.cancel:
+      case DioExceptionType.badResponse:
+      case DioExceptionType.unknown:
+        return _classifyUnderlying(cause.error);
+    }
+  }
 
-/// 401 or 403. Surfaces via the deep-link snackbar that routes the user to
-/// Settings → Connection with the auth section pre-expanded.
-class NleAuthError extends NleError {
-  final int statusCode;
-  const NleAuthError({required this.statusCode, super.serverMessage});
+  static NleNetworkErrorKind _classifyUnderlying(Object? error) {
+    if (error is HandshakeException) return NleNetworkErrorKind.tlsFailure;
+    if (error is SocketException) {
+      final osError = error.osError;
+      final message = '${error.message} ${osError?.message ?? ''}'
+          .toLowerCase();
+      if (message.contains('failed host lookup') ||
+          message.contains('nodename nor servname') ||
+          message.contains('name or service not known') ||
+          message.contains('no address associated')) {
+        return NleNetworkErrorKind.dnsFailure;
+      }
+      // ECONNREFUSED is 61 on macOS/BSD, 111 on Linux.
+      if (message.contains('connection refused') ||
+          osError?.errorCode == 61 ||
+          osError?.errorCode == 111) {
+        return NleNetworkErrorKind.connectionRefused;
+      }
+    }
+    return NleNetworkErrorKind.unknown;
+  }
+
+  /// `host:port` the failed request was aimed at, or empty when unknown.
+  /// Safe to surface to the user / logs — never contains credentials.
+  String get target => NleError._targetOf(cause.requestOptions);
 
   @override
   String toString() =>
-      'NleAuthError($statusCode${serverMessage == null ? "" : ": $serverMessage"})';
+      'NleNetworkError($kind, ${cause.type}: ${cause.message})';
+}
+
+/// A non-Cloudflare 3xx: the server (usually a reverse proxy in front of NLE)
+/// redirected the request. A JSON control API never legitimately redirects,
+/// so this almost always means the stored address needs fixing — an
+/// `http→https` upgrade redirect (Caddy/nginx auto-HTTPS), a trailing-slash
+/// rewrite, or a proxy misroute. Deliberately NOT an [NleAuthError]: no
+/// credential was rejected, and routing the user to the auth settings would
+/// misdiagnose the problem.
+class NleRedirectError extends NleError {
+  final int statusCode;
+
+  /// The `Location` header's first value, when present. May help the user
+  /// spot where the proxy wanted to send them (e.g. the same host over
+  /// https).
+  final String? location;
+
+  /// `host:port` the request was aimed at, or empty when unknown. Safe for
+  /// user-facing copy and logs — never contains credentials.
+  final String target;
+
+  const NleRedirectError({
+    required this.statusCode,
+    this.location,
+    this.target = '',
+    super.serverMessage,
+  });
+
+  @override
+  String toString() =>
+      'NleRedirectError($statusCode, target: $target'
+      '${location == null ? '' : ', location: $location'})';
+}
+
+/// An authentication / access-gate failure: a 401 or 403 from the origin, or a
+/// 3xx redirect to an identity provider (Cloudflare Access, SSO). Surfaces via
+/// the deep-link snackbar that routes the user to Settings → Connection with
+/// the auth section pre-expanded.
+class NleAuthError extends NleError {
+  final int statusCode;
+
+  /// True when the failure is a Cloudflare Access gate (a redirect to the
+  /// Access login, or a 401/403 carrying `WWW-Authenticate: Cloudflare-Access`)
+  /// rather than the origin rejecting Basic/Bearer credentials. Lets the UI
+  /// point the user specifically at the service-token fields.
+  final bool isCloudflareAccess;
+
+  const NleAuthError({
+    required this.statusCode,
+    this.isCloudflareAccess = false,
+    super.serverMessage,
+  });
+
+  @override
+  String toString() =>
+      'NleAuthError($statusCode${isCloudflareAccess ? ", cloudflare-access" : ""}'
+      '${serverMessage == null ? "" : ": $serverMessage"})';
 }
 
 /// 429. [retryAfter] is the parsed value of the response's `Retry-After` header

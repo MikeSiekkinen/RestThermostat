@@ -250,6 +250,134 @@ void main() {
     await _disposeTree(tester);
   });
 
+  testWidgets('Cloudflare Access auth round-trips through the Settings form', (
+    tester,
+  ) async {
+    final h = _setup(
+      initialUrl: 'https://nest.example.com:443',
+      initialAuth: const AuthCfServiceToken(
+        clientId: 'abc.access',
+        clientSecret: 'old-secret',
+      ),
+    );
+    h.adapter.onGet('/api/devices', (s) => s.reply(200, _devicesOne()));
+
+    await tester.pumpWidget(h.widget);
+    await _settleAndUnmount(tester);
+
+    // Advanced auto-expands for a non-None stored auth; CF fields are
+    // pre-populated from the store.
+    expect(
+      find.widgetWithText(TextFormField, 'Service token client ID'),
+      findsOneWidget,
+    );
+    expect(find.text('abc.access'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Service token client secret'),
+      'new-secret',
+    );
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Test connection'));
+    await _settleAndUnmount(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await _settleAndUnmount(tester);
+
+    final saved = h.store.auth as AuthCfServiceToken;
+    expect(saved.clientId, 'abc.access');
+    expect(saved.clientSecret, 'new-secret');
+
+    await _disposeTree(tester);
+  });
+
+  testWidgets('CF client secret is obscured with a working visibility toggle', (
+    tester,
+  ) async {
+    final h = _setup(
+      initialUrl: 'https://nest.example.com:443',
+      initialAuth: const AuthCfServiceToken(
+        clientId: 'abc.access',
+        clientSecret: 's3cr3t',
+      ),
+    );
+    h.adapter.onGet('/api/devices', (s) => s.reply(200, _devicesOne()));
+
+    await tester.pumpWidget(h.widget);
+    await _settleAndUnmount(tester);
+
+    final secretField = find.widgetWithText(
+      TextFormField,
+      'Service token client secret',
+    );
+    EditableText editable() => tester.widget<EditableText>(
+      find.descendant(of: secretField, matching: find.byType(EditableText)),
+    );
+    expect(editable().obscureText, isTrue);
+
+    await tester.tap(find.byTooltip('Show client secret'));
+    await tester.pump();
+    expect(editable().obscureText, isFalse);
+    expect(find.byTooltip('Hide client secret'), findsOneWidget);
+
+    await _disposeTree(tester);
+  });
+
+  testWidgets('Editing the CF secret after a passing test re-disables Save '
+      '(header-map gate comparison)', (tester) async {
+    final h = _setup(
+      initialUrl: 'https://nest.example.com:443',
+      initialAuth: const AuthCfServiceToken(
+        clientId: 'abc.access',
+        clientSecret: 's3cr3t',
+      ),
+    );
+    h.adapter.onGet('/api/devices', (s) => s.reply(200, _devicesOne()));
+
+    await tester.pumpWidget(h.widget);
+    await _settleAndUnmount(tester);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Test connection'));
+    await _settleAndUnmount(tester);
+    final save = find.widgetWithText(FilledButton, 'Save');
+    expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Service token client secret'),
+      'edited-secret',
+    );
+    await tester.pump();
+    expect(tester.widget<FilledButton>(save).onPressed, isNull);
+
+    await _disposeTree(tester);
+  });
+
+  testWidgets('Editing the Bearer token after a passing test re-disables Save '
+      '(existing schemes still gate through the header-map comparison)', (
+    tester,
+  ) async {
+    final h = _setup(
+      initialUrl: 'http://saved.local:8082',
+      initialAuth: const AuthBearer(token: 'good-token'),
+    );
+    h.adapter.onGet('/api/devices', (s) => s.reply(200, _devicesOne()));
+
+    await tester.pumpWidget(h.widget);
+    await _settleAndUnmount(tester);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Test connection'));
+    await _settleAndUnmount(tester);
+    final save = find.widgetWithText(FilledButton, 'Save');
+    expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Token'),
+      'edited-token',
+    );
+    await tester.pump();
+    expect(tester.widget<FilledButton>(save).onPressed, isNull);
+
+    await _disposeTree(tester);
+  });
+
   testWidgets('Rename dialog writes override; empty rename clears it', (
     tester,
   ) async {

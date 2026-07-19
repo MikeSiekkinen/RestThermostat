@@ -105,6 +105,50 @@ void main() {
     expect(basic.password, 'hunter2');
   });
 
+  testWidgets('Connect passes AuthCfServiceToken to callback', (tester) async {
+    String? capturedUrl;
+    AuthConfig? capturedAuth;
+
+    await tester.pumpWidget(
+      host(
+        onConnect: (url, auth) async {
+          capturedUrl = url;
+          capturedAuth = auth;
+          return const ConnectSuccess();
+        },
+      ),
+    );
+
+    await tester.enterText(find.byType(TextFormField).first, 'nest.home');
+    await tester.tap(find.text('Advanced'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('None'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cloudflare Access').last);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.widgetWithText(TextFormField, 'Service token client ID'),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Service token client ID'),
+      'abc.access',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Service token client secret'),
+      's3cr3t',
+    );
+
+    await tester.tap(find.text('Connect'));
+    await tester.pumpAndSettle();
+
+    expect(capturedUrl, 'http://nest.home:8082');
+    final cf = capturedAuth as AuthCfServiceToken;
+    expect(cf.clientId, 'abc.access');
+    expect(cf.clientSecret, 's3cr3t');
+  });
+
   testWidgets('inline error from callback is displayed', (tester) async {
     await tester.pumpWidget(
       host(

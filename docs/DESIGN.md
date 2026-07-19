@@ -259,23 +259,34 @@ Onboarding-complete flag set only after URL stored + connection tested + active 
 
 ### 7.2 Auth UX
 
-The "Advanced" expander is collapsed by default. Reveals an auth-type picker: `None` (default) / `Basic` / `Bearer`.
+The "Advanced" expander is collapsed by default. Reveals an auth-type picker: `None` (default) / `Basic` / `Bearer` / `Cloudflare Access`.
 
-- `None`: no `Authorization` header sent.
-- `Basic`: username + password fields → standard Basic header.
+- `None`: no auth headers sent.
+- `Basic`: username + password fields → standard `Authorization: Basic <base64>` header.
 - `Bearer`: token field → `Authorization: Bearer <token>`.
+- `Cloudflare Access`: service-token client-ID + client-secret fields → `CF-Access-Client-Id` + `CF-Access-Client-Secret` header pair (no `Authorization` header).
 
-NLE's self-hosted Control API has **no auth by default**; the `Authorization` header is for users running a reverse proxy (Caddy/nginx) in front of NLE.
+NLE's self-hosted Control API has **no auth by default**; the auth headers are for users running a reverse proxy (Caddy/nginx) in front of NLE.
+
+The auth choices are **mutually exclusive**. Cloudflare Access authenticates the client to the Cloudflare Access edge in front of the proxy; Cloudflare strips the `CF-Access-Client-*` headers before the request reaches the origin, so the origin sees no auth. Layering Cloudflare Access on top of origin Basic/Bearer is not supported (would require a second header set) — the common NLE-behind-Cloudflare-Tunnel deployment relies on Access as the sole gate.
+
+The model (`AuthConfig` in `lib/models/auth_config.dart`) exposes each choice's contribution as a `Map<String,String> headers` so the HTTP client merges header-based schemes uniformly; `authorizationHeader` remains a convenience accessor (null for `None` and `Cloudflare Access`).
+
+**Redirect handling.** The API client does not follow redirects (a JSON control API never legitimately redirects). A 3xx bearing Cloudflare Access markers (`WWW-Authenticate: Cloudflare-Access`, or a `Location` on `*.cloudflareaccess.com`) — like a 401/403 with the same markers — is classified as a Cloudflare Access gate and the UI points the user at the service-token fields. Any other redirect (a reverse proxy's http→https upgrade, a trailing-slash rewrite) surfaces as its own "server redirected — check the address" error, **not** an auth failure: no credential was rejected, and routing the user to auth settings would misdiagnose an address problem.
+
+**The Cloudflare classification is trusted only for `https` targets.** A real Access deployment always terminates TLS; over plain http the markers are forgeable by anyone on-path, and acting on them would turn the "add a service token" guidance into an elicitation surface for an org-scoped credential the app would then send in cleartext. On http, such responses fall through to the generic auth/redirect copy.
 
 ### 7.3 Credential storage
 
 `flutter_secure_storage` for credentials (Keychain on iOS, EncryptedSharedPreferences on Android). Keys:
-- `auth_type`
+- `auth_type` (`none` / `basic` / `bearer` / `cf_service_token`)
 - `auth_basic_username`
 - `auth_basic_password`
 - `auth_bearer_token`
+- `auth_cf_client_id`
+- `auth_cf_client_secret`
 
-`shared_preferences` for everything else (non-secret). See [§12.1](#121-three-tier-persistence).
+Switching auth type clears every credential key before writing the active set, so a secret from a previous type never lingers. `shared_preferences` for everything else (non-secret). See [§12.1](#121-three-tier-persistence).
 
 ### 7.4 Test Connection target
 
@@ -285,14 +296,15 @@ NLE's self-hosted Control API has **no auth by default**; the `Authorization` he
 
 - Accept `http://hostname[:port]`, `https://hostname[:port]`, `http://ip[:port]`.
 - Missing scheme → default `http://`.
-- Missing port → default `:8082`.
+- Missing port → **scheme-aware** default: `:8082` for `http` (a direct-LAN NLE server), `:443` for `https` (a reverse proxy / Cloudflare front terminating TLS on the standard port). Forcing `:8082` onto every URL broke `https` deployments behind Cloudflare Access.
 - Strip trailing slash for canonical storage.
 - Reject malformed input with inline validation.
 
 Examples:
 - `nest.home` → `http://nest.home:8082`
 - `192.168.1.42` → `http://192.168.1.42:8082`
-- `https://nest.example.com` → `https://nest.example.com:8082`
+- `https://nest.example.com` → `https://nest.example.com:443`
+- `https://nest.example.com:8443` → `https://nest.example.com:8443`
 - `http://nest.home:9000` → `http://nest.home:9000`
 
 ### 7.6 Re-edit in Settings
@@ -513,7 +525,7 @@ Check `MediaQuery.disableAnimations`. When true:
 
 | Data | Storage |
 |---|---|
-| `auth_type`, `auth_basic_username`, `auth_basic_password`, `auth_bearer_token` | `flutter_secure_storage` |
+| `auth_type`, `auth_basic_username`, `auth_basic_password`, `auth_bearer_token`, `auth_cf_client_id`, `auth_cf_client_secret` | `flutter_secure_storage` |
 | `server_url`, `active_device_serial`, `device_name_overrides`, `onboarding_complete` | `shared_preferences` |
 | `last_state_cache` (JSON), `last_schedule_cache_{serial}` (JSON with timestamp) | `shared_preferences` |
 
@@ -716,7 +728,7 @@ The **Control API on port 8082**. The V1 API (`/api/v1/*`) is for the hosted ser
 
 ### 16.2 Authentication
 
-No auth by default. Server passes through `Authorization` headers unchanged from a reverse proxy. App supports optional Basic or Bearer per [§7.2](#72-auth-ux).
+No auth by default. Server passes through `Authorization` headers unchanged from a reverse proxy. App supports optional Basic, Bearer, or Cloudflare Access service-token auth per [§7.2](#72-auth-ux). Cloudflare Access sends the `CF-Access-Client-Id` / `CF-Access-Client-Secret` header pair (no `Authorization` header) to authenticate the client to the Cloudflare Access edge in front of the proxy.
 
 ### 16.3 Endpoints used
 

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rest_thermostat/services/nle_error.dart';
@@ -6,8 +8,11 @@ DioException _badResponse({
   required int code,
   Object? body,
   Map<String, List<String>>? headers,
+  // https by default: the Cloudflare Access classification is deliberately
+  // trusted only for https targets (forgeable headers over plain http).
+  String baseUrl = 'https://nest.example.com',
 }) {
-  final req = RequestOptions(path: '/x');
+  final req = RequestOptions(path: '/x', baseUrl: baseUrl);
   return DioException(
     requestOptions: req,
     type: DioExceptionType.badResponse,
@@ -64,6 +69,145 @@ void main() {
       expect(e.statusCode, 500);
     });
 
+    test('302 to Cloudflare Access login → NleAuthError(isCloudflareAccess)', () {
+      final e =
+          NleError.fromDio(
+                _badResponse(
+                  code: 302,
+                  headers: {
+                    'location': [
+                      'https://team.cloudflareaccess.com/cdn-cgi/access/login/x',
+                    ],
+                    'www-authenticate': ['Cloudflare-Access'],
+                  },
+                ),
+              )
+              as NleAuthError;
+      expect(e.statusCode, 302);
+      expect(e.isCloudflareAccess, isTrue);
+    });
+
+    test('302 with only a cloudflareaccess.com Location (no challenge '
+        'header) still classifies as CF', () {
+      // The realistic browser-flow case: Access redirects without tagging
+      // the response with WWW-Authenticate.
+      final e =
+          NleError.fromDio(
+                _badResponse(
+                  code: 302,
+                  headers: {
+                    'location': [
+                      'https://team.cloudflareaccess.com/cdn-cgi/access/login/x',
+                    ],
+                  },
+                ),
+              )
+              as NleAuthError;
+      expect(e.isCloudflareAccess, isTrue);
+    });
+
+    test('generic 302 (no Access markers) → NleRedirectError, not auth', () {
+      final e =
+          NleError.fromDio(
+                _badResponse(
+                  code: 302,
+                  headers: {
+                    'location': ['https://example.com/login'],
+                  },
+                ),
+              )
+              as NleRedirectError;
+      expect(e.statusCode, 302);
+      expect(e.location, 'https://example.com/login');
+      expect(e.target, 'nest.example.com:443');
+    });
+
+    test('403 carrying Cloudflare-Access challenge sets the flag', () {
+      final e =
+          NleError.fromDio(
+                _badResponse(
+                  code: 403,
+                  headers: {
+                    'www-authenticate': ['Cloudflare-Access'],
+                  },
+                ),
+              )
+              as NleAuthError;
+      expect(e.isCloudflareAccess, isTrue);
+    });
+
+    test('Cloudflare markers over plain http are NOT trusted', () {
+      // Over http the headers are forgeable by anyone on-path; acting on
+      // them would turn the "add a service token" guidance into a
+      // credential-elicitation surface. The 3xx falls through to the
+      // redirect classification, the 403 to a plain auth error.
+      final redirect = NleError.fromDio(
+        _badResponse(
+          code: 302,
+          baseUrl: 'http://nest.home:8082',
+          headers: {
+            'location': ['https://team.cloudflareaccess.com/login'],
+            'www-authenticate': ['Cloudflare-Access'],
+          },
+        ),
+      );
+      expect(redirect, isA<NleRedirectError>());
+
+      final auth =
+          NleError.fromDio(
+                _badResponse(
+                  code: 403,
+                  baseUrl: 'http://nest.home:8082',
+                  headers: {
+                    'www-authenticate': ['Cloudflare-Access'],
+                  },
+                ),
+              )
+              as NleAuthError;
+      expect(auth.isCloudflareAccess, isFalse);
+    });
+
+    test('multi-valued WWW-Authenticate / Location headers never crash '
+        'classification', () {
+      // Multiple challenges are legal, common HTTP (Negotiate + NTLM from
+      // corporate proxies); dio's Headers.value() throws on them, so the
+      // classifier must use the list form.
+      final e = NleError.fromDio(
+        _badResponse(
+          code: 401,
+          headers: {
+            'www-authenticate': ['Negotiate', 'NTLM'],
+            'location': ['https://a.example.com/', 'https://b.example.com/'],
+          },
+        ),
+      );
+      expect(e, isA<NleAuthError>());
+      expect((e as NleAuthError).isCloudflareAccess, isFalse);
+
+      // And a CF challenge hidden among several values is still found.
+      final cf =
+          NleError.fromDio(
+                _badResponse(
+                  code: 403,
+                  headers: {
+                    'www-authenticate': [
+                      'Basic realm="x"',
+                      'Cloudflare-Access',
+                    ],
+                  },
+                ),
+              )
+              as NleAuthError;
+      expect(cf.isCloudflareAccess, isTrue);
+    });
+
+    test('transformTimeout classifies as a timeout kind', () {
+      final e =
+          NleError.fromDio(_typed(DioExceptionType.transformTimeout))
+              as NleNetworkError;
+      expect(e.kind, NleNetworkErrorKind.receiveTimeout);
+    });
+
     test('429 with integer Retry-After parses to Duration', () {
       final e =
           NleError.fromDio(
@@ -111,6 +255,94 @@ void main() {
     test('serverMessage is null when body is empty', () {
       final e = NleError.fromDio(_badResponse(code: 400)) as NleClientError;
       expect(e.serverMessage, isNull);
+    });
+  });
+
+  group('NleNetworkError.kind classification', () {
+    NleNetworkError net(
+      DioExceptionType type, {
+      Object? error,
+      String baseUrl = 'http://nest.home:8082',
+    }) {
+      return NleError.fromDio(
+            DioException(
+              requestOptions: RequestOptions(
+                path: '/api/devices',
+                baseUrl: baseUrl,
+              ),
+              type: type,
+              error: error,
+            ),
+          )
+          as NleNetworkError;
+    }
+
+    test('connectionTimeout type → connectionTimeout kind', () {
+      expect(
+        net(DioExceptionType.connectionTimeout).kind,
+        NleNetworkErrorKind.connectionTimeout,
+      );
+    });
+
+    test('receiveTimeout type → receiveTimeout kind', () {
+      expect(
+        net(DioExceptionType.receiveTimeout).kind,
+        NleNetworkErrorKind.receiveTimeout,
+      );
+    });
+
+    test('badCertificate type → tlsFailure kind', () {
+      expect(
+        net(DioExceptionType.badCertificate).kind,
+        NleNetworkErrorKind.tlsFailure,
+      );
+    });
+
+    test('connectionError wrapping HandshakeException → tlsFailure', () {
+      expect(
+        net(
+          DioExceptionType.connectionError,
+          error: const HandshakeException('handshake failed'),
+        ).kind,
+        NleNetworkErrorKind.tlsFailure,
+      );
+    });
+
+    test('SocketException "Connection refused" → connectionRefused', () {
+      expect(
+        net(
+          DioExceptionType.connectionError,
+          error: const SocketException(
+            'Connection refused',
+            osError: OSError('Connection refused', 61),
+          ),
+        ).kind,
+        NleNetworkErrorKind.connectionRefused,
+      );
+    });
+
+    test('SocketException "Failed host lookup" → dnsFailure', () {
+      expect(
+        net(
+          DioExceptionType.connectionError,
+          error: const SocketException(
+            "Failed host lookup: 'nest.home'",
+            osError: OSError('nodename nor servname provided', 8),
+          ),
+        ).kind,
+        NleNetworkErrorKind.dnsFailure,
+      );
+    });
+
+    test('connectionError with no underlying error → unknown', () {
+      expect(
+        net(DioExceptionType.connectionError).kind,
+        NleNetworkErrorKind.unknown,
+      );
+    });
+
+    test('target exposes host:port from the request', () {
+      expect(net(DioExceptionType.connectionError).target, 'nest.home:8082');
     });
   });
 

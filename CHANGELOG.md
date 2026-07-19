@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Cloudflare Access service-token authentication. The Advanced auth picker on
+  the Server Setup and Settings screens gains a "Cloudflare Access" option with
+  client-ID and client-secret fields, sent as the `CF-Access-Client-Id` /
+  `CF-Access-Client-Secret` header pair so the app can reach an NLE proxy
+  fronted by Cloudflare Access. Credentials are stored in secure storage under
+  `auth_cf_client_id` / `auth_cf_client_secret`. See `docs/DESIGN.md` §7.2/§7.3.
+
+### Changed
+
+- Connection errors now report the specific cause instead of a single
+  "Couldn't reach server." Timeouts, refused connections, DNS failures, TLS
+  failures, and redirects each get distinct copy that includes the `host:port`
+  the attempt was aimed at, and the diagnostics log records the target and the
+  underlying socket reason (no credentials). Shared by onboarding and the
+  Settings connection editor.
+
+### Fixed
+
+- URL normalization now uses a scheme-aware default port: `https` URLs without
+  an explicit port default to `:443` instead of `:8082`. Forcing `:8082` onto
+  `https` addresses made Cloudflare-fronted (and other reverse-proxied)
+  deployments unreachable with the generic "Couldn't reach server." Note:
+  addresses saved before this fix keep their stored `:8082` port — re-enter
+  the address in Settings → Connection to pick up the new default.
+- The API client no longer follows HTTP redirects. On an `https` target, a
+  redirect to Cloudflare Access (or a `WWW-Authenticate: Cloudflare-Access`
+  challenge) is classified as an access-gate auth failure with specific
+  guidance to add a service token; any other redirect gets its own
+  "server redirected" copy naming the target instead of being misreported as
+  a network or authentication failure.
+
 ## [1.1.0] - 2026-07-04
 
 ### Added

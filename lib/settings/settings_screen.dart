@@ -7,6 +7,7 @@ import '../models/device.dart';
 import '../screens/logs/logs_screen.dart';
 import '../services/device_display_name.dart';
 import '../services/nle_error.dart';
+import '../services/nle_error_messages.dart';
 import '../services/onboarding_store.dart';
 import '../services/url_normalizer.dart';
 import '../state/providers.dart';
@@ -50,10 +51,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final TextEditingController _userCtrl;
   late final TextEditingController _passCtrl;
   late final TextEditingController _tokenCtrl;
+  late final TextEditingController _cfClientIdCtrl;
+  late final TextEditingController _cfClientSecretCtrl;
   late _AuthChoice _authChoice;
   bool _advancedExpanded = false;
   bool _passwordVisible = false;
   bool _tokenVisible = false;
+  bool _cfClientSecretVisible = false;
   bool _testing = false;
   bool _testPassed = false;
   String? _testError;
@@ -76,6 +80,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _userCtrl = TextEditingController();
     _passCtrl = TextEditingController();
     _tokenCtrl = TextEditingController();
+    _cfClientIdCtrl = TextEditingController();
+    _cfClientSecretCtrl = TextEditingController();
     _authChoice = _AuthChoice.none;
     if (widget.initiallyExpandAuth) {
       _advancedExpanded = true;
@@ -85,6 +91,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _userCtrl.addListener(_invalidateGate);
     _passCtrl.addListener(_invalidateGate);
     _tokenCtrl.addListener(_invalidateGate);
+    _cfClientIdCtrl.addListener(_invalidateGate);
+    _cfClientSecretCtrl.addListener(_invalidateGate);
 
     _initialLoadFuture = _loadInitial();
   }
@@ -107,6 +115,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _authChoice = _AuthChoice.bearer;
           _tokenCtrl.text = token;
           _advancedExpanded = true;
+        case AuthCfServiceToken(:final clientId, :final clientSecret):
+          _authChoice = _AuthChoice.cfServiceToken;
+          _cfClientIdCtrl.text = clientId;
+          _cfClientSecretCtrl.text = clientSecret;
+          _advancedExpanded = true;
       }
       _latestOverrides = config.deviceNameOverrides;
     });
@@ -119,10 +132,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _userCtrl.removeListener(_invalidateGate);
     _passCtrl.removeListener(_invalidateGate);
     _tokenCtrl.removeListener(_invalidateGate);
+    _cfClientIdCtrl.removeListener(_invalidateGate);
+    _cfClientSecretCtrl.removeListener(_invalidateGate);
     _urlCtrl.dispose();
     _userCtrl.dispose();
     _passCtrl.dispose();
     _tokenCtrl.dispose();
+    _cfClientIdCtrl.dispose();
+    _cfClientSecretCtrl.dispose();
     super.dispose();
   }
 
@@ -152,7 +169,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final gated = _gatedAuth;
     if (gated == null) return false;
     if (current.tag != gated.tag) return false;
-    return current.authorizationHeader == gated.authorizationHeader;
+    // Compare the full header contribution rather than just the Authorization
+    // header — schemes like Cloudflare Access carry their credentials in custom
+    // headers and have no Authorization value to compare.
+    return _headersEqual(current.headers, gated.headers);
+  }
+
+  static bool _headersEqual(Map<String, String> a, Map<String, String> b) {
+    if (a.length != b.length) return false;
+    for (final entry in a.entries) {
+      if (b[entry.key] != entry.value) return false;
+    }
+    return true;
   }
 
   AuthConfig _buildAuth() => switch (_authChoice) {
@@ -162,6 +190,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       password: _passCtrl.text,
     ),
     _AuthChoice.bearer => AuthBearer(token: _tokenCtrl.text),
+    _AuthChoice.cfServiceToken => AuthCfServiceToken(
+      clientId: _cfClientIdCtrl.text,
+      clientSecret: _cfClientSecretCtrl.text,
+    ),
   };
 
   Future<void> _onTestConnection() async {
@@ -200,19 +232,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _gatedAuth = auth;
         _testSuccessMsg = l.settingsTestSuccess(response.devices.length);
       });
-    } on NleAuthError catch (_) {
+    } on NleError catch (e) {
       if (!mounted) return;
       setState(() {
         _testing = false;
         _testPassed = false;
-        _testError = l.connectFailedAuth;
-      });
-    } on NleError catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _testing = false;
-        _testPassed = false;
-        _testError = l.connectFailedUnreachable;
+        _testError = connectErrorMessage(l, e);
       });
     }
   }
@@ -391,6 +416,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     value: _AuthChoice.bearer,
                     child: Text(l.authChoiceBearer),
                   ),
+                  DropdownMenuItem(
+                    value: _AuthChoice.cfServiceToken,
+                    child: Text(l.authChoiceCfServiceToken),
+                  ),
                 ],
                 onChanged: (v) {
                   if (v != null) {
@@ -447,6 +476,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ),
                   obscureText: !_tokenVisible,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                ),
+              ] else if (_authChoice == _AuthChoice.cfServiceToken) ...[
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _cfClientIdCtrl,
+                  decoration: InputDecoration(labelText: l.authCfClientIdLabel),
+                  autocorrect: false,
+                  enableSuggestions: false,
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _cfClientSecretCtrl,
+                  decoration: InputDecoration(
+                    labelText: l.authCfClientSecretLabel,
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _cfClientSecretVisible
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
+                      onPressed: () => setState(
+                        () => _cfClientSecretVisible = !_cfClientSecretVisible,
+                      ),
+                      tooltip: _cfClientSecretVisible
+                          ? l.authCfClientSecretHide
+                          : l.authCfClientSecretShow,
+                    ),
+                  ),
+                  obscureText: !_cfClientSecretVisible,
                   autocorrect: false,
                   enableSuggestions: false,
                 ),
@@ -721,7 +781,7 @@ class _DeviceRow extends StatelessWidget {
   }
 }
 
-enum _AuthChoice { none, basic, bearer }
+enum _AuthChoice { none, basic, bearer, cfServiceToken }
 
 class _RenameDeviceDialog extends StatefulWidget {
   final String serial;
