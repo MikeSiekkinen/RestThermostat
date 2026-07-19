@@ -6,8 +6,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'l10n/gen/app_localizations.dart';
 import 'models/device.dart';
 import 'onboarding/onboarding_flow.dart';
+import 'screens/details/details_screen.dart';
 import 'screens/home/home_body.dart';
 import 'screens/main_shell.dart';
+import 'screens/schedule/schedule_screen.dart';
 import 'services/app_info.dart';
 import 'services/backup/backup_service.dart';
 import 'services/onboarding_store.dart';
@@ -194,7 +196,14 @@ class _Home extends ConsumerStatefulWidget {
 }
 
 class _HomeState extends ConsumerState<_Home> {
-  late final PageController _pageController = PageController();
+  // One PageController per tab: the three tabs live together in the shell's
+  // `IndexedStack` (all mounted at once), so a single controller can't back
+  // all of them (Issue #125). Each tab's swipe drives the shared
+  // `activeDeviceSerialProvider`; the other controllers re-sync on the next
+  // build via the post-frame `jumpToPage` in [_buildSwipeableTab].
+  late final PageController _homeController = PageController();
+  late final PageController _scheduleController = PageController();
+  late final PageController _detailsController = PageController();
   bool _fallbackSnackbarShown = false;
   AuthFailureCoordinator? _authCoordinator;
   VoidCallback? _authListener;
@@ -217,7 +226,9 @@ class _HomeState extends ConsumerState<_Home> {
     if (_authCoordinator != null && _authListener != null) {
       _authCoordinator!.removeListener(_authListener!);
     }
-    _pageController.dispose();
+    _homeController.dispose();
+    _scheduleController.dispose();
+    _detailsController.dispose();
     super.dispose();
   }
 
@@ -310,12 +321,15 @@ class _HomeState extends ConsumerState<_Home> {
     } catch (_) {
       // Swallow — the in-memory provider is authoritative for this session.
     }
-    // Keep PageView in sync if the change came from the picker sheet.
+    // Keep the Home PageView in sync if the change came from the picker sheet
+    // (the picker only exists on the Home tab). The Schedule/Details
+    // controllers re-sync via the post-frame `jumpToPage` in
+    // [_buildSwipeableTab] on the rebuild this triggers.
     final index = devices.indexWhere((d) => d.serial == serial);
-    if (index >= 0 && _pageController.hasClients) {
-      final currentPage = _pageController.page?.round() ?? 0;
+    if (index >= 0 && _homeController.hasClients) {
+      final currentPage = _homeController.page?.round() ?? 0;
       if (currentPage != index) {
-        _pageController.animateToPage(
+        _homeController.animateToPage(
           index,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOutCubic,
@@ -394,13 +408,20 @@ class _HomeState extends ConsumerState<_Home> {
                   Expanded(
                     child: MainShell(
                       device: activeDevice!,
-                      overrides: widget.overrides,
-                      lastSyncAt: lastSyncAt,
                       homeTab: _buildHomeTab(
                         context,
                         snapshot.devices,
                         activeDevice,
                         activeSerial,
+                      ),
+                      scheduleTab: _buildScheduleTab(
+                        snapshot.devices,
+                        activeSerial,
+                      ),
+                      detailsTab: _buildDetailsTab(
+                        snapshot.devices,
+                        activeSerial,
+                        lastSyncAt,
                       ),
                     ),
                   ),
@@ -417,38 +438,47 @@ class _HomeState extends ConsumerState<_Home> {
     );
   }
 
-  /// Builds the Home-tab body. Single-device: a plain `HomeBody`. Multi-
-  /// device: wraps `HomeBody` in a `PageView` that drives
-  /// `activeDeviceSerialProvider` on swipe, and threads the device-picker
-  /// trigger + indicator dots into the body. The PageController is reused
-  /// across rebuilds so picker-driven changes can animate to the right
-  /// page rather than resetting.
-  Widget _buildHomeTab(
-    BuildContext context,
-    List<Device> devices,
-    Device activeDevice,
-    String? activeSerial,
-  ) {
+  /// Wraps a tab body in a horizontal device-swipe `PageView` when 2+ devices
+  /// are connected, so the user can flip between thermostats from any tab
+  /// (Issue #125 extends the Home-only swipe from Issue #15). A swipe writes
+  /// the swiped-to serial through [_setActiveSerial] — i.e. into the shared
+  /// `activeDeviceSerialProvider`, the single source of truth — so all three
+  /// tabs and the persisted active serial stay in lockstep.
+  ///
+  /// Single-device: the plain [pageBuilder] body, no `PageView`.
+  ///
+  /// [controller] is per-tab because the three tabs are mounted together in
+  /// the shell's `IndexedStack`; one controller can't back multiple viewports.
+  /// The post-frame `jumpToPage` realigns this tab's controller with the
+  /// active serial when it changed from another surface (another tab's swipe,
+  /// or the Home picker sheet) rather than from this tab's own gesture.
+  Widget _buildSwipeableTab({
+    required List<Device> devices,
+    required String? activeSerial,
+    required PageController controller,
+    required Widget Function(Device device) pageBuilder,
+  }) {
     if (devices.length < 2) {
-      return HomeBody(device: activeDevice, overrides: widget.overrides);
+      final active = devices.firstWhere(
+        (d) => d.serial == activeSerial,
+        orElse: () => devices.first,
+      );
+      return pageBuilder(active);
     }
     final activeIndex = devices.indexWhere((d) => d.serial == activeSerial);
     final resolvedIndex = activeIndex >= 0 ? activeIndex : 0;
 
-    // Keep the PageController in sync with provider-driven changes (e.g.
-    // picker-sheet selection). Without this jump, picking a row in the
-    // sheet wouldn't move the page.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (!_pageController.hasClients) return;
-      final currentPage = _pageController.page?.round();
+      if (!controller.hasClients) return;
+      final currentPage = controller.page?.round();
       if (currentPage != resolvedIndex) {
-        _pageController.jumpToPage(resolvedIndex);
+        controller.jumpToPage(resolvedIndex);
       }
     });
 
     return PageView.builder(
-      controller: _pageController,
+      controller: controller,
       itemCount: devices.length,
       onPageChanged: (index) {
         final serial = devices[index].serial;
@@ -456,19 +486,81 @@ class _HomeState extends ConsumerState<_Home> {
           _setActiveSerial(serial, devices);
         }
       },
-      itemBuilder: (_, index) {
-        final d = devices[index];
-        return HomeBody(
-          device: d,
-          overrides: widget.overrides,
-          onNameTap: () => _openDevicePicker(context, devices, activeSerial),
-          indicatorDots: DeviceIndicatorDots(
-            count: devices.length,
-            activeIndex: resolvedIndex,
-            activeMode: activeDevice.mode,
-          ),
-        );
-      },
+      itemBuilder: (_, index) => pageBuilder(devices[index]),
+    );
+  }
+
+  /// Builds the Home-tab body. Single-device: a plain `HomeBody`. Multi-
+  /// device: a swipeable `PageView` (via [_buildSwipeableTab]) with the
+  /// device-picker trigger + indicator dots threaded into each page.
+  Widget _buildHomeTab(
+    BuildContext context,
+    List<Device> devices,
+    Device activeDevice,
+    String? activeSerial,
+  ) {
+    final multiDevice = devices.length >= 2;
+    final activeIndex = devices.indexWhere((d) => d.serial == activeSerial);
+    final resolvedIndex = activeIndex >= 0 ? activeIndex : 0;
+
+    return _buildSwipeableTab(
+      devices: devices,
+      activeSerial: activeSerial,
+      controller: _homeController,
+      pageBuilder: (device) => HomeBody(
+        device: device,
+        overrides: widget.overrides,
+        onNameTap: multiDevice
+            ? () => _openDevicePicker(context, devices, activeSerial)
+            : null,
+        indicatorDots: multiDevice
+            ? DeviceIndicatorDots(
+                count: devices.length,
+                activeIndex: resolvedIndex,
+                activeMode: activeDevice.mode,
+              )
+            : null,
+      ),
+    );
+  }
+
+  /// Builds the Schedule-tab body: swipeable between devices when 2+ are
+  /// connected (Issue #125), otherwise a plain `ScheduleScreen`. No indicator
+  /// dots and no header picker on this tab per the issue — swipe only.
+  Widget _buildScheduleTab(List<Device> devices, String? activeSerial) {
+    return _buildSwipeableTab(
+      devices: devices,
+      activeSerial: activeSerial,
+      controller: _scheduleController,
+      pageBuilder: (device) => ScheduleScreen(
+        serial: device.serial,
+        temperatureScale: device.temperatureScale,
+        deviceMode: device.mode,
+        scheduleMode: device.scheduleMode,
+        capabilities: device.capabilities,
+        device: device,
+        overrides: widget.overrides,
+      ),
+    );
+  }
+
+  /// Builds the Details-tab body: swipeable between devices when 2+ are
+  /// connected (Issue #125), otherwise a plain `DetailsScreen`. Swipe only —
+  /// no dots, no header picker.
+  Widget _buildDetailsTab(
+    List<Device> devices,
+    String? activeSerial,
+    DateTime? lastSyncAt,
+  ) {
+    return _buildSwipeableTab(
+      devices: devices,
+      activeSerial: activeSerial,
+      controller: _detailsController,
+      pageBuilder: (device) => DetailsScreen(
+        device: device,
+        lastSyncAt: lastSyncAt,
+        overrides: widget.overrides,
+      ),
     );
   }
 }
