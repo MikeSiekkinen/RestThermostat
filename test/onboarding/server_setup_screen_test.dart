@@ -11,6 +11,7 @@ void main() {
     required ConnectFn onConnect,
     String? initialUrl,
     AuthConfig initialAuth = const AuthNone(),
+    VoidCallback? onRestore,
   }) {
     return MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -19,9 +20,34 @@ void main() {
         initialUrl: initialUrl,
         initialAuth: initialAuth,
         onConnect: onConnect,
+        onRestore: onRestore,
       ),
     );
   }
+
+  testWidgets('Restore from backup is hidden without an onRestore', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(onConnect: (_, _) async => const ConnectSuccess()),
+    );
+    expect(find.text('Restore from backup'), findsNothing);
+  });
+
+  testWidgets('Restore from backup shows and fires when provided', (
+    tester,
+  ) async {
+    var restored = false;
+    await tester.pumpWidget(
+      host(
+        onConnect: (_, _) async => const ConnectSuccess(),
+        onRestore: () => restored = true,
+      ),
+    );
+    expect(find.text('Restore from backup'), findsOneWidget);
+    await tester.tap(find.text('Restore from backup'));
+    expect(restored, isTrue);
+  });
 
   testWidgets('rejects empty URL with inline validation', (tester) async {
     await tester.pumpWidget(

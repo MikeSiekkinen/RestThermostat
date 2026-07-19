@@ -142,6 +142,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         initialUrl: _resumedUrl,
         initialAuth: _resumedAuth,
         onConnect: _attemptConnect,
+        onRestore: widget.backupService == null ? null : _onRestore,
       ),
       _Step.noDevices => NoDevicesScreen(
         onBack: () => setState(() => _step = _Step.serverSetup),
