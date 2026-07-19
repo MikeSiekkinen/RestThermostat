@@ -201,9 +201,14 @@ class _HomeState extends ConsumerState<_Home> {
   // all of them (Issue #125). Each tab's swipe drives the shared
   // `activeDeviceSerialProvider`; the other controllers re-sync on the next
   // build via the post-frame `jumpToPage` in [_buildSwipeableTab].
-  late final PageController _homeController = PageController();
-  late final PageController _scheduleController = PageController();
-  late final PageController _detailsController = PageController();
+  //
+  // Created lazily on each tab's first multi-device build so `initialPage`
+  // can be seeded to the restored active device — otherwise the fresh
+  // controller paints index 0 for one frame before the post-frame sync, a
+  // visible flash of the wrong device on cold start (CodeRabbit, PR #126).
+  PageController? _homeController;
+  PageController? _scheduleController;
+  PageController? _detailsController;
   bool _fallbackSnackbarShown = false;
   AuthFailureCoordinator? _authCoordinator;
   VoidCallback? _authListener;
@@ -226,9 +231,9 @@ class _HomeState extends ConsumerState<_Home> {
     if (_authCoordinator != null && _authListener != null) {
       _authCoordinator!.removeListener(_authListener!);
     }
-    _homeController.dispose();
-    _scheduleController.dispose();
-    _detailsController.dispose();
+    _homeController?.dispose();
+    _scheduleController?.dispose();
+    _detailsController?.dispose();
     super.dispose();
   }
 
@@ -325,11 +330,12 @@ class _HomeState extends ConsumerState<_Home> {
     // (the picker only exists on the Home tab). The Schedule/Details
     // controllers re-sync via the post-frame `jumpToPage` in
     // [_buildSwipeableTab] on the rebuild this triggers.
+    final home = _homeController;
     final index = devices.indexWhere((d) => d.serial == serial);
-    if (index >= 0 && _homeController.hasClients) {
-      final currentPage = _homeController.page?.round() ?? 0;
+    if (index >= 0 && home != null && home.hasClients) {
+      final currentPage = home.page?.round() ?? 0;
       if (currentPage != index) {
-        _homeController.animateToPage(
+        home.animateToPage(
           index,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOutCubic,
@@ -455,7 +461,8 @@ class _HomeState extends ConsumerState<_Home> {
   Widget _buildSwipeableTab({
     required List<Device> devices,
     required String? activeSerial,
-    required PageController controller,
+    required PageController? Function() getController,
+    required void Function(PageController) setController,
     required Widget Function(Device device) pageBuilder,
   }) {
     if (devices.length < 2) {
@@ -468,17 +475,27 @@ class _HomeState extends ConsumerState<_Home> {
     final activeIndex = devices.indexWhere((d) => d.serial == activeSerial);
     final resolvedIndex = activeIndex >= 0 ? activeIndex : 0;
 
+    // Create this tab's controller on its first multi-device build, seeding
+    // `initialPage` to the active device so the first frame paints the right
+    // device (no index-0 flash before the post-frame sync).
+    var controller = getController();
+    if (controller == null) {
+      controller = PageController(initialPage: resolvedIndex);
+      setController(controller);
+    }
+    final tabController = controller;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (!controller.hasClients) return;
-      final currentPage = controller.page?.round();
+      if (!tabController.hasClients) return;
+      final currentPage = tabController.page?.round();
       if (currentPage != resolvedIndex) {
-        controller.jumpToPage(resolvedIndex);
+        tabController.jumpToPage(resolvedIndex);
       }
     });
 
     return PageView.builder(
-      controller: controller,
+      controller: tabController,
       itemCount: devices.length,
       onPageChanged: (index) {
         final serial = devices[index].serial;
@@ -486,6 +503,10 @@ class _HomeState extends ConsumerState<_Home> {
           _setActiveSerial(serial, devices);
         }
       },
+      // Each [pageBuilder] keys its child by `device.serial` so Flutter ties
+      // page State to device identity, not to the index slot — a device-list
+      // reorder can't bleed one thermostat's page state onto another
+      // (CodeRabbit, PR #126).
       itemBuilder: (_, index) => pageBuilder(devices[index]),
     );
   }
@@ -506,8 +527,10 @@ class _HomeState extends ConsumerState<_Home> {
     return _buildSwipeableTab(
       devices: devices,
       activeSerial: activeSerial,
-      controller: _homeController,
+      getController: () => _homeController,
+      setController: (c) => _homeController = c,
       pageBuilder: (device) => HomeBody(
+        key: ValueKey(device.serial),
         device: device,
         overrides: widget.overrides,
         onNameTap: multiDevice
@@ -531,8 +554,10 @@ class _HomeState extends ConsumerState<_Home> {
     return _buildSwipeableTab(
       devices: devices,
       activeSerial: activeSerial,
-      controller: _scheduleController,
+      getController: () => _scheduleController,
+      setController: (c) => _scheduleController = c,
       pageBuilder: (device) => ScheduleScreen(
+        key: ValueKey(device.serial),
         serial: device.serial,
         temperatureScale: device.temperatureScale,
         deviceMode: device.mode,
@@ -555,8 +580,10 @@ class _HomeState extends ConsumerState<_Home> {
     return _buildSwipeableTab(
       devices: devices,
       activeSerial: activeSerial,
-      controller: _detailsController,
+      getController: () => _detailsController,
+      setController: (c) => _detailsController = c,
       pageBuilder: (device) => DetailsScreen(
+        key: ValueKey(device.serial),
         device: device,
         lastSyncAt: lastSyncAt,
         overrides: widget.overrides,
