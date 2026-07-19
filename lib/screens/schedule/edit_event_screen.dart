@@ -657,65 +657,25 @@ class _TempStepper extends StatelessWidget {
   /// the steppers' clamp — before it reaches [onChanged]. Non-numeric or empty
   /// input leaves the value unchanged.
   Future<void> _editViaKeyboard(BuildContext context) async {
-    final l = AppLocalizations.of(context);
-    final isF = scale.toUpperCase() != 'C';
-    final unit = isF ? '°F' : '°C';
-    final controller = TextEditingController(
-      text: isF ? (valueC * 9 / 5 + 32).round().toString() : _trimC(valueC),
-    );
-    final minD = isF
-        ? (_minTempC * 9 / 5 + 32).round().toString()
-        : _trimC(_minTempC);
-    final maxD = isF
-        ? (_maxTempC * 9 / 5 + 32).round().toString()
-        : _trimC(_maxTempC);
-
-    final confirmed = await showDialog<bool>(
+    // The dialog owns its own [TextEditingController] via [_TempEntryDialog] so
+    // that the controller is disposed in that widget's own `State.dispose()` —
+    // after its `EditableText` subtree has unmounted — rather than
+    // synchronously after `await showDialog`, which would race the route
+    // teardown and trip `_dependents.isEmpty` (Issue #111).
+    final celsius = await showDialog<double>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l.editEventTempEntryTitle),
-        content: TextField(
-          key: const ValueKey('temp-entry-field'),
-          controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.numberWithOptions(decimal: !isF),
-          textAlign: TextAlign.center,
-          cursorColor: accent,
-          style: (Theme.of(ctx).textTheme.headlineMedium ?? const TextStyle())
-              .merge(numeralStyle),
-          decoration: InputDecoration(
-            suffixText: unit,
-            helperText: '$minD–$maxD $unit',
-            focusedBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: accent, width: 2),
-            ),
-          ),
-          onSubmitted: (_) => Navigator.of(ctx).pop(true),
-        ),
-        actions: [
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: accent),
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(l.editEventCancel),
-          ),
-          TextButton(
-            key: const ValueKey('temp-entry-confirm'),
-            style: TextButton.styleFrom(foregroundColor: accent),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(l.editEventTempEntryConfirm),
-          ),
-        ],
+      builder: (_) => _TempEntryDialog(
+        valueC: valueC,
+        scale: scale,
+        accent: accent,
+        numeralStyle: numeralStyle,
       ),
     );
-
-    if (confirmed == true) {
-      final raw = double.tryParse(controller.text.trim());
-      if (raw != null) {
-        final celsius = isF ? (raw - 32) * 5 / 9 : raw;
-        onChanged(celsius.clamp(_minTempC, _maxTempC).toDouble());
-      }
-    }
-    controller.dispose();
+    // The parent screen sits under the (modal) dialog so it normally stays
+    // mounted, but guard the async gap defensively before the setState-driving
+    // callback in case the route was torn down while the dialog was open.
+    if (!context.mounted) return;
+    if (celsius != null) onChanged(celsius);
   }
 
   /// Format a Celsius value for prefill: drop a trailing `.0` (20.0 → "20") but
@@ -743,6 +703,109 @@ class _TempStepper extends StatelessWidget {
         ? celsius - 0.5
         : ((celsius * 9 / 5 + 32) - 1 - 32) * 5 / 9;
     return next.clamp(_minTempC, _maxTempC);
+  }
+}
+
+/// Keyboard-entry dialog for a temperature, owning its own controller for its
+/// full lifetime so the controller is disposed in `dispose()` (after the
+/// `EditableText` subtree unmounts) rather than synchronously after the pop —
+/// which raced the route teardown and threw `_dependents.isEmpty` (Issue #111).
+///
+/// The user types in the device's display unit; on confirm the parsed value is
+/// converted back to Celsius and clamped to [_minTempC, _maxTempC] — matching
+/// the steppers' clamp — and returned via `Navigator.pop`. Cancel, empty, or
+/// non-numeric input pops `null`, leaving the value unchanged.
+class _TempEntryDialog extends StatefulWidget {
+  final double valueC;
+  final String scale;
+  final Color accent;
+  final TextStyle? numeralStyle;
+
+  const _TempEntryDialog({
+    required this.valueC,
+    required this.scale,
+    required this.accent,
+    required this.numeralStyle,
+  });
+
+  @override
+  State<_TempEntryDialog> createState() => _TempEntryDialogState();
+}
+
+class _TempEntryDialogState extends State<_TempEntryDialog> {
+  late final bool _isF = widget.scale.toUpperCase() != 'C';
+  late final TextEditingController _controller = TextEditingController(
+    text: _isF
+        ? (widget.valueC * 9 / 5 + 32).round().toString()
+        : _TempStepper._trimC(widget.valueC),
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// Parse the field and pop the clamped Celsius value, or `null` if the input
+  /// is empty/non-numeric (leave the current value unchanged). A locale-comma
+  /// decimal ("20,5") is normalized to a period so it parses, and `NaN` is
+  /// rejected — `double.nan` would otherwise survive [num.clamp] as the upper
+  /// limit and silently commit the ceiling temperature.
+  void _commit() {
+    final raw = double.tryParse(_controller.text.trim().replaceAll(',', '.'));
+    if (raw == null || raw.isNaN) {
+      Navigator.of(context).pop();
+      return;
+    }
+    final celsius = _isF ? (raw - 32) * 5 / 9 : raw;
+    Navigator.of(context).pop(celsius.clamp(_minTempC, _maxTempC).toDouble());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final unit = _isF ? '°F' : '°C';
+    final minD = _isF
+        ? (_minTempC * 9 / 5 + 32).round().toString()
+        : _TempStepper._trimC(_minTempC);
+    final maxD = _isF
+        ? (_maxTempC * 9 / 5 + 32).round().toString()
+        : _TempStepper._trimC(_maxTempC);
+
+    return AlertDialog(
+      title: Text(l.editEventTempEntryTitle),
+      content: TextField(
+        key: const ValueKey('temp-entry-field'),
+        controller: _controller,
+        autofocus: true,
+        keyboardType: TextInputType.numberWithOptions(decimal: !_isF),
+        textAlign: TextAlign.center,
+        cursorColor: widget.accent,
+        style: (Theme.of(context).textTheme.headlineMedium ?? const TextStyle())
+            .merge(widget.numeralStyle),
+        decoration: InputDecoration(
+          suffixText: unit,
+          helperText: '$minD–$maxD $unit',
+          focusedBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: widget.accent, width: 2),
+          ),
+        ),
+        onSubmitted: (_) => _commit(),
+      ),
+      actions: [
+        TextButton(
+          style: TextButton.styleFrom(foregroundColor: widget.accent),
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l.editEventCancel),
+        ),
+        TextButton(
+          key: const ValueKey('temp-entry-confirm'),
+          style: TextButton.styleFrom(foregroundColor: widget.accent),
+          onPressed: _commit,
+          child: Text(l.editEventTempEntryConfirm),
+        ),
+      ],
+    );
   }
 }
 
