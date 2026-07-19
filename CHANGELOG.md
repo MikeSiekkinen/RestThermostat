@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-07-19
+
+### Added
+
+- Keyboard temperature entry on the Home dial: tap the target readout to type
+  a setpoint instead of dragging the ring. (#113)
+- Heat-cool (Auto) dual setpoints on the Home dial: two draggable HEAT/COOL
+  markers with a warm→cool band, a stacked readout, a dual-field range dialog
+  with an enforced 1.5°C deadband, and an explicit {low, high} write. See
+  `docs/adr/0002-heat-cool-dual-marker-dial.md` and DESIGN §10.3/§11.3. (#116)
+
+### Fixed
+
+- Schedule header no longer truncates the Auto band: "Set …" sits on its own
+  line below "Now …" in every mode. (#115)
+- Temp-keypad "Set" crash on the Edit Event screen (`_dependents.isEmpty`), plus
+  hardened keypad input parsing. (#111)
+
+### Changed
+
+- Dependency bumps: `google_fonts` 8.1.0→8.2.0, `package_info_plus`
+  10.1.0→10.2.1, `share_plus` 13.1.0→13.2.1. Pub dependabot updates are now
+  grouped into a single weekly PR. (#94)
+
 ## [1.2.0] - 2026-07-18
 
 ### Added
