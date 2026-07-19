@@ -167,40 +167,47 @@ class _EmberTimeFieldsState extends State<EmberTimeFields> {
     final minuteError = _minute == null ? l.editEventMinuteError : null;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            _field(
-              context,
-              key: const ValueKey('time-hour-field'),
-              controller: _hourCtrl,
-              label: l.editEventHourLabel,
-              hasError: hourError != null,
-            ),
-            const _Colon(),
-            _field(
-              context,
-              key: const ValueKey('time-minute-field'),
-              controller: _minuteCtrl,
-              label: l.editEventMinuteLabel,
-              hasError: minuteError != null,
-            ),
-            if (!widget.use24Hour) ...[
-              const SizedBox(width: 16),
-              _AmPmToggle(
-                isPm: _isPm,
-                onChanged: (pm) {
-                  _isPm = pm;
-                  _emit();
-                },
+        // The hour/minute pair (and AM/PM in 12-hour mode) centered as a group.
+        // FittedBox keeps that centering while scaling the group down instead of
+        // overflowing at large accessibility text sizes.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _field(
+                context,
+                key: const ValueKey('time-hour-field'),
+                controller: _hourCtrl,
+                label: l.editEventHourLabel,
+                hasError: hourError != null,
               ),
+              const SizedBox(width: 14),
+              _field(
+                context,
+                key: const ValueKey('time-minute-field'),
+                controller: _minuteCtrl,
+                label: l.editEventMinuteLabel,
+                hasError: minuteError != null,
+              ),
+              if (!widget.use24Hour) ...[
+                const SizedBox(width: 16),
+                _AmPmToggle(
+                  isPm: _isPm,
+                  onChanged: (pm) {
+                    _isPm = pm;
+                    _emit();
+                  },
+                ),
+              ],
             ],
-          ],
+          ),
         ),
         // Errors live below the row (not per-field `errorText`) so the two
-        // fields stay vertically aligned with the colon and AM/PM pills.
+        // fields stay vertically aligned with the AM/PM pills.
         // `liveRegion` restores the announcement that `InputDecoration.errorText`
         // would otherwise give screen readers when the message appears.
         for (final error in [hourError, minuteError])
@@ -211,6 +218,7 @@ class _EmberTimeFieldsState extends State<EmberTimeFields> {
                 liveRegion: true,
                 child: Text(
                   error,
+                  textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.error,
                   ),
@@ -235,13 +243,11 @@ class _EmberTimeFieldsState extends State<EmberTimeFields> {
       borderRadius: BorderRadius.circular(12),
       borderSide: BorderSide(color: color, width: width),
     );
-    // Flexible + a max-width cap: the fields sit at 88px when there's room but
-    // shrink rather than overflow when a large accessibility text scale grows
-    // the colon and AM/PM labels past the available row width.
-    return Flexible(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 88),
-        child: Column(
+    // Fixed 88px box; the parent centers the pair and a FittedBox scales the
+    // group down rather than letting it overflow at large text sizes.
+    return SizedBox(
+      width: 88,
+      child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             // The label rides centered above its box (was a left-aligned
@@ -292,24 +298,6 @@ class _EmberTimeFieldsState extends State<EmberTimeFields> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _Colon extends StatelessWidget {
-  const _Colon();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Text(
-        ':',
-        style: Theme.of(
-          context,
-        ).textTheme.headlineMedium?.copyWith(color: EmberColors.textPrimary),
-      ),
     );
   }
 }

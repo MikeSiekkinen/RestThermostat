@@ -11,7 +11,6 @@ import '../../state/providers.dart';
 import '../../theme/colors.dart';
 import '../../widgets/ember_time_fields.dart';
 import '../../widgets/repeat_days_row.dart';
-import 'day_index.dart';
 
 /// Per `docs/DESIGN.md` §6 / PRD §5.5 (with DESIGN §18 divergences).
 ///
@@ -236,12 +235,7 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
               onTargetTempLow: (c) => setState(() => _targetTempLow = c),
               onTargetTempHigh: (c) => setState(() => _targetTempHigh = c),
             ),
-            const SizedBox(height: 32),
-            Text(
-              _timeSectionHeader(context, l),
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 24),
             EmberTimeFields(
               key: const ValueKey('ember-time-fields'),
               initialHour: _hour ?? 7,
@@ -285,26 +279,6 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
         ),
       ),
     );
-  }
-
-  /// Section header above the time fields. In new-event mode the repeat-day
-  /// panels below already carry each day's date, so this stays the generic
-  /// "Time". In edit mode there's no day picker, so it names the event's
-  /// weekday plus, as a reminder, the next date it falls on — e.g. "Monday
-  /// (Jul 20)", or "Saturday (Jul 18 today)" when that's today.
-  String _timeSectionHeader(BuildContext context, AppLocalizations l) {
-    if (widget.isNew) return l.editEventTimeLabel;
-    final dayIndex = widget.existingEvent!.dayIndex;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    // dayIndex is Mon=0..Sun=6; DateTime.weekday is Mon=1..Sun=7. Dart's % is
-    // non-negative, so this is the days until the next occurrence (0 = today).
-    final next = today.add(Duration(days: (dayIndex + 1 - now.weekday) % 7));
-    final ml = MaterialLocalizations.of(context);
-    final paren = next == today
-        ? '${ml.formatShortMonthDay(today)} today'
-        : ml.formatShortMonthDay(next);
-    return '${fullDayNames[dayIndex]} ($paren)';
   }
 
   Future<void> _save() async {
