@@ -10,11 +10,13 @@ class TimeFieldColors {
   final Color restingBorder;
   final Color focusedBorder;
   final Color cursor;
+  final Color label;
 
   const TimeFieldColors({
     required this.restingBorder,
     required this.focusedBorder,
     required this.cursor,
+    required this.label,
   });
 
   /// Mode-agnostic gray with a de-warmed cursor — the default treatment.
@@ -22,14 +24,16 @@ class TimeFieldColors {
     restingBorder: EmberColors.textTertiary,
     focusedBorder: EmberColors.textPrimary,
     cursor: EmberColors.textSecondary,
+    label: EmberColors.textSecondary,
   );
 
   /// Boxes tinted by [accent] (an event's mode glow): a dimmed resting outline,
-  /// the full accent when focused, and an accent cursor.
+  /// the full accent when focused, an accent cursor, and an accent caption.
   factory TimeFieldColors.accented(Color accent) => TimeFieldColors(
-    restingBorder: accent.withValues(alpha: 0.55),
+    restingBorder: accent.withValues(alpha: 0.7),
     focusedBorder: accent,
     cursor: accent,
+    label: accent,
   );
 }
 
@@ -248,7 +252,7 @@ class _EmberTimeFieldsState extends State<EmberTimeFields> {
                 label,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: hasError ? errorColor : EmberColors.textSecondary,
+                  color: hasError ? errorColor : widget.colors.label,
                 ),
               ),
             ),

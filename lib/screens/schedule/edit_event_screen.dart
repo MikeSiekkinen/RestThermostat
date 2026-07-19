@@ -181,9 +181,15 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
     final mediaQuery = MediaQuery.of(context);
     final locale = Localizations.maybeLocaleOf(context) ?? const Locale('en');
     final l = AppLocalizations.of(context);
-    final timeColors = ref.watch(timeFieldPaletteProvider) == TimeFieldPalette.neutral
+    // One accent drives both the time boxes and the temp-entry dialog: the
+    // event's mode tint in "match mode", plain white in "neutral" (so nothing
+    // inherits the app's warm primary).
+    final neutral =
+        ref.watch(timeFieldPaletteProvider) == TimeFieldPalette.neutral;
+    final accent = neutral ? EmberColors.textPrimary : _tintFor(_type);
+    final timeColors = neutral
         ? TimeFieldColors.neutral
-        : TimeFieldColors.accented(_tintFor(_type));
+        : TimeFieldColors.accented(accent);
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
@@ -218,6 +224,7 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
             _TempSection(
               type: _type,
               scale: widget.temperatureScale,
+              accent: accent,
               targetTemp: _targetTemp,
               targetTempLow: _targetTempLow,
               targetTempHigh: _targetTempHigh,
@@ -589,11 +596,17 @@ class _TempStepper extends StatelessWidget {
   /// `temp-up`/`temp-down` widget keys remain stable.
   final bool showLabel;
 
+  /// Accent for the keyboard-entry dialog (cursor, focused underline, and the
+  /// Cancel/Set actions), so it honors the time-field color scheme instead of
+  /// the app's warm default primary.
+  final Color accent;
+
   const _TempStepper({
     required this.label,
     required this.valueC,
     required this.scale,
     required this.onChanged,
+    required this.accent,
     this.showLabel = true,
   });
 
@@ -671,20 +684,26 @@ class _TempStepper extends StatelessWidget {
           autofocus: true,
           keyboardType: TextInputType.numberWithOptions(decimal: !isF),
           textAlign: TextAlign.center,
+          cursorColor: accent,
           style: Theme.of(ctx).textTheme.headlineMedium,
           decoration: InputDecoration(
             suffixText: unit,
             helperText: '$minD–$maxD $unit',
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: accent, width: 2),
+            ),
           ),
           onSubmitted: (_) => Navigator.of(ctx).pop(true),
         ),
         actions: [
           TextButton(
+            style: TextButton.styleFrom(foregroundColor: accent),
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(l.editEventCancel),
           ),
           TextButton(
             key: const ValueKey('temp-entry-confirm'),
+            style: TextButton.styleFrom(foregroundColor: accent),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(l.editEventTempEntryConfirm),
           ),
@@ -733,6 +752,7 @@ class _TempStepper extends StatelessWidget {
 class _TempSection extends StatelessWidget {
   final String type;
   final String scale;
+  final Color accent;
   final double? targetTemp;
   final double? targetTempLow;
   final double? targetTempHigh;
@@ -743,6 +763,7 @@ class _TempSection extends StatelessWidget {
   const _TempSection({
     required this.type,
     required this.scale,
+    required this.accent,
     required this.targetTemp,
     required this.targetTempLow,
     required this.targetTempHigh,
@@ -760,6 +781,7 @@ class _TempSection extends StatelessWidget {
             label: 'HEAT',
             valueC: targetTempLow ?? 18.0,
             scale: scale,
+            accent: accent,
             onChanged: onTargetTempLow,
           ),
           const SizedBox(height: 16),
@@ -767,6 +789,7 @@ class _TempSection extends StatelessWidget {
             label: 'COOL',
             valueC: targetTempHigh ?? 24.0,
             scale: scale,
+            accent: accent,
             onChanged: onTargetTempHigh,
           ),
         ],
@@ -777,6 +800,7 @@ class _TempSection extends StatelessWidget {
       showLabel: false,
       valueC: targetTemp ?? 20.0,
       scale: scale,
+      accent: accent,
       onChanged: onTargetTemp,
     );
   }
