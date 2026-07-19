@@ -933,4 +933,92 @@ void main() {
       expect(h.requests.last['value'], 'HEAT');
     });
   });
+
+  group('temperature keypad (Issue #111)', () {
+    const tempValue = ValueKey('temp-value-HEAT');
+    const entryField = ValueKey('temp-entry-field');
+    const confirm = ValueKey('temp-entry-confirm');
+
+    const heatEvent = ScheduleEvent(
+      dayIndex: 1,
+      hour: 7,
+      minute: 0,
+      type: 'HEAT',
+      targetTemp: 20.0,
+    );
+
+    _Harness editHarness({String temperatureScale = 'C'}) => _setup(
+      schedule: _emptyWeek().addEvent(heatEvent),
+      existingEvent: heatEvent,
+      defaultDayIndex: 1,
+      temperatureScale: temperatureScale,
+    );
+
+    testWidgets('tapping Set commits the value without throwing', (
+      tester,
+    ) async {
+      final h = editHarness();
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      // Open the keypad, type a new value, confirm with Set.
+      await tester.tap(find.byKey(tempValue));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(entryField), '22');
+      await tester.tap(find.byKey(confirm));
+      await tester.pumpAndSettle();
+
+      // Regression: the dialog-local controller disposal used to race the route
+      // teardown, throwing `_dependents.isEmpty` (framework.dart:6268).
+      expect(tester.takeException(), isNull);
+      // The stepper display reflects the entered value.
+      expect(find.byKey(tempValue), findsOneWidget);
+      expect(
+        find.descendant(of: find.byKey(tempValue), matching: find.text('22°C')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('keyboard Done (onSubmitted) commits like Set', (tester) async {
+      final h = editHarness();
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      await tester.tap(find.byKey(tempValue));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(entryField), '25');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.descendant(of: find.byKey(tempValue), matching: find.text('25°C')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('Cancel dismisses without committing', (tester) async {
+      final h = editHarness();
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      await tester.tap(find.byKey(tempValue));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(entryField), '28');
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('Cancel'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // Unchanged from the seeded 20°C.
+      expect(
+        find.descendant(of: find.byKey(tempValue), matching: find.text('20°C')),
+        findsOneWidget,
+      );
+    });
+  });
 }
