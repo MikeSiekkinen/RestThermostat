@@ -209,10 +209,17 @@ void main() {
     await tester.tap(find.text('SCHEDULE'));
     await _pumpUntilStable(tester);
 
+    // The Schedule header renders the active device's name (Issue #100),
+    // independent of the schedule fetch — so it doubles as a "which device is
+    // visible" probe. Device 0 first.
+    expect(find.text('Upstairs'), findsOneWidget);
+
     await tester.fling(find.byType(PageView), const Offset(-400, 0), 1200);
     await _pumpUntilStable(tester);
 
+    // Both the shared state AND the visible page advanced to device 1.
     expect(store.activeSerial, '02BB02BD041404KL');
+    expect(find.text('Downstairs'), findsOneWidget);
   });
 
   testWidgets('swiping the Details tab advances the active-device provider', (
@@ -233,11 +240,17 @@ void main() {
     await tester.tap(find.text('DETAILS'));
     await _pumpUntilStable(tester);
 
+    // The Details "CURRENT" header renders the active device's name (as
+    // "{name} · {mode}") — a "which device is visible" probe. Device 0 first.
+    expect(find.textContaining('Upstairs'), findsOneWidget);
+
     // Only the active (Details) tab's PageView is onstage.
     await tester.fling(find.byType(PageView), const Offset(-400, 0), 1200);
     await _pumpUntilStable(tester);
 
+    // Both the shared state AND the visible page advanced to device 1.
     expect(store.activeSerial, '02BB02BD041404KL');
+    expect(find.textContaining('Downstairs'), findsOneWidget);
   });
 
   testWidgets(
