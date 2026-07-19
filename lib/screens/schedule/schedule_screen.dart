@@ -7,6 +7,7 @@ import '../../models/schedule.dart';
 import '../../services/device_display_name.dart';
 import '../../services/schedule_helpers.dart';
 import '../../services/setpoint_source.dart';
+import '../../settings/numeral_font.dart';
 import '../../state/providers.dart';
 import '../../theme/colors.dart';
 import 'day_index.dart';
@@ -219,6 +220,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                     events: schedule?.eventsForDay(_selectedDay) ?? const [],
                     temperatureScale: widget.temperatureScale,
                     activeEvent: activeEvent,
+                    numeralStyle: ref.watch(numeralFontProvider).style,
                     onTapEvent: (event) => _openEditEvent(schedule, event),
                   ),
                 ),
@@ -391,12 +393,16 @@ class _DayEventList extends StatelessWidget {
   /// The event currently driving the setpoint (Issue #97), or `null`. When one
   /// of this day's events equals it, that row gets the in-control highlight.
   final ScheduleEvent? activeEvent;
+
+  /// Numeral face for the row times and temperatures.
+  final TextStyle? numeralStyle;
   final ValueChanged<ScheduleEvent> onTapEvent;
 
   const _DayEventList({
     required this.events,
     required this.temperatureScale,
     required this.activeEvent,
+    required this.numeralStyle,
     required this.onTapEvent,
   });
 
@@ -436,6 +442,7 @@ class _DayEventList extends StatelessWidget {
         event: events[i],
         temperatureScale: temperatureScale,
         isActive: activeEvent != null && events[i] == activeEvent,
+        numeralStyle: numeralStyle,
         onTap: () => onTapEvent(events[i]),
       ),
     );
@@ -450,12 +457,16 @@ class _EventRow extends StatelessWidget {
   /// When true the row gets a full-strength type-colored border and glow so it
   /// reads as "the schedule is holding this right now" regardless of mode.
   final bool isActive;
+
+  /// Numeral face for the time and temperature, merged onto their styles.
+  final TextStyle? numeralStyle;
   final VoidCallback onTap;
 
   const _EventRow({
     required this.event,
     required this.temperatureScale,
     required this.isActive,
+    required this.numeralStyle,
     required this.onTap,
   });
 
@@ -526,7 +537,10 @@ class _EventRow extends StatelessWidget {
                   Expanded(
                     child: Text(
                       timeLabel,
-                      style: Theme.of(context).textTheme.headlineLarge,
+                      style:
+                          (Theme.of(context).textTheme.headlineLarge ??
+                                  const TextStyle())
+                              .merge(numeralStyle),
                     ),
                   ),
                   Column(
@@ -534,10 +548,11 @@ class _EventRow extends StatelessWidget {
                     children: [
                       Text(
                         tempLabel,
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: tint,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style:
+                            (Theme.of(context).textTheme.bodyLarge ??
+                                    const TextStyle())
+                                .copyWith(color: tint, fontWeight: FontWeight.w600)
+                                .merge(numeralStyle),
                       ),
                       const SizedBox(height: 2),
                       Text(

@@ -108,6 +108,10 @@ class TemperatureDial extends StatefulWidget {
   /// Companion to [onIncrease] for the `onDecrease` action.
   final VoidCallback? onDecrease;
 
+  /// Numeral face for the big target-temperature readout, merged onto the
+  /// display style. Null keeps the theme's Fraunces display face.
+  final TextStyle? numeralStyle;
+
   const TemperatureDial({
     super.key,
     required this.currentTemperatureCelsius,
@@ -122,6 +126,7 @@ class TemperatureDial extends StatefulWidget {
     this.onTargetTap,
     this.onIncrease,
     this.onDecrease,
+    this.numeralStyle,
   });
 
   bool get _interactive =>
@@ -358,7 +363,9 @@ class _TemperatureDialState extends State<TemperatureDial> {
                       children: [
                         Text(
                           targetLabel,
-                          style: EmberTypography.displayLarge(),
+                          style: EmberTypography.displayLarge().merge(
+                            widget.numeralStyle,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Text(
