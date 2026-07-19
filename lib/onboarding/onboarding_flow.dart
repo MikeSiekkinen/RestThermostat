@@ -5,6 +5,7 @@ import '../models/auth_config.dart';
 import '../models/device.dart';
 import '../services/nle_api_client.dart';
 import '../services/nle_error.dart';
+import '../services/nle_error_messages.dart';
 import '../services/onboarding_store.dart';
 import 'connect_outcome.dart';
 import 'device_picker_screen.dart';
@@ -76,14 +77,10 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         _step = _Step.devicePicker;
       });
       return const ConnectSuccess();
-    } on NleAuthError catch (_) {
+    } on NleError catch (e) {
       if (!mounted) return const ConnectInlineError('');
       final l = AppLocalizations.of(context);
-      return ConnectInlineError(l.connectFailedAuth);
-    } on NleError catch (_) {
-      if (!mounted) return const ConnectInlineError('');
-      final l = AppLocalizations.of(context);
-      return ConnectInlineError(l.connectFailedUnreachable);
+      return ConnectInlineError(connectErrorMessage(l, e));
     }
   }
 

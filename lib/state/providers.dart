@@ -35,7 +35,7 @@ final activeServerProvider =
 NleApiClient _defaultClientFactory(String url, AuthConfig auth) =>
     NleApiClient.create(
       baseUrl: url,
-      authorizationHeader: auth.authorizationHeader,
+      authHeaders: auth.headers,
       logger: AppLogger.instance,
     );
 

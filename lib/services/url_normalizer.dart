@@ -2,7 +2,9 @@
 ///
 /// Rules:
 /// - Missing scheme → default `http://`.
-/// - Missing port → default `:8082`.
+/// - Missing port → scheme-aware default: `:8082` for `http` (a direct-LAN
+///   NLE server), `:443` for `https` (a reverse proxy / Cloudflare front that
+///   terminates TLS on the standard port).
 /// - Strip trailing slash.
 /// - Reject malformed input (empty host, bad scheme, parse failure).
 class UrlNormalizationException implements Exception {
@@ -41,6 +43,10 @@ String normalizeServerUrl(String input) {
     );
   }
 
-  final port = uri.hasPort ? uri.port : 8082;
+  // An https URL without an explicit port is fronted by a reverse proxy or
+  // Cloudflare on the standard TLS port (443); only the direct-LAN http case
+  // defaults to NLE's 8082. Forcing 8082 onto https URLs was the cause of
+  // "Couldn't reach server" against Cloudflare-fronted deployments.
+  final port = uri.hasPort ? uri.port : (uri.scheme == 'https' ? 443 : 8082);
   return '${uri.scheme}://${uri.host}:$port';
 }

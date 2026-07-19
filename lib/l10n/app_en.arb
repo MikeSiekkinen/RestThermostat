@@ -209,6 +209,7 @@
   "authChoiceNone": "None",
   "authChoiceBasic": "Basic",
   "authChoiceBearer": "Bearer",
+  "authChoiceCfServiceToken": "Cloudflare Access",
   "authUsernameLabel": "Username",
   "authPasswordLabel": "Password",
   "authPasswordShow": "Show password",
@@ -216,6 +217,10 @@
   "authTokenLabel": "Token",
   "authTokenShow": "Show token",
   "authTokenHide": "Hide token",
+  "authCfClientIdLabel": "Service token client ID",
+  "authCfClientSecretLabel": "Service token client secret",
+  "authCfClientSecretShow": "Show client secret",
+  "authCfClientSecretHide": "Hide client secret",
   "connectButton": "Connect",
   "@serverSetupTitle": { "description": "AppBar title on the Server Setup screen." },
   "@serverAddressLabel": { "description": "Text field label for the NLE server URL." },
@@ -226,6 +231,7 @@
   "@authChoiceNone": { "description": "Dropdown option: no authentication (default)." },
   "@authChoiceBasic": { "description": "Dropdown option: HTTP Basic authentication." },
   "@authChoiceBearer": { "description": "Dropdown option: Bearer-token authentication." },
+  "@authChoiceCfServiceToken": { "description": "Dropdown option: Cloudflare Access service-token authentication." },
   "@authUsernameLabel": { "description": "Username text field label (HTTP Basic auth)." },
   "@authPasswordLabel": { "description": "Password text field label (HTTP Basic auth)." },
   "@authPasswordShow": { "description": "Visibility-toggle tooltip when the password field is obscured." },
@@ -233,12 +239,48 @@
   "@authTokenLabel": { "description": "Bearer-token text field label." },
   "@authTokenShow": { "description": "Visibility-toggle tooltip when the bearer-token field is obscured." },
   "@authTokenHide": { "description": "Visibility-toggle tooltip when the bearer-token field is visible." },
+  "@authCfClientIdLabel": { "description": "Cloudflare Access service-token client ID field label." },
+  "@authCfClientSecretLabel": { "description": "Cloudflare Access service-token client secret field label." },
+  "@authCfClientSecretShow": { "description": "Visibility-toggle tooltip when the CF client-secret field is obscured." },
+  "@authCfClientSecretHide": { "description": "Visibility-toggle tooltip when the CF client-secret field is visible." },
   "@connectButton": { "description": "Primary submit button on the Server Setup screen." },
 
   "connectFailedAuth": "Authentication failed.",
+  "connectFailedCloudflareAccess": "Blocked by Cloudflare Access. Add a valid service token under Advanced → Cloudflare Access.",
   "connectFailedUnreachable": "Couldn't reach server.",
+  "connectFailedTimeout": "Connection to {target} timed out. The server didn't respond.",
+  "connectFailedRefused": "Connection to {target} was refused. Check the address and port.",
+  "connectFailedDns": "Couldn't find server {target}. Check the address.",
+  "connectFailedTls": "Secure (TLS) connection to {target} failed. Check the address and certificate.",
+  "connectFailedNetwork": "Couldn't reach {target}. Check your network and the address.",
+  "connectFailedRedirect": "Server at {target} redirected the request. Check the address — if your proxy upgrades to HTTPS, use the https:// URL directly.",
   "@connectFailedAuth": { "description": "Inline error after Test Connection when the server rejected credentials (401/403)." },
-  "@connectFailedUnreachable": { "description": "Inline error after Test Connection for any non-auth failure." },
+  "@connectFailedCloudflareAccess": { "description": "Inline error after Test Connection when Cloudflare Access blocked the request (redirect to the Access login, or a Cloudflare-Access challenge)." },
+  "@connectFailedUnreachable": { "description": "Inline error after Test Connection for a non-network failure (e.g. server or parse error)." },
+  "@connectFailedTimeout": {
+    "description": "Inline error after Test Connection when the connection or response timed out.",
+    "placeholders": { "target": { "type": "String", "example": "nest.home:8082" } }
+  },
+  "@connectFailedRefused": {
+    "description": "Inline error after Test Connection when the host refused the connection (wrong port / nothing listening).",
+    "placeholders": { "target": { "type": "String", "example": "nest.home:8082" } }
+  },
+  "@connectFailedDns": {
+    "description": "Inline error after Test Connection when the hostname failed to resolve (DNS).",
+    "placeholders": { "target": { "type": "String", "example": "nest.home:8082" } }
+  },
+  "@connectFailedTls": {
+    "description": "Inline error after Test Connection when the TLS handshake / certificate check failed.",
+    "placeholders": { "target": { "type": "String", "example": "nest.home:443" } }
+  },
+  "@connectFailedNetwork": {
+    "description": "Inline error after Test Connection for an otherwise-unclassified network failure.",
+    "placeholders": { "target": { "type": "String", "example": "nest.home:8082" } }
+  },
+  "@connectFailedRedirect": {
+    "description": "Inline error after Test Connection when the server answered with a non-Cloudflare redirect (reverse-proxy http→https upgrade, path rewrite) — an address problem, not an auth problem.",
+    "placeholders": { "target": { "type": "String", "example": "nest.home:80" } }
+  },
 
   "devicePickerTitle": "Choose a thermostat",
   "noDevicesTitle": "No thermostats registered.",
