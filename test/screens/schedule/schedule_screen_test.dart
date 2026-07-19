@@ -996,6 +996,11 @@ void main() {
         find.bySemanticsLabel(RegExp('Now 77°F, humidity 60%, set to 76°F')),
         findsOne,
       );
+      // The visible "Set …" line is wrapped in ExcludeSemantics so the setpoint
+      // is announced once (via the combined label above), not twice. Guard that
+      // exclusion: its raw visual string must not surface as its own semantics
+      // node (Issue #115).
+      expect(find.bySemanticsLabel('Set 76°F'), findsNothing);
 
       await _disposeTree(tester);
     });
