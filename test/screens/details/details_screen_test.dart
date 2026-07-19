@@ -51,6 +51,7 @@ Future<void> _pumpHost(
   DateTime? now,
   Map<String, String> overrides = const {},
   NumeralFont? numeralFont,
+  VoidCallback? onDeviceNameTap,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -73,6 +74,7 @@ Future<void> _pumpHost(
             lastSyncAt: lastSyncAt,
             now: () => now ?? DateTime(2026, 5, 13, 12, 0, 0),
             overrides: overrides,
+            onDeviceNameTap: onDeviceNameTap,
           ),
         ),
       ),
@@ -344,6 +346,35 @@ void main() {
       // The new temperature tile (24.76999°C → 77°F) carries it too.
       final temp = tester.widget<Text>(find.text('77°'));
       expect(temp.style?.fontFamily, 'Anton');
+    });
+  });
+
+  group('CURRENT header device picker (Issue #127)', () {
+    testWidgets('renders a caret and invokes the callback when the header is '
+        'tapped (multi-device)', (tester) async {
+      var taps = 0;
+      await _pumpHost(
+        tester,
+        device: _device(target: 22.0),
+        onDeviceNameTap: () => taps++,
+      );
+
+      // The caret mirrors Home's affordance.
+      expect(find.byIcon(Icons.expand_more), findsOneWidget);
+
+      // The combined "{name} · {mode}" heading is the whole tap target.
+      await tester.tap(find.textContaining('Upstairs'));
+      await tester.pump();
+      expect(taps, 1);
+    });
+
+    testWidgets('shows no caret and is not tappable when single-device '
+        '(callback null)', (tester) async {
+      await _pumpHost(tester, device: _device(target: 22.0));
+
+      // Header still renders (Issue #100 combined header) but with no caret.
+      expect(find.textContaining('Upstairs'), findsOneWidget);
+      expect(find.byIcon(Icons.expand_more), findsNothing);
     });
   });
 }

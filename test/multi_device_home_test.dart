@@ -261,6 +261,77 @@ void main() {
     expect(find.textContaining('Downstairs'), findsOneWidget);
   });
 
+  testWidgets('tapping the Schedule header name opens the picker and selecting '
+      'a device advances the active-device provider (Issue #127)', (
+    tester,
+  ) async {
+    final store = FakeOnboardingStore()
+      ..serverUrl = 'http://test.local:8082'
+      ..activeSerial = '02AA01AC041403JM'
+      ..complete = true;
+
+    final dio = Dio(BaseOptions(baseUrl: 'http://test.local:8082'));
+    final adapter = DioAdapter(dio: dio);
+    adapter.onGet('/api/devices', (s) => s.reply(200, _twoDeviceBody()));
+
+    await tester.pumpWidget(_wrap(store: store, dio: dio));
+    await _pumpUntilStable(tester);
+
+    await tester.tap(find.text('SCHEDULE'));
+    await _pumpUntilStable(tester);
+
+    // Non-gesture path: tap the header device name (not a swipe) to open the
+    // same picker Home uses. Device 0 (Upstairs) is active first.
+    expect(find.text('Upstairs'), findsOneWidget);
+    await tester.tap(find.text('Upstairs').first);
+    await _pumpUntilStable(tester);
+
+    expect(find.byType(DevicePickerSheet), findsOneWidget);
+
+    await tester.tap(find.text('Downstairs'));
+    await _pumpUntilStable(tester);
+
+    // Sheet dismisses; shared state + the visible page both advanced.
+    expect(find.byType(DevicePickerSheet), findsNothing);
+    expect(store.activeSerial, '02BB02BD041404KL');
+    expect(find.text('Downstairs'), findsOneWidget);
+  });
+
+  testWidgets('tapping the Details CURRENT header opens the picker and '
+      'selecting a device advances the active-device provider (Issue #127)', (
+    tester,
+  ) async {
+    final store = FakeOnboardingStore()
+      ..serverUrl = 'http://test.local:8082'
+      ..activeSerial = '02AA01AC041403JM'
+      ..complete = true;
+
+    final dio = Dio(BaseOptions(baseUrl: 'http://test.local:8082'));
+    final adapter = DioAdapter(dio: dio);
+    adapter.onGet('/api/devices', (s) => s.reply(200, _twoDeviceBody()));
+
+    await tester.pumpWidget(_wrap(store: store, dio: dio));
+    await _pumpUntilStable(tester);
+
+    await tester.tap(find.text('DETAILS'));
+    await _pumpUntilStable(tester);
+
+    // The "CURRENT" header renders "{name} · {mode}"; tapping it (non-gesture)
+    // opens the picker. Device 0 (Upstairs) active first.
+    expect(find.textContaining('Upstairs'), findsOneWidget);
+    await tester.tap(find.textContaining('Upstairs').first);
+    await _pumpUntilStable(tester);
+
+    expect(find.byType(DevicePickerSheet), findsOneWidget);
+
+    await tester.tap(find.text('Downstairs'));
+    await _pumpUntilStable(tester);
+
+    expect(find.byType(DevicePickerSheet), findsNothing);
+    expect(store.activeSerial, '02BB02BD041404KL');
+    expect(find.textContaining('Downstairs'), findsOneWidget);
+  });
+
   testWidgets(
     'persisted serial not in latest snapshot falls back and snackbars once',
     (tester) async {

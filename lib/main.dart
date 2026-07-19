@@ -421,10 +421,12 @@ class _HomeState extends ConsumerState<_Home> {
                         activeSerial,
                       ),
                       scheduleTab: _buildScheduleTab(
+                        context,
                         snapshot.devices,
                         activeSerial,
                       ),
                       detailsTab: _buildDetailsTab(
+                        context,
                         snapshot.devices,
                         activeSerial,
                         lastSyncAt,
@@ -548,9 +550,16 @@ class _HomeState extends ConsumerState<_Home> {
   }
 
   /// Builds the Schedule-tab body: swipeable between devices when 2+ are
-  /// connected (Issue #125), otherwise a plain `ScheduleScreen`. No indicator
-  /// dots and no header picker on this tab per the issue — swipe only.
-  Widget _buildScheduleTab(List<Device> devices, String? activeSerial) {
+  /// connected (Issue #125), otherwise a plain `ScheduleScreen`. With 2+
+  /// devices the header device name is also tappable → the shared
+  /// `DevicePickerSheet` (Issue #127), a non-gesture device switch at parity
+  /// with Home for assistive-tech / switch-control users. No indicator dots.
+  Widget _buildScheduleTab(
+    BuildContext context,
+    List<Device> devices,
+    String? activeSerial,
+  ) {
+    final multiDevice = devices.length >= 2;
     return _buildSwipeableTab(
       devices: devices,
       activeSerial: activeSerial,
@@ -565,18 +574,24 @@ class _HomeState extends ConsumerState<_Home> {
         capabilities: device.capabilities,
         device: device,
         overrides: widget.overrides,
+        onDeviceNameTap: multiDevice
+            ? () => _openDevicePicker(context, devices, activeSerial)
+            : null,
       ),
     );
   }
 
   /// Builds the Details-tab body: swipeable between devices when 2+ are
-  /// connected (Issue #125), otherwise a plain `DetailsScreen`. Swipe only —
-  /// no dots, no header picker.
+  /// connected (Issue #125), otherwise a plain `DetailsScreen`. With 2+ devices
+  /// the "CURRENT" header is tappable → the shared `DevicePickerSheet` (Issue
+  /// #127), matching Home's non-gesture device switch. No indicator dots.
   Widget _buildDetailsTab(
+    BuildContext context,
     List<Device> devices,
     String? activeSerial,
     DateTime? lastSyncAt,
   ) {
+    final multiDevice = devices.length >= 2;
     return _buildSwipeableTab(
       devices: devices,
       activeSerial: activeSerial,
@@ -587,6 +602,9 @@ class _HomeState extends ConsumerState<_Home> {
         device: device,
         lastSyncAt: lastSyncAt,
         overrides: widget.overrides,
+        onDeviceNameTap: multiDevice
+            ? () => _openDevicePicker(context, devices, activeSerial)
+            : null,
       ),
     );
   }

@@ -42,12 +42,22 @@ class DetailsScreen extends ConsumerWidget {
   /// Schedule, device picker). Empty map falls back to the server name.
   final Map<String, String> overrides;
 
+  /// When non-null, the "CURRENT" heading becomes tappable and shows the same
+  /// caret (`Icons.expand_more`) Home uses, opening the shared
+  /// `DevicePickerSheet` (Issue #127) — a non-gesture way to change the active
+  /// device at parity with Home. The heading text is the combined
+  /// `"{name} · {mode}"` ARB string (`detailsCurrentHeader`), so the whole
+  /// heading is the tap target rather than just the name substring. Null for
+  /// the single-device case and test callers (no affordance).
+  final VoidCallback? onDeviceNameTap;
+
   const DetailsScreen({
     super.key,
     required this.device,
     required this.lastSyncAt,
     this.now = DateTime.now,
     this.overrides = const {},
+    this.onDeviceNameTap,
   });
 
   @override
@@ -71,6 +81,7 @@ class DetailsScreen extends ConsumerWidget {
             displayNameFor(device, overrides),
             _modeLabel(context, device.mode),
           ),
+          onTap: onDeviceNameTap,
         ),
         // Row 1: temperature + humidity. IntrinsicHeight so the pair share the
         // taller card's height (the temperature tile has no footer line);
@@ -176,14 +187,51 @@ class DetailsScreen extends ConsumerWidget {
 
 class _SectionHeading extends StatelessWidget {
   final String text;
-  const _SectionHeading(this.text);
+
+  /// When non-null (Issue #127, the "CURRENT" heading only) the heading becomes
+  /// tappable and grows the same `Icons.expand_more` caret Home uses, opening
+  /// the shared `DevicePickerSheet`. Null leaves the plain static heading.
+  final VoidCallback? onTap;
+
+  const _SectionHeading(this.text, {this.onTap});
+
   @override
   Widget build(BuildContext context) {
+    final headingText = Text(
+      text,
+      style: EmberTypography.labelSmall(color: EmberColors.textTertiary),
+    );
+    if (onTap == null) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: headingText,
+      );
+    }
+
+    // Mirror Home's caret affordance (see `StatusRow`): the whole heading is
+    // the tap target because the ARB string combines name + mode, and the
+    // caret signals it opens the picker.
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Text(
-        text,
-        style: EmberTypography.labelSmall(color: EmberColors.textTertiary),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Flexible(child: headingText),
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.expand_more,
+                size: 16,
+                color: EmberColors.textSecondary,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -37,6 +37,7 @@ _Harness _setup({
   DateTime Function()? now,
   Map<String, String> overrides = const {},
   double textScale = 1.0,
+  VoidCallback? onDeviceNameTap,
 }) {
   final dio = Dio(BaseOptions(baseUrl: 'http://test.local:8082'));
   final adapter = DioAdapter(dio: dio);
@@ -71,6 +72,7 @@ _Harness _setup({
             device: device,
             now: now ?? DateTime.now,
             overrides: overrides,
+            onDeviceNameTap: onDeviceNameTap,
           ),
         ),
       ),
@@ -1100,6 +1102,64 @@ void main() {
       // layout; assert none was swallowed.
       expect(tester.takeException(), isNull);
       expect(find.textContaining('Now 77°F'), findsOneWidget);
+
+      await _disposeTree(tester);
+    });
+  });
+
+  group('header device picker (Issue #127)', () {
+    Device pickerDevice({String name = 'Upstairs'}) {
+      final raw = File('test/fixtures/devices_one.json').readAsStringSync();
+      final entry = Map<String, dynamic>.from(
+        (jsonDecode(raw) as Map<String, dynamic>)['devices'][0]
+            as Map<String, dynamic>,
+      );
+      entry['name'] = name;
+      return Device.fromJson(entry);
+    }
+
+    void stubSchedule(_Harness h) {
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(200, _scheduleFixture()),
+        queryParameters: {'serial': 'abc'},
+      );
+    }
+
+    testWidgets('renders a caret and invokes the callback when the name is '
+        'tapped (multi-device)', (tester) async {
+      var taps = 0;
+      final h = _setup(
+        serial: 'abc',
+        device: pickerDevice(),
+        onDeviceNameTap: () => taps++,
+      );
+      stubSchedule(h);
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      // The caret mirrors Home's affordance.
+      expect(find.byIcon(Icons.expand_more), findsOneWidget);
+
+      await tester.tap(find.text('Upstairs'));
+      await tester.pumpAndSettle();
+      expect(taps, 1);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('shows no caret and is not tappable when single-device '
+        '(callback null)', (tester) async {
+      final h = _setup(serial: 'abc', device: pickerDevice());
+      stubSchedule(h);
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      // Name still renders (Issue #100) but with no caret / no InkWell.
+      expect(find.text('Upstairs'), findsOneWidget);
+      expect(find.byIcon(Icons.expand_more), findsNothing);
 
       await _disposeTree(tester);
     });
