@@ -64,12 +64,24 @@ class BackupService {
   /// Appearance keys are written straight to prefs; callers should refresh the
   /// appearance providers (e.g. `ref.invalidate`) so live state re-hydrates.
   Future<void> apply(ConfigSnapshot snapshot) async {
+    final current = await store.read();
+
     if (snapshot.serverUrl != null) {
       await store.saveServerUrl(snapshot.serverUrl!);
     }
     await store.saveAuth(snapshot.auth);
     if (snapshot.activeSerial != null) {
       await store.saveActiveSerial(snapshot.activeSerial!);
+    }
+
+    // Mirror device-name overrides rather than merge: drop any the current
+    // config carries that the backup doesn't, so a restore reproduces the
+    // backup exactly (a stale override from the pre-restore device must not
+    // survive). Then write the backup's set.
+    for (final serial in current.deviceNameOverrides.keys) {
+      if (!snapshot.deviceNameOverrides.containsKey(serial)) {
+        await store.setDeviceNameOverride(serial, null);
+      }
     }
     for (final entry in snapshot.deviceNameOverrides.entries) {
       await store.setDeviceNameOverride(entry.key, entry.value);
@@ -87,7 +99,13 @@ class BackupService {
       snapshot.timeFieldPalette,
     );
 
-    await store.markComplete();
+    // Only land the user "connected" if there's actually a server to reach —
+    // from the backup or already on disk. A serverUrl-less file marking
+    // onboarding complete would soft-stick Bootstrap (isComplete but no
+    // server → it falls through to onboarding anyway).
+    if ((snapshot.serverUrl ?? current.serverUrl) != null) {
+      await store.markComplete();
+    }
   }
 
   static Future<void> _writeOrRemove(

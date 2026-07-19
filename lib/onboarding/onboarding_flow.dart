@@ -102,9 +102,20 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     widget.onComplete();
   }
 
+  bool _restoring = false;
+
   Future<void> _onRestore() async {
     final service = widget.backupService;
-    if (service == null) return;
+    if (service == null || _restoring) return;
+    setState(() => _restoring = true);
+    try {
+      await _runRestore(service);
+    } finally {
+      if (mounted) setState(() => _restoring = false);
+    }
+  }
+
+  Future<void> _runRestore(BackupService service) async {
     final applied = await runBackupImport(
       context,
       service,

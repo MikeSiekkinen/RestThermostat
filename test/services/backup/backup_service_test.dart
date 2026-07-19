@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rest_thermostat/models/auth_config.dart';
 import 'package:rest_thermostat/services/backup/backup_service.dart';
+import 'package:rest_thermostat/services/backup/config_snapshot.dart';
 import 'package:rest_thermostat/settings/numeral_font.dart';
 import 'package:rest_thermostat/settings/time_field_palette.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -91,6 +92,52 @@ void main() {
       expect(prefs.getString(NumeralFontNotifier.prefsKey), 'jetBrainsMono');
       expect(prefs.getString(TimeFieldPaletteNotifier.prefsKey), 'neutral');
     });
+
+    test('mirrors device-name overrides — stale ones do not survive', () async {
+      // Backup carries only S1; target device already has a different override
+      // (S2) that must be dropped so restore reproduces the backup exactly.
+      SharedPreferences.setMockInitialValues({});
+      final source = FakeOnboardingStore()
+        ..serverUrl = 'https://a.example'
+        ..nameOverrides['S1'] = 'Hallway';
+      final envelope = await serviceFor(source).exportEncrypted('pw');
+
+      final target = FakeOnboardingStore()
+        ..serverUrl = 'https://old.example'
+        ..nameOverrides['S2'] = 'Bedroom';
+      final targetService = serviceFor(target);
+      await targetService.apply(await targetService.decrypt(envelope, 'pw'));
+
+      expect(target.nameOverrides, {'S1': 'Hallway'});
+      expect(
+        target.nameOverrides.containsKey('S2'),
+        isFalse,
+        reason: 'stale override must be removed on restore',
+      );
+    });
+
+    test(
+      'a serverUrl-less snapshot does not mark onboarding complete',
+      () async {
+        // Guards against soft-sticking Bootstrap (isComplete but no server).
+        SharedPreferences.setMockInitialValues({});
+        final target =
+            FakeOnboardingStore(); // fresh: serverUrl null, incomplete
+        final service = serviceFor(target);
+        const noServer = ConfigSnapshot(
+          serverUrl: null,
+          auth: AuthNone(),
+          activeSerial: null,
+          deviceNameOverrides: {},
+          numeralFont: null,
+          timeFieldPalette: null,
+        );
+
+        await service.apply(noServer);
+
+        expect(target.complete, isFalse);
+      },
+    );
 
     test('full restore round-trip preserves every value', () async {
       SharedPreferences.setMockInitialValues({

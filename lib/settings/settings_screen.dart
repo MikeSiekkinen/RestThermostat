@@ -68,6 +68,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _cfClientSecretVisible = false;
   bool _testing = false;
   bool _testPassed = false;
+  // Guards the backup Export/Restore flows against a double-tap launching two
+  // interleaved flows (there's a one-frame window before the dialog covers the
+  // tile).
+  bool _backupBusy = false;
   String? _testError;
   String? _testSuccessMsg;
   Map<String, String> _latestOverrides = const {};
@@ -662,10 +666,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _onExportBackup() async {
-    await runBackupExport(context, ref.read(backupServiceProvider));
+    if (_backupBusy) return;
+    setState(() => _backupBusy = true);
+    try {
+      await runBackupExport(context, ref.read(backupServiceProvider));
+    } finally {
+      if (mounted) setState(() => _backupBusy = false);
+    }
   }
 
   Future<void> _onRestoreBackup() async {
+    if (_backupBusy) return;
+    setState(() => _backupBusy = true);
+    try {
+      await _runRestore();
+    } finally {
+      if (mounted) setState(() => _backupBusy = false);
+    }
+  }
+
+  Future<void> _runRestore() async {
     final applied = await runBackupImport(
       context,
       ref.read(backupServiceProvider),

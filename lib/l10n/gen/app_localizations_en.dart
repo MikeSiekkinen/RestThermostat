@@ -550,6 +550,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get backupRestorePartial =>
+      'Restore failed and your settings may be partly changed. Reconnect from Settings or try restoring again.';
+
+  @override
   String get backupConfirmTitle => 'Restore this backup?';
 
   @override

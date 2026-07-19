@@ -1042,6 +1042,12 @@ abstract class AppLocalizations {
   /// **'Couldn\'t restore the backup: {error}'**
   String backupRestoreFailed(Object error);
 
+  /// Snackbar warning that a mid-apply failure may have left config partly overwritten.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore failed and your settings may be partly changed. Reconnect from Settings or try restoring again.'**
+  String get backupRestorePartial;
+
   /// Title of the dialog that confirms overwriting config with a restored backup.
   ///
   /// In en, this message translates to:

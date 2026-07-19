@@ -355,6 +355,7 @@
   "backupErrorMalformed": "That backup file is damaged or unreadable.",
   "backupExportFailed": "Couldn't create the backup: {error}",
   "backupRestoreFailed": "Couldn't restore the backup: {error}",
+  "backupRestorePartial": "Restore failed and your settings may be partly changed. Reconnect from Settings or try restoring again.",
   "backupConfirmTitle": "Restore this backup?",
   "backupConfirmBody": "This replaces your current server, credentials, and appearance with the values in the backup.",
   "backupConfirmServer": "Server: {url}",
@@ -451,6 +452,7 @@
     "description": "Snackbar shown when applying a restored backup fails unexpectedly.",
     "placeholders": { "error": { "type": "Object" } }
   },
+  "@backupRestorePartial": { "description": "Snackbar warning that a mid-apply failure may have left config partly overwritten." },
   "@backupConfirmTitle": { "description": "Title of the dialog that confirms overwriting config with a restored backup." },
   "@backupConfirmBody": { "description": "Body text warning that restore overwrites current config." },
   "@backupConfirmServer": {

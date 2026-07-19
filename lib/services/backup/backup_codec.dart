@@ -30,6 +30,17 @@ class Argon2idParams {
     parallelism: 1,
   );
 
+  // Upper bounds on cost read from an *untrusted* file. Decrypt runs the KDF
+  // (before the MAC can reject a wrong passphrase), so a hand-crafted envelope
+  // with enormous params would otherwise OOM/hang the app on import. These
+  // ceilings sit far above anything this app writes (19 MiB / t=2 / p=1) or a
+  // reasonable future raise, but low enough that the allocation can't take the
+  // process down. Raise them (with a schema bump) if we ever legitimately need
+  // more.
+  static const _maxMemory = 262144; // 256 MiB in KiB
+  static const _maxIterations = 24;
+  static const _maxParallelism = 16;
+
   Map<String, dynamic> toJson() => {
     'm': memory,
     't': iterations,
@@ -40,6 +51,9 @@ class Argon2idParams {
     final m = json['m'], t = json['t'], p = json['p'];
     if (m is! int || t is! int || p is! int || m < 1 || t < 1 || p < 1) {
       throw const BackupMalformed('invalid argon2id params');
+    }
+    if (m > _maxMemory || t > _maxIterations || p > _maxParallelism) {
+      throw const BackupMalformed('argon2id params exceed safe bounds');
     }
     return Argon2idParams(memory: m, iterations: t, parallelism: p);
   }

@@ -121,6 +121,36 @@ void main() {
       );
     });
 
+    test(
+      'out-of-bounds Argon2id params are rejected before the KDF runs',
+      () async {
+        // A hand-crafted file with enormous cost params would OOM/hang the app if
+        // the KDF ran; it must be rejected as malformed instead.
+        String envelopeWith(Map<String, dynamic> params) => jsonEncode({
+          'app': 'rest-thermostat',
+          'schema': 1,
+          'kdf': 'argon2id',
+          'cipher': 'xchacha20poly1305',
+          'salt': base64Encode(List.filled(16, 0)),
+          'params': params,
+          'nonce': base64Encode(List.filled(24, 0)),
+          'ciphertext': base64Encode(List.filled(32, 0)),
+        });
+
+        for (final params in <Map<String, dynamic>>[
+          {'m': 2000000000, 't': 2, 'p': 1}, // ~2 TB memory
+          {'m': 19456, 't': 100000, 'p': 1}, // absurd iterations
+          {'m': 19456, 't': 2, 'p': 4096}, // absurd parallelism
+        ]) {
+          expect(
+            () => testCodec().decrypt(envelopeWith(params), 'anything'),
+            throwsA(isA<BackupMalformed>()),
+            reason: 'params $params should be rejected',
+          );
+        }
+      },
+    );
+
     test('no plaintext secret leaks into the envelope', () async {
       const secret = 'SUPER-SECRET-TOKEN-9f3a1c';
       final envelope = await testCodec().encrypt({

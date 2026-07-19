@@ -43,13 +43,18 @@ Rejected: `cryptography_flutter` (doesn't accelerate the KDF, no web), `pointyca
 
 ### Argon2id parameters
 
-OWASP Password Storage Cheat Sheet baseline: **m = 19 MiB (19456 KiB), t = 2, p = 1**, 32-byte key, 16-byte salt. Tuned toward a ~1 s one-shot unlock. Because params live in the envelope, these are a floor we can raise without a schema bump.
+OWASP Password Storage Cheat Sheet baseline: **m = 19 MiB (19456 KiB), t = 2, p = 1**, 32-byte key, 16-byte salt. Targets a ~1–3 s one-shot unlock (pure-Dart Argon2id is slower on low-end phones — see the on-device follow-up below). Because params live in the envelope, these are a floor we can raise without a schema bump. On **import**, params are read from an untrusted file and drive the KDF *before* the MAC can reject a wrong passphrase, so the reader clamps them to safe upper bounds (≤ 256 MiB / t ≤ 24 / p ≤ 16, `Argon2idParams.fromJson`) — an out-of-range file is rejected as malformed rather than allowed to OOM/hang the app.
+
+### File dialog (save/open)
+
+`flutter_file_dialog` provides the filesystem save and open dialogs via the OS document picker (Android SAF, iOS `UIDocumentPicker`). Chosen over a `share_plus` share sheet (which can only hand the file to another app, not save it to a chosen folder) and over `file_picker` (whose Windows Dart code pins `win32 5.x` and won't compile against the `win32 6.x` that `share_plus` requires — and `flutter test` compiles every platform's sources, so a `dependency_overrides` can't paper over it). `flutter_file_dialog` is Android/iOS-only, so it has no `win32` dependency and needs no manifest permission or Info.plist key.
 
 ### Schema / forward-compatibility policy
 
 - `schema` starts at **1**. Import **rejects** `schema` greater than the build supports (`BackupTooNewSchema`) rather than silently dropping fields it can't interpret.
 - Within a supported schema, the payload decoder **ignores unknown keys and tolerates missing ones** — a file written by a future build with extra keys still restores everything the current build understands, and a shorter file still restores.
 - A new config key that older builds can safely ignore does **not** need a schema bump. Bump `schema` only for a change that would make an old build mis-restore.
+- **Adding or changing an auth scheme requires a schema bump.** `auth.type` is load-bearing: an older reader that doesn't recognize a new type coerces it to `AuthNone` (`ConfigSnapshot._authFromJson`), silently dropping the credential and landing the user unauthenticated. Because that is a mis-restore (not a safely-ignorable key), a new auth scheme must raise `schema` so old builds reject the file up front rather than restore it half-authenticated.
 
 ## Scope
 
@@ -60,8 +65,8 @@ Backed up: `server_url`; auth type + credentials (Basic user/pass, Bearer token,
 ## Consequences
 
 - **Positive:** survives Keystore loss; no plaintext secret ever leaves the app; no native toolchain in CI; old backups keep working as params/keys evolve.
-- **Negative:** ~1 s Argon2id unlock on device (mitigated by isolate + spinner); adds two compiled deps (`cryptography`, `file_picker`) → a `pubspec.lock` change and a build-number bump (DESIGN §13.4). `file_picker` (chosen for its real filesystem save-document dialog, vs a share sheet that can't save to a chosen folder) needs a `dependency_overrides: win32: ^6.0.1` to co-resolve with `share_plus` — harmless, as win32 is Windows-only and this app targets Android/iOS.
-- **Open / follow-up:** confirm on-device Argon2id latency at the chosen params on the min-spec target; if unacceptable, revisit `sodium` (this ADR would be superseded).
+- **Negative:** ~1–3 s Argon2id unlock on device (mitigated by isolate + spinner); adds two compiled deps (`cryptography`, `flutter_file_dialog`) → a `pubspec.lock` change and a build-number bump (DESIGN §13.4). Neither needs native build config or a `dependency_overrides` (see *File dialog* above for why `flutter_file_dialog` was chosen over `file_picker`).
+- **Open / follow-up:** confirm on-device Argon2id latency at the chosen params on the min-spec target; if unacceptable, revisit `sodium` (this ADR would be superseded). The iOS `UIDocumentPicker` save/open path is code-correct but not yet exercised on-device (no in-repo iOS build).
 
 ## Testing
 

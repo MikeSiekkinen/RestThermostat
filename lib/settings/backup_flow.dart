@@ -83,6 +83,8 @@ Future<bool> runBackupImport(
         dialogType: OpenFileDialogType.document,
         fileExtensionsFilter: ['json'],
         mimeTypesFilter: ['application/json'],
+        // iOS honors UTIs, not the extension/MIME filters, at pick time.
+        allowedUtiTypes: ['public.json'],
       ),
     );
   } catch (e) {
@@ -138,6 +140,11 @@ Future<bool> runBackupImport(
     } on BackupMalformed {
       if (context.mounted) _snack(context, l.backupErrorMalformed);
       return false;
+    } catch (e) {
+      // Anything the codec didn't classify (e.g. a compute()/isolate failure
+      // in the KDF) — surface it instead of unwinding unhandled.
+      if (context.mounted) _snack(context, l.backupRestoreFailed(e));
+      return false;
     }
   }
   if (!context.mounted) return false;
@@ -153,7 +160,11 @@ Future<bool> runBackupImport(
   try {
     await service.apply(snapshot);
   } catch (e) {
-    if (context.mounted) _snack(context, l.backupRestoreFailed(e));
+    // apply() writes several keys in sequence with no rollback; a mid-sequence
+    // failure (e.g. a locked keychain) can leave config partly overwritten.
+    // Warn the user so they know to re-restore or reconnect rather than trust
+    // a silently half-applied state.
+    if (context.mounted) _snack(context, l.backupRestorePartial);
     return false;
   }
 
@@ -202,17 +213,25 @@ class _ProgressDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      content: Row(
-        children: [
-          const SizedBox(
-            height: 22,
-            width: 22,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          const SizedBox(width: 20),
-          Expanded(child: Text(caption)),
-        ],
+    // `barrierDismissible: false` blocks scrim taps but NOT the Android Back
+    // button; without `canPop: false` a Back press would pop this dialog, and
+    // then `_withProgress`'s `finally` pop would tear down the route beneath
+    // it. Making the dialog truly non-dismissible keeps the flow's single pop
+    // correct.
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
+        content: Row(
+          children: [
+            const SizedBox(
+              height: 22,
+              width: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 20),
+            Expanded(child: Text(caption)),
+          ],
+        ),
       ),
     );
   }
