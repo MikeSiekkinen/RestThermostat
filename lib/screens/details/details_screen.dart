@@ -67,8 +67,10 @@ class DetailsScreen extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       children: [
         _SectionHeading(
-          '${displayNameFor(device, overrides)} · '
-          '${_modeLabel(context, device.mode)}',
+          l.detailsCurrentHeader(
+            displayNameFor(device, overrides),
+            _modeLabel(context, device.mode),
+          ),
         ),
         // Row 1: temperature + humidity. IntrinsicHeight so the pair share the
         // taller card's height (the temperature tile has no footer line);

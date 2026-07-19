@@ -1399,7 +1399,7 @@ abstract class AppLocalizations {
   /// **'HUMIDITY'**
   String get detailsHumidity;
 
-  /// Label for the current-temperature stat tile (abbreviated to fit three tiles across).
+  /// Label for the current-temperature stat tile.
   ///
   /// In en, this message translates to:
   /// **'TEMP'**
@@ -1410,6 +1410,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'SETPOINT'**
   String get detailsSetpoint;
+
+  /// Header above the Details stat tiles: the device's display name and its current operating mode. Mirrors the scheduleHeaderNow separator convention so other locales can reorder name/mode without a code change.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · {mode}'**
+  String detailsCurrentHeader(String name, String mode);
 
   /// Long-press tooltip body explaining the (Derived) suffix.
   ///

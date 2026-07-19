@@ -775,6 +775,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get detailsSetpoint => 'SETPOINT';
 
   @override
+  String detailsCurrentHeader(String name, String mode) {
+    return '$name · $mode';
+  }
+
+  @override
   String get detailsSetpointSourceTooltip =>
       'Source is derived locally from schedule + away state. (Derived)';
 
