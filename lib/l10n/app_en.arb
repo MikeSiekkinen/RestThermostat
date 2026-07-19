@@ -270,6 +270,8 @@
   "settingsTimeFieldPaletteHelp": "How the Hour/Minute boxes on Edit Event are colored.",
   "settingsTimeFieldPaletteMatchMode": "Match mode",
   "settingsTimeFieldPaletteNeutral": "Neutral",
+  "settingsNumeralFontLabel": "Schedule numerals",
+  "settingsNumeralFontHelp": "Font for the numbers on the schedule time & temperature displays.",
   "settingsAboutSection": "About",
   "settingsAboutVersion": "Rest Thermostat {version} (build {buildNumber})",
   "settingsAboutCredit": "For Cody Kociemba's NoLongerEvil project",
@@ -309,6 +311,8 @@
   "@settingsTimeFieldPaletteHelp": { "description": "Helper text under the time-box color-scheme selector." },
   "@settingsTimeFieldPaletteMatchMode": { "description": "Segmented-button option: tint the time boxes by the event's mode." },
   "@settingsTimeFieldPaletteNeutral": { "description": "Segmented-button option: keep the time boxes a mode-agnostic gray." },
+  "@settingsNumeralFontLabel": { "description": "Label for the numeral-font selector in Settings." },
+  "@settingsNumeralFontHelp": { "description": "Helper text under the numeral-font selector." },
   "@settingsAboutSection": { "description": "Settings section header for the About/version/credit block." },
   "@settingsAboutVersion": {
     "description": "Version + build line in the About section.",

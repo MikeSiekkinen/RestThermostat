@@ -19,11 +19,15 @@ class RepeatDaysRow extends StatelessWidget {
   final ValueChanged<Set<int>> onChanged;
   final Locale locale;
 
+  /// Numeral face for the date numbers, merged onto their text style.
+  final TextStyle? numeralStyle;
+
   const RepeatDaysRow({
     super.key,
     required this.selectedDays,
     required this.onChanged,
     required this.locale,
+    this.numeralStyle,
   });
 
   @override
@@ -45,6 +49,7 @@ class RepeatDaysRow extends StatelessWidget {
             dayIndex: dayIndex,
             fullName: fullDayNames[dayIndex],
             selected: selectedDays.contains(dayIndex),
+            numeralStyle: numeralStyle,
             onTap: () => _toggle(dayIndex),
           ),
       ],
@@ -69,6 +74,7 @@ class _DayPanel extends StatelessWidget {
   final int dayIndex;
   final String fullName;
   final bool selected;
+  final TextStyle? numeralStyle;
   final VoidCallback onTap;
 
   const _DayPanel({
@@ -77,6 +83,7 @@ class _DayPanel extends StatelessWidget {
     required this.dayIndex,
     required this.fullName,
     required this.selected,
+    required this.numeralStyle,
     required this.onTap,
   });
 
@@ -120,10 +127,11 @@ class _DayPanel extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     '$dateNum',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: fg,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style:
+                        (Theme.of(context).textTheme.titleMedium ??
+                                const TextStyle())
+                            .copyWith(color: fg, fontWeight: FontWeight.w600)
+                            .merge(numeralStyle),
                   ),
                 ],
               ),

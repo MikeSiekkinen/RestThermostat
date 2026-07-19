@@ -2,7 +2,7 @@ name: rest_thermostat
 description: Community Flutter app for NoLongerEvil firmware on Nest Gen 1/2 thermostats.
 publish_to: 'none'
 
-version: 1.1.0+11
+version: 1.1.0+12
 
 environment:
   sdk: ^3.12.0
@@ -85,3 +85,15 @@ flutter:
     - assets/fonts/
     - assets/icon/
     - assets/splash/
+
+  # Numeral-font options for the schedule displays (Settings → Appearance).
+  # Declared explicitly (not via google_fonts) so the exact family names are
+  # stable and no runtime lookup is involved. Oswald is a variable font; its
+  # weight axis is driven by the TextStyle's fontWeight.
+  fonts:
+    - family: Oswald
+      fonts:
+        - asset: assets/fonts/Oswald-Variable.ttf
+    - family: Anton
+      fonts:
+        - asset: assets/fonts/Anton-Regular.ttf

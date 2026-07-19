@@ -353,6 +353,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsTimeFieldPaletteNeutral => 'Neutral';
 
   @override
+  String get settingsNumeralFontLabel => 'Schedule numerals';
+
+  @override
+  String get settingsNumeralFontHelp =>
+      'Font for the numbers on the schedule time & temperature displays.';
+
+  @override
   String get settingsAboutSection => 'About';
 
   @override

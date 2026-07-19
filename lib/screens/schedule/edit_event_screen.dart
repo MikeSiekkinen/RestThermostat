@@ -6,6 +6,7 @@ import '../../l10n/gen/app_localizations.dart';
 import '../../models/device.dart';
 import '../../models/schedule.dart';
 import '../../services/nle_api_client.dart';
+import '../../settings/numeral_font.dart';
 import '../../settings/time_field_palette.dart';
 import '../../state/providers.dart';
 import '../../theme/colors.dart';
@@ -189,6 +190,7 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
     final timeColors = neutral
         ? TimeFieldColors.neutral
         : TimeFieldColors.accented(accent);
+    final numeralStyle = ref.watch(numeralFontProvider).style;
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
@@ -228,6 +230,7 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
               type: _type,
               scale: widget.temperatureScale,
               accent: accent,
+              numeralStyle: numeralStyle,
               targetTemp: _targetTemp,
               targetTempLow: _targetTempLow,
               targetTempHigh: _targetTempHigh,
@@ -242,6 +245,7 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
               initialMinute: _minute ?? 0,
               use24Hour: mediaQuery.alwaysUse24HourFormat,
               colors: timeColors,
+              numeralStyle: numeralStyle,
               onChanged: (h, m) => setState(() {
                 _hour = h;
                 _minute = m;
@@ -258,6 +262,7 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
                 selectedDays: _selectedDays,
                 onChanged: (s) => setState(() => _selectedDays = s),
                 locale: locale,
+                numeralStyle: numeralStyle,
               ),
             ],
             if (!widget.isNew) ...[
@@ -579,12 +584,16 @@ class _TempStepper extends StatelessWidget {
   /// the app's warm default primary.
   final Color accent;
 
+  /// Numeral face for the value display and the entry dialog.
+  final TextStyle? numeralStyle;
+
   const _TempStepper({
     required this.label,
     required this.valueC,
     required this.scale,
     required this.onChanged,
     required this.accent,
+    required this.numeralStyle,
     this.showLabel = true,
   });
 
@@ -619,7 +628,10 @@ class _TempStepper extends StatelessWidget {
                   child: Text(
                     _format(valueC, scale),
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineLarge,
+                    style:
+                        (Theme.of(context).textTheme.headlineLarge ??
+                                const TextStyle())
+                            .merge(numeralStyle),
                   ),
                 ),
               ),
@@ -663,7 +675,9 @@ class _TempStepper extends StatelessWidget {
           keyboardType: TextInputType.numberWithOptions(decimal: !isF),
           textAlign: TextAlign.center,
           cursorColor: accent,
-          style: Theme.of(ctx).textTheme.headlineMedium,
+          style:
+              (Theme.of(ctx).textTheme.headlineMedium ?? const TextStyle())
+                  .merge(numeralStyle),
           decoration: InputDecoration(
             suffixText: unit,
             helperText: '$minD–$maxD $unit',
@@ -731,6 +745,7 @@ class _TempSection extends StatelessWidget {
   final String type;
   final String scale;
   final Color accent;
+  final TextStyle? numeralStyle;
   final double? targetTemp;
   final double? targetTempLow;
   final double? targetTempHigh;
@@ -742,6 +757,7 @@ class _TempSection extends StatelessWidget {
     required this.type,
     required this.scale,
     required this.accent,
+    required this.numeralStyle,
     required this.targetTemp,
     required this.targetTempLow,
     required this.targetTempHigh,
@@ -760,6 +776,7 @@ class _TempSection extends StatelessWidget {
             valueC: targetTempLow ?? 18.0,
             scale: scale,
             accent: accent,
+            numeralStyle: numeralStyle,
             onChanged: onTargetTempLow,
           ),
           const SizedBox(height: 16),
@@ -768,6 +785,7 @@ class _TempSection extends StatelessWidget {
             valueC: targetTempHigh ?? 24.0,
             scale: scale,
             accent: accent,
+            numeralStyle: numeralStyle,
             onChanged: onTargetTempHigh,
           ),
         ],
@@ -779,6 +797,7 @@ class _TempSection extends StatelessWidget {
       valueC: targetTemp ?? 20.0,
       scale: scale,
       accent: accent,
+      numeralStyle: numeralStyle,
       onChanged: onTargetTemp,
     );
   }

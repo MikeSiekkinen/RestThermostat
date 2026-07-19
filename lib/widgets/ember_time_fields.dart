@@ -58,6 +58,10 @@ class EmberTimeFields extends StatefulWidget {
   /// scheme; callers pass an accented set to tint the boxes by event mode.
   final TimeFieldColors colors;
 
+  /// Numeral face for the digits (family + weight), merged onto the box text
+  /// style. Null keeps the theme's display face.
+  final TextStyle? numeralStyle;
+
   const EmberTimeFields({
     super.key,
     required this.initialHour,
@@ -65,6 +69,7 @@ class EmberTimeFields extends StatefulWidget {
     required this.onChanged,
     this.use24Hour = false,
     this.colors = TimeFieldColors.neutral,
+    this.numeralStyle,
   });
 
   @override
@@ -275,9 +280,11 @@ class _EmberTimeFieldsState extends State<EmberTimeFields> {
                 ],
                 textAlign: TextAlign.center,
                 cursorColor: widget.colors.cursor,
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  color: EmberColors.textPrimary,
-                ),
+                style:
+                    (Theme.of(context).textTheme.headlineMedium ??
+                            const TextStyle())
+                        .copyWith(color: EmberColors.textPrimary)
+                        .merge(widget.numeralStyle),
                 decoration: InputDecoration(
                   isDense: true,
                   contentPadding: const EdgeInsets.symmetric(

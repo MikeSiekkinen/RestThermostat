@@ -712,6 +712,18 @@ abstract class AppLocalizations {
   /// **'Neutral'**
   String get settingsTimeFieldPaletteNeutral;
 
+  /// Label for the numeral-font selector in Settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule numerals'**
+  String get settingsNumeralFontLabel;
+
+  /// Helper text under the numeral-font selector.
+  ///
+  /// In en, this message translates to:
+  /// **'Font for the numbers on the schedule time & temperature displays.'**
+  String get settingsNumeralFontHelp;
+
   /// Settings section header for the About/version/credit block.
   ///
   /// In en, this message translates to:
