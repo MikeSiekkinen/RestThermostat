@@ -194,6 +194,9 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
       appBar: AppBar(
         centerTitle: true,
         leading: TextButton(
+          // White, not the theme's warm primary. Disabled state still greys out
+          // via the button's default disabled foreground.
+          style: TextButton.styleFrom(foregroundColor: EmberColors.textPrimary),
           onPressed: _saving ? null : () => Navigator.of(context).pop(),
           child: Text(l.editEventCancel, maxLines: 1, softWrap: false),
         ),
@@ -203,6 +206,7 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
         title: Text(widget.isNew ? l.editEventTitleNew : l.editEventTitleEdit),
         actions: [
           TextButton(
+            style: TextButton.styleFrom(foregroundColor: EmberColors.textPrimary),
             onPressed: (_saving || !_timeValid) ? null : _save,
             child: Text(l.editEventSave),
           ),
