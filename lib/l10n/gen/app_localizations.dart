@@ -880,6 +880,216 @@ abstract class AppLocalizations {
   /// **'Leave empty to use the server name'**
   String get settingsRenameHelp;
 
+  /// Settings section header for the encrypted config backup/restore rows (Issue #109).
+  ///
+  /// In en, this message translates to:
+  /// **'Backup'**
+  String get settingsBackupSection;
+
+  /// ListTile title that starts the encrypted-backup export flow.
+  ///
+  /// In en, this message translates to:
+  /// **'Export backup…'**
+  String get settingsExportBackup;
+
+  /// ListTile subtitle for the Export backup row.
+  ///
+  /// In en, this message translates to:
+  /// **'Save an encrypted copy of your settings and credentials.'**
+  String get settingsExportBackupSubtitle;
+
+  /// ListTile title that starts the restore-from-backup flow.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore from backup…'**
+  String get settingsRestoreBackup;
+
+  /// ListTile subtitle for the Restore from backup row.
+  ///
+  /// In en, this message translates to:
+  /// **'Import settings and credentials from a backup file.'**
+  String get settingsRestoreBackupSubtitle;
+
+  /// Title of the dialog where the user sets a passphrase to encrypt an export.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a backup passphrase'**
+  String get backupSetPassphraseTitle;
+
+  /// Text-field label for the backup passphrase.
+  ///
+  /// In en, this message translates to:
+  /// **'Passphrase'**
+  String get backupPassphraseLabel;
+
+  /// Text-field label for re-entering the backup passphrase to confirm it.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm passphrase'**
+  String get backupPassphraseConfirmLabel;
+
+  /// Helper text under the passphrase field stating the minimum length.
+  ///
+  /// In en, this message translates to:
+  /// **'At least 8 characters.'**
+  String get backupPassphraseHelp;
+
+  /// Warning that a forgotten passphrase means the backup is unrecoverable.
+  ///
+  /// In en, this message translates to:
+  /// **'There is no way to recover this backup if you forget the passphrase.'**
+  String get backupPassphraseWarning;
+
+  /// Validation error when the passphrase is under the minimum length.
+  ///
+  /// In en, this message translates to:
+  /// **'Use at least 8 characters.'**
+  String get backupPassphraseTooShort;
+
+  /// Validation error when the passphrase and its confirmation differ.
+  ///
+  /// In en, this message translates to:
+  /// **'Passphrases don\'t match.'**
+  String get backupPassphraseMismatch;
+
+  /// Tooltip for the reveal-passphrase icon button.
+  ///
+  /// In en, this message translates to:
+  /// **'Show passphrase'**
+  String get backupPassphraseShow;
+
+  /// Tooltip for the hide-passphrase icon button.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide passphrase'**
+  String get backupPassphraseHide;
+
+  /// Confirm button on the set-passphrase dialog that creates and shares the backup.
+  ///
+  /// In en, this message translates to:
+  /// **'Export'**
+  String get backupExportAction;
+
+  /// Button on the import passphrase dialog that proceeds to decrypt and confirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get backupImportAction;
+
+  /// Progress caption shown while the export is being encrypted (Argon2id).
+  ///
+  /// In en, this message translates to:
+  /// **'Encrypting…'**
+  String get backupEncrypting;
+
+  /// Progress caption shown while an import is being decrypted (Argon2id).
+  ///
+  /// In en, this message translates to:
+  /// **'Decrypting…'**
+  String get backupDecrypting;
+
+  /// Title of the dialog prompting for the passphrase when importing a backup.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter backup passphrase'**
+  String get backupEnterPassphraseTitle;
+
+  /// Body text of the import passphrase dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the passphrase this backup was created with.'**
+  String get backupEnterPassphraseBody;
+
+  /// Inline error shown in the import passphrase dialog when decryption fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Wrong passphrase. Try again.'**
+  String get backupWrongPassphrase;
+
+  /// Error when the picked file isn't a Rest Thermostat backup.
+  ///
+  /// In en, this message translates to:
+  /// **'That file isn\'t a Rest Thermostat backup.'**
+  String get backupErrorForeignFile;
+
+  /// Error when the backup's schema is newer than this app build supports.
+  ///
+  /// In en, this message translates to:
+  /// **'This backup was made by a newer version of the app. Update Rest Thermostat and try again.'**
+  String get backupErrorTooNew;
+
+  /// Error when the backup file is corrupt or structurally invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That backup file is damaged or unreadable.'**
+  String get backupErrorMalformed;
+
+  /// Snackbar shown when creating a backup fails unexpectedly.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t create the backup: {error}'**
+  String backupExportFailed(Object error);
+
+  /// Snackbar shown when applying a restored backup fails unexpectedly.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t restore the backup: {error}'**
+  String backupRestoreFailed(Object error);
+
+  /// Title of the dialog that confirms overwriting config with a restored backup.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore this backup?'**
+  String get backupConfirmTitle;
+
+  /// Body text warning that restore overwrites current config.
+  ///
+  /// In en, this message translates to:
+  /// **'This replaces your current server, credentials, and appearance with the values in the backup.'**
+  String get backupConfirmBody;
+
+  /// Summary line in the restore-confirm dialog showing the backup's server URL.
+  ///
+  /// In en, this message translates to:
+  /// **'Server: {url}'**
+  String backupConfirmServer(String url);
+
+  /// Summary line when the backup has no server URL set.
+  ///
+  /// In en, this message translates to:
+  /// **'Server: not set'**
+  String get backupConfirmServerNone;
+
+  /// Summary line in the restore-confirm dialog showing the backup's auth type.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in: {type}'**
+  String backupConfirmAuth(String type);
+
+  /// Summary line pluralizing how many device-name overrides the backup contains.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No saved device names} =1{1 saved device name} other{{count} saved device names}}'**
+  String backupConfirmDeviceNames(int count);
+
+  /// Confirm button that applies the restored backup.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get backupConfirmAction;
+
+  /// Snackbar confirming a successful restore.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup restored.'**
+  String get backupRestoredSnack;
+
+  /// Secondary button on the onboarding welcome screen that starts the restore-from-backup flow.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore from backup'**
+  String get welcomeRestoreButton;
+
   /// AppBar title on the Schedule screen.
   ///
   /// In en, this message translates to:

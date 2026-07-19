@@ -458,6 +458,136 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsRenameHelp => 'Leave empty to use the server name';
 
   @override
+  String get settingsBackupSection => 'Backup';
+
+  @override
+  String get settingsExportBackup => 'Export backup…';
+
+  @override
+  String get settingsExportBackupSubtitle =>
+      'Save an encrypted copy of your settings and credentials.';
+
+  @override
+  String get settingsRestoreBackup => 'Restore from backup…';
+
+  @override
+  String get settingsRestoreBackupSubtitle =>
+      'Import settings and credentials from a backup file.';
+
+  @override
+  String get backupSetPassphraseTitle => 'Set a backup passphrase';
+
+  @override
+  String get backupPassphraseLabel => 'Passphrase';
+
+  @override
+  String get backupPassphraseConfirmLabel => 'Confirm passphrase';
+
+  @override
+  String get backupPassphraseHelp => 'At least 8 characters.';
+
+  @override
+  String get backupPassphraseWarning =>
+      'There is no way to recover this backup if you forget the passphrase.';
+
+  @override
+  String get backupPassphraseTooShort => 'Use at least 8 characters.';
+
+  @override
+  String get backupPassphraseMismatch => 'Passphrases don\'t match.';
+
+  @override
+  String get backupPassphraseShow => 'Show passphrase';
+
+  @override
+  String get backupPassphraseHide => 'Hide passphrase';
+
+  @override
+  String get backupExportAction => 'Export';
+
+  @override
+  String get backupImportAction => 'Continue';
+
+  @override
+  String get backupEncrypting => 'Encrypting…';
+
+  @override
+  String get backupDecrypting => 'Decrypting…';
+
+  @override
+  String get backupEnterPassphraseTitle => 'Enter backup passphrase';
+
+  @override
+  String get backupEnterPassphraseBody =>
+      'Enter the passphrase this backup was created with.';
+
+  @override
+  String get backupWrongPassphrase => 'Wrong passphrase. Try again.';
+
+  @override
+  String get backupErrorForeignFile =>
+      'That file isn\'t a Rest Thermostat backup.';
+
+  @override
+  String get backupErrorTooNew =>
+      'This backup was made by a newer version of the app. Update Rest Thermostat and try again.';
+
+  @override
+  String get backupErrorMalformed =>
+      'That backup file is damaged or unreadable.';
+
+  @override
+  String backupExportFailed(Object error) {
+    return 'Couldn\'t create the backup: $error';
+  }
+
+  @override
+  String backupRestoreFailed(Object error) {
+    return 'Couldn\'t restore the backup: $error';
+  }
+
+  @override
+  String get backupConfirmTitle => 'Restore this backup?';
+
+  @override
+  String get backupConfirmBody =>
+      'This replaces your current server, credentials, and appearance with the values in the backup.';
+
+  @override
+  String backupConfirmServer(String url) {
+    return 'Server: $url';
+  }
+
+  @override
+  String get backupConfirmServerNone => 'Server: not set';
+
+  @override
+  String backupConfirmAuth(String type) {
+    return 'Sign-in: $type';
+  }
+
+  @override
+  String backupConfirmDeviceNames(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count saved device names',
+      one: '1 saved device name',
+      zero: 'No saved device names',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get backupConfirmAction => 'Restore';
+
+  @override
+  String get backupRestoredSnack => 'Backup restored.';
+
+  @override
+  String get welcomeRestoreButton => 'Restore from backup';
+
+  @override
   String get scheduleTitle => 'Schedule';
 
   @override

@@ -5,6 +5,7 @@ import '../models/schedule.dart';
 import '../onboarding/onboarding_flow.dart';
 import '../services/app_info.dart';
 import '../services/app_logger.dart';
+import '../services/backup/backup_service.dart';
 import '../services/nle_api_client.dart';
 import '../services/onboarding_store.dart';
 import 'auth_failure_coordinator.dart';
@@ -46,6 +47,14 @@ final clientFactoryProvider = Provider<NleClientFactory>(
 );
 
 final stateCacheProvider = Provider<StateCache>((_) => SharedPrefsStateCache());
+
+/// Encrypted config backup/restore service (Issue #109). Reuses the same
+/// [OnboardingStore] instance the rest of the app persists through, so an
+/// export reads live config and a restore writes into the store Settings/Home
+/// already read from.
+final backupServiceProvider = Provider<BackupService>(
+  (ref) => BackupService(store: ref.watch(onboardingStoreProvider)),
+);
 
 /// Bound in `main.dart` to the same [OnboardingStore] instance Bootstrap uses,
 /// so Settings reads/writes hit the same persistence layer. Tests override

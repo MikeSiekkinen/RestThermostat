@@ -11,6 +11,7 @@ import '../services/nle_error_messages.dart';
 import '../services/onboarding_store.dart';
 import '../services/url_normalizer.dart';
 import '../state/providers.dart';
+import 'backup_flow.dart';
 import 'numeral_font.dart';
 import 'time_field_palette.dart';
 
@@ -30,6 +31,12 @@ class SettingsScreen extends ConsumerStatefulWidget {
   /// re-route back to Welcome (see `lib/main.dart`).
   final VoidCallback onDisconnect;
 
+  /// Invoked after a successful Restore-from-backup so the host can re-read the
+  /// now-replaced config and rebuild (pop Settings + re-bootstrap). Distinct
+  /// from [onDisconnect] because restore lands the user connected, not at
+  /// Welcome. See `lib/main.dart`.
+  final VoidCallback? onConfigRestored;
+
   /// When true, the Connection section's "Advanced" (auth) expander starts
   /// expanded — used by the auth-failure deep-link snackbar so the user
   /// lands directly on the credentials form.
@@ -38,6 +45,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({
     super.key,
     required this.onDisconnect,
+    this.onConfigRestored,
     this.initiallyExpandAuth = false,
   });
 
@@ -349,6 +357,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     const Divider(),
                     _buildDiagnosticsSection(context),
                     const Divider(),
+                    _buildBackupSection(context),
+                    const Divider(),
                     _buildAppearanceSection(context),
                     const Divider(),
                     _buildAboutSection(context),
@@ -622,6 +632,60 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildBackupSection(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SectionHeader(text: l.settingsBackupSection),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l.settingsExportBackup),
+            subtitle: Text(l.settingsExportBackupSubtitle),
+            trailing: const Icon(Icons.ios_share),
+            onTap: _onExportBackup,
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l.settingsRestoreBackup),
+            subtitle: Text(l.settingsRestoreBackupSubtitle),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _onRestoreBackup,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _onExportBackup() async {
+    await runBackupExport(context, ref.read(backupServiceProvider));
+  }
+
+  Future<void> _onRestoreBackup() async {
+    final applied = await runBackupImport(
+      context,
+      ref.read(backupServiceProvider),
+      onApplied: () async {
+        // Appearance notifiers hydrated once at startup — force a re-read of the
+        // restored prefs. Clear the state cache so the next poll uses the
+        // restored server + credentials rather than the old device's snapshot.
+        ref.invalidate(numeralFontProvider);
+        ref.invalidate(timeFieldPaletteProvider);
+        await ref.read(stateCacheProvider).clear();
+      },
+    );
+    if (!applied || !mounted) return;
+    final l = AppLocalizations.of(context);
+    // MaterialApp's root ScaffoldMessenger survives the pop below, so this shows
+    // on the freshly-loaded Home.
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l.backupRestoredSnack)));
+    widget.onConfigRestored?.call();
   }
 
   Widget _buildAppearanceSection(BuildContext context) {
