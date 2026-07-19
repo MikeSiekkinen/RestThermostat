@@ -209,17 +209,40 @@ Events are single-day in the data model and the UI. The Edit Event screen does *
 ### 6.5 Optimistic schedule saves
 
 1. User edits local schedule model → UI updates immediately.
-2. App serializes full week → `POST /command set_schedule`.
-3. On success → done (no reconcile required; the server's schedule bucket is authoritative immediately, and the thermostat picks it up on its next subscribe).
-4. On failure → revert local model + snackbar with retry.
+2. App derives the write's `schedule_mode` from the device's operating mode (§6.6) and coerces any stale event types to it.
+3. When the derived mode differs from the device's shared-bucket `schedule_mode` (`Device.scheduleMode` from `/api/devices`), app issues `POST /command set_schedule_mode` first.
+4. App serializes full week → `POST /command set_schedule` (wire shape in §6.8).
+5. On success → done. The server stores and pushes the bucket to the device's long-poll connection immediately — but the *server* echoing the payload back on `GET /api/schedule` only proves storage, not device acceptance (§6.8).
+6. On failure → revert local model + snackbar with retry (retry re-runs steps 3–4; re-sending `set_schedule_mode` is idempotent).
 
 ### 6.6 `schedule_mode` field handling
 
-Preserve the schedule's top-level `schedule_mode` exactly as loaded. When creating a new schedule from scratch, default to `"HEAT"`. Not surfaced in UI in v1.
+Derived deliberately at save time from the device's operating mode — never preserved-as-loaded or defaulted (the pre-#93 behavior of defaulting to `"HEAT"` made devices in other modes silently ignore the schedule): heat/emergency → `HEAT`, cool → `COOL`, heat-cool → `RANGE`. A device in `off` keeps the stored shared-bucket mode when one is set and capability-valid — and then sends no `set_schedule_mode`; when the stored mode is unset (`null` — the common state, since nothing populates it until this app does) or outside the device's capabilities, the app falls back to a capability-derived mode and does sync it with `set_schedule_mode` (a `null` bucket mode can never match the payload, so skipping the sync would leave the schedule ignored). Event-type pills on Edit Event are constrained to the single type matching the derived mode, and stale events from before a mode switch are coerced at save, so a written payload never contains an event whose `type` contradicts its `schedule_mode` (the device ignores such schedules). Not surfaced in UI in v1.
 
 ### 6.7 Empty days
 
-A day with empty events is valid (empty list). PRD's "No events scheduled — tap + to add one" placeholder handles this.
+A day with empty events is valid (empty map on the wire, §6.8). PRD's "No events scheduled — tap + to add one" placeholder handles this.
+
+### 6.8 `set_schedule` write contract (Issue #93 live ablation, 2026-07-18)
+
+Gen 2 firmware silently ignores the **entire** schedule bucket unless all of the following hold. The NLE server validates only `time`/`type`/temps and forwards the payload verbatim, so a nonconforming payload still round-trips through `GET /api/schedule` looking healthy:
+
+- `days` values are **maps keyed by string index** (`{"0": ev, "1": ev}`) in time-sorted order — **not arrays**, despite the upstream Control API docs' write example. All seven day keys present; empty day → empty map.
+- A top-level **`name`** is present (preserve from the last read, else `"Current Schedule"`).
+- Every event carries **`entry_type: "setpoint"`** (`continuation` entries are server-generated; they're dropped on read and never written back).
+- The payload's `schedule_mode` matches the shared bucket's `schedule_mode` (synced via `set_schedule_mode`, §6.5–6.6).
+
+### 6.9 Schedule-in-control event highlight (Issue #97)
+
+When the [§9.5](#95-setpoint-source-details-screen) derivation returns `scheduled`, the Schedule screen highlights the **specific event row** that is currently driving the setpoint — the one `findActiveEvent` returns — with a full-strength, type-colored border and glow (`HEAT` → heat red, `COOL` → cool blue; the standard `EmberColors` glow family). Every other state — `manual`, `away`, no schedule loaded, fetch error, or an active `RANGE` event (which §9.5 deliberately never matches in v1; maintainer reaffirmed 2026-07-18) — leaves all rows in their normal (dimmed-border) treatment.
+
+**Why a per-row highlight, not a background wash:** an earlier draft tinted the whole screen background. In practice that was near-invisible whenever the device was in heat/cool mode, because the app-level `EmberBackground` already washes the screen in the same heat-red/cool-blue — tint-on-same-color. The maintainer reversed it (2026-07-18) to a per-event-row highlight, which reads in every mode and points at *which* event is holding, matching how users think about the schedule.
+
+The highlight only appears on the active event's own row, so it shows only while its day is the one being viewed; other days show no highlight. It reuses `deriveSetpointSource` unchanged, keeping the highlight and the Details screen's Scheduled/Manual row in agreement by construction, and the row's border/glow animates on and off with the standard 300ms `easeInOutCubic` idiom (§4.3, §11.4) as the clock crosses into a new event or a poll changes the match. It recomputes on rebuild (each poll, refetch, or provider invalidation); there is no dedicated timer for the crossing instant. Non-visual users get the state through a Semantics label that prepends "Currently active." to the row's announcement.
+
+### 6.10 Schedule header — device name + live temps (Issue #100)
+
+The Schedule screen's header shows **which** thermostat is being scheduled and what it's doing now: the device's resolved display name (`displayNameFor`, §4.4 — local override → server name → `Thermostat (XXXX)`) over a small `Now <measured> • Set <target>` line, both in the device's unit. The "Set" value mirrors the Details screen's `_setpointDisplay` — a heat-cool device with both bounds shows the `low – high` band (the scalar `targetTemperature` is a midpoint/sentinel in that mode), every other mode the single target — so header and Details never disagree. When no `Device` is available (e.g. before first resolution, or in tests) the header falls back to the plain "Schedule" title with no temps. The two-line title's `toolbarHeight` scales with the text scaler so large accessibility fonts grow the header rather than clipping it, and a Semantics label spells the temps out ("Now 77°F, set to 76°F") in place of the middot line.
 
 ---
 
@@ -463,6 +486,7 @@ Bundle .ttf files for: Fraunces (300, 400, 500), Geist (400, 500, 700), JetBrain
 | Animation | Mechanism | Duration | Curve |
 |---|---|---|---|
 | Background gradient mode swap | `AnimatedContainer` | 300ms | `easeInOutCubic` |
+| Schedule-in-control event highlight (§6.9) | `AnimatedContainer` | 300ms | `easeInOutCubic` |
 | Fan concentric ring pulse | `AnimationController` (repeat) | 1.6s | linear |
 | Status dot glow pulse | `AnimationController` (repeat) | 2.5s | `easeInOut` |
 | Dial target temp tween | `TweenAnimationBuilder` | 400ms | `easeInOutCubic` |
@@ -593,9 +617,9 @@ GitHub Actions, free for public repos:
 
 **MIT.**
 
-### 13.6 Time picker — custom Ember-themed
+### 13.6 Time entry — hour/minute text fields
 
-Not platform-adaptive. PRD's "native iOS/Android time wheel" is overridden in favor of a custom Ember-themed picker that matches the app's visual vocabulary on both platforms.
+Not platform-adaptive, and not a wheel. PRD's "native iOS/Android time wheel" is overridden in favor of direct text entry: two Ember-themed numeric fields (hour, minute) with an AM/PM selector shown only in 12-hour mode (`MediaQueryData.alwaysUse24HourFormat` is the format source). Out-of-range or empty input disables Save with an inline error — never silently clamped. This supersedes the earlier custom wheel picker (`EmberTimePicker`), removed in Issue #96; the maintainer reversed that decision in favor of faster direct entry.
 
 ### 13.7 Icons and splash
 
@@ -725,7 +749,8 @@ No auth by default. Server passes through `Authorization` headers unchanged from
 | `set_away` | boolean |
 | `set_fan` | `"auto"` / `"on"` / number (seconds) |
 | `set_eco_temperatures` | `{"high": number, "low": number}` |
-| `set_schedule` | full schedule object — see [§6](#6-schedule-model) |
+| `set_schedule` | full schedule object — wire contract in [§6.8](#68-set_schedule-write-contract-issue-93-live-ablation-2026-07-18) |
+| `set_schedule_mode` | bare mode string `"HEAT"` / `"COOL"` / `"RANGE"` — must match the written schedule's `schedule_mode` (§6.5) |
 
 ### 16.5 Load-bearing facts
 
@@ -733,6 +758,7 @@ No auth by default. Server passes through `Authorization` headers unchanged from
 - **`/api/devices` returns all devices in one response.** Use this as the polling endpoint, not per-device `/status`.
 - **Schedules are keyed Monday=0..Sunday=6.** Not JS-standard.
 - **Schedule writes are full-replace.** No partial updates supported.
+- **The server accepts schedule payloads the firmware ignores.** `GET /api/schedule` echoing a write back proves storage, not device acceptance — conform to §6.8 exactly.
 - **`/api/stats` is server stats** (subscription counts, availability) — not HVAC runtime. Daily runtime is unavailable from NLE.
 - **Weather is on port 8000 only** for thermostats. Outside temperature is unavailable for clients.
 - **SSE exists at `/api/events`** but is not used in v1 (architectural seam preserved).
@@ -762,7 +788,7 @@ Where this document deviates from `PRD.md` literal text:
 | §5.5 Edit Event | No per-event name field; no repeat-days circles on Edit Event (creation-only repeat). |
 | §5.6 Settings | No temperature unit toggle (server is source of truth). |
 | §5.2, §5.3 Stats | No outside temp slot; no runtime slot. |
-| §5.5 Time picker | Custom Ember-themed, not platform-native. |
+| §5.5 Time picker | Hour/minute text inputs (12/24h-aware), not a platform-native wheel — nor the custom wheel this row previously recorded. |
 | §7 App icon | Concentric arcs, not "silver fan blade or stylized flame." |
 | §9 Q1 (auth) | Resolved: no auth default, optional reverse-proxy Basic/Bearer. |
 | §9 Q4 (weather) | Resolved: NLE doesn't expose weather to clients; feature dropped. |

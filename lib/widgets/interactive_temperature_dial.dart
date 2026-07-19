@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/device.dart';
 import '../services/nle_error.dart';
+import '../settings/numeral_font.dart';
 import '../state/auth_failure_coordinator.dart';
 import '../state/devices_snapshot.dart';
 import '../state/providers.dart';
@@ -263,6 +264,8 @@ class _InteractiveTemperatureDialState
       onTargetTap: _onTap,
       onIncrease: () => _bump(1),
       onDecrease: () => _bump(-1),
+      numeralStyle: ref.watch(numeralFontProvider).style,
+      humidityPercent: widget.device.humidity,
     );
   }
 }

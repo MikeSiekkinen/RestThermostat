@@ -9,15 +9,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
 
 import 'package:rest_thermostat/models/auth_config.dart';
+import 'package:rest_thermostat/models/device.dart';
 import 'package:rest_thermostat/screens/schedule/schedule_screen.dart';
 import 'package:rest_thermostat/services/nle_api_client.dart';
 import 'package:rest_thermostat/state/providers.dart';
+import 'package:rest_thermostat/theme/colors.dart';
 
 class _Harness {
   final Widget widget;
   final DioAdapter adapter;
 
-  _Harness({required this.widget, required this.adapter});
+  /// The device handed to [ScheduleScreen]. Tests mutate this to simulate a
+  /// poll delivering changed device state (e.g. a new `targetTemperature`)
+  /// through a parent rebuild.
+  final ValueNotifier<Device?> device;
+
+  _Harness({required this.widget, required this.adapter, required this.device});
 }
 
 _Harness _setup({
@@ -25,9 +32,14 @@ _Harness _setup({
   String temperatureScale = 'F',
   Locale locale = const Locale('en', 'GB'),
   bool use24Hour = false,
+  Device? device,
+  DateTime Function()? now,
+  Map<String, String> overrides = const {},
+  double textScale = 1.0,
 }) {
   final dio = Dio(BaseOptions(baseUrl: 'http://test.local:8082'));
   final adapter = DioAdapter(dio: dio);
+  final deviceNotifier = ValueNotifier<Device?>(device);
 
   final widget = ProviderScope(
     overrides: [
@@ -46,16 +58,25 @@ _Harness _setup({
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: const [Locale('en', 'GB'), Locale('en', 'US')],
       home: MediaQuery(
-        data: MediaQueryData(alwaysUse24HourFormat: use24Hour),
-        child: ScheduleScreen(
-          serial: serial,
-          temperatureScale: temperatureScale,
+        data: MediaQueryData(
+          alwaysUse24HourFormat: use24Hour,
+          textScaler: TextScaler.linear(textScale),
+        ),
+        child: ValueListenableBuilder<Device?>(
+          valueListenable: deviceNotifier,
+          builder: (_, device, _) => ScheduleScreen(
+            serial: serial,
+            temperatureScale: temperatureScale,
+            device: device,
+            now: now ?? DateTime.now,
+            overrides: overrides,
+          ),
         ),
       ),
     ),
   );
 
-  return _Harness(widget: widget, adapter: adapter);
+  return _Harness(widget: widget, adapter: adapter, device: deviceNotifier);
 }
 
 class _SeedActiveServer extends ActiveServerNotifier {
@@ -370,5 +391,601 @@ void main() {
     );
 
     await _disposeTree(tester);
+  });
+
+  group('schedule-in-control event highlight (Issue #97)', () {
+    // Fixed clock: Wednesday 2026-05-13 12:00 local → internal day index 2.
+    final wedNoon = DateTime(2026, 5, 13, 12, 0, 0);
+
+    Device device({required double target, String ecoMode = 'schedule'}) {
+      final raw = File('test/fixtures/devices_one.json').readAsStringSync();
+      final entry = Map<String, dynamic>.from(
+        (jsonDecode(raw) as Map<String, dynamic>)['devices'][0]
+            as Map<String, dynamic>,
+      );
+      entry['target_temperature'] = target;
+      entry['eco_mode'] = ecoMode;
+      return Device.fromJson(entry);
+    }
+
+    /// Wire-shaped schedule response with [wednesdayEvents] on day 2 and all
+    /// other days empty.
+    Map<String, dynamic> wireSchedule(
+      List<Map<String, dynamic>> wednesdayEvents, {
+      String mode = 'HEAT',
+    }) => {
+      'serial': 'abc',
+      'schedule': {
+        'ver': 2,
+        'name': 'Current Schedule',
+        'schedule_mode': mode,
+        'days': {
+          for (var d = 0; d < 7; d++)
+            '$d': d == 2
+                ? {
+                    for (var i = 0; i < wednesdayEvents.length; i++)
+                      '$i': wednesdayEvents[i],
+                  }
+                : <String, dynamic>{},
+        },
+      },
+    };
+
+    /// The row's target `BoxDecoration` (Wednesday = day index 2), found by
+    /// the content key `event-row-<day>-<timeSeconds>`.
+    BoxDecoration rowDecoration(WidgetTester tester, int timeSeconds) {
+      final c = tester.widget<AnimatedContainer>(
+        find.byKey(ValueKey('event-row-2-$timeSeconds')),
+      );
+      return c.decoration! as BoxDecoration;
+    }
+
+    /// A row is highlighted (Issue #97) when its border is the full 2px
+    /// type-colored border with a glow, vs the 1px dimmed default.
+    bool isHighlighted(BoxDecoration d) {
+      final border = d.border! as Border;
+      return border.top.width == 2 && (d.boxShadow?.isNotEmpty ?? false);
+    }
+
+    /// Assert no rendered event row carries the highlight.
+    void expectNoHighlightedRow(WidgetTester tester) {
+      final rows = tester.widgetList<AnimatedContainer>(
+        find.byWidgetPredicate(
+          (w) =>
+              w is AnimatedContainer &&
+              w.key is ValueKey<String> &&
+              (w.key! as ValueKey<String>).value.startsWith('event-row-'),
+        ),
+      );
+      for (final row in rows) {
+        expect(isHighlighted(row.decoration! as BoxDecoration), isFalse);
+      }
+    }
+
+    testWidgets('active HEAT event matching the target highlights its row '
+        'heat-red', (tester) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 20.0),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'HEAT',
+              'time': 28800,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+          ]),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      final d = rowDecoration(tester, 28800);
+      expect(isHighlighted(d), isTrue);
+      expect((d.border! as Border).top.color, EmberColors.heatGlow);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('active COOL event matching the target highlights its row '
+        'cool-blue', (tester) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 22.0),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'COOL',
+              'time': 28800,
+              'temp': 22.0,
+              'entry_type': 'setpoint',
+            },
+          ], mode: 'COOL'),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      final d = rowDecoration(tester, 28800);
+      expect(isHighlighted(d), isTrue);
+      expect((d.border! as Border).top.color, EmberColors.coolGlow);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('only the active event is highlighted, not an earlier sibling '
+        'on the same day', (tester) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 20.0),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            // 06:00 earlier event, same setpoint — must NOT be highlighted.
+            {
+              'type': 'HEAT',
+              'time': 21600,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+            // 08:00 is the most recent before noon — the active one.
+            {
+              'type': 'HEAT',
+              'time': 28800,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+          ]),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expect(isHighlighted(rowDecoration(tester, 28800)), isTrue);
+      expect(isHighlighted(rowDecoration(tester, 21600)), isFalse);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('the active row announces its state to screen readers', (
+      tester,
+    ) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 20.0),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'HEAT',
+              'time': 28800,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+          ]),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Currently active\. Event at ')),
+        findsOneWidget,
+      );
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('manual override (target differs) leaves rows unhighlighted', (
+      tester,
+    ) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 25.0),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'HEAT',
+              'time': 28800,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+          ]),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expectNoHighlightedRow(tester);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('active RANGE event leaves rows unhighlighted even when a '
+        'bound matches (documented v1 policy)', (tester) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 20.0),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'RANGE',
+              'time': 28800,
+              'temp-min': 20.0,
+              'temp-max': 24.0,
+              'entry_type': 'setpoint',
+            },
+          ], mode: 'RANGE'),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expectNoHighlightedRow(tester);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('away mode leaves rows unhighlighted even when the active '
+        'event matches', (tester) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 20.0, ecoMode: 'manual-eco'),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'HEAT',
+              'time': 28800,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+          ]),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expectNoHighlightedRow(tester);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('no device handed in leaves rows unhighlighted', (
+      tester,
+    ) async {
+      final h = _setup(serial: 'abc', now: () => wedNoon);
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'HEAT',
+              'time': 28800,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+          ]),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expectNoHighlightedRow(tester);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('the highlight only shows on the active event\'s own day', (
+      tester,
+    ) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 20.0),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'HEAT',
+              'time': 28800,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+          ]),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+      // Active event's day (Wednesday) is selected initially → highlighted.
+      expect(isHighlighted(rowDecoration(tester, 28800)), isTrue);
+
+      // Switch to Thursday (index 3): the Wednesday event isn't rendered, so
+      // no row is highlighted on the visible day.
+      await tester.tap(
+        find.ancestor(
+          of: find.byKey(const ValueKey('day-underline-3')),
+          matching: find.byType(InkWell),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expectNoHighlightedRow(tester);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('a rebuild delivering a changed targetTemperature clears the '
+        'highlight', (tester) async {
+      final h = _setup(
+        serial: 'abc',
+        device: device(target: 20.0),
+        now: () => wedNoon,
+      );
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(
+          200,
+          wireSchedule([
+            {
+              'type': 'HEAT',
+              'time': 28800,
+              'temp': 20.0,
+              'entry_type': 'setpoint',
+            },
+          ]),
+        ),
+        queryParameters: {'serial': 'abc'},
+      );
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+      expect(isHighlighted(rowDecoration(tester, 28800)), isTrue);
+
+      // Simulate the next poll reporting a manual dial turn.
+      h.device.value = device(target: 25.0);
+      await tester.pumpAndSettle();
+
+      expect(isHighlighted(rowDecoration(tester, 28800)), isFalse);
+
+      await _disposeTree(tester);
+    });
+  });
+
+  group('schedule header (Issue #100)', () {
+    Device headerDevice({
+      String name = 'Upstairs',
+      double current = 24.76999, // 76.6°F → 77°F
+      double target = 24.444444444444443, // 76.0°F → 76°F
+      String mode = 'cool',
+      double? low,
+      double? high,
+    }) {
+      final raw = File('test/fixtures/devices_one.json').readAsStringSync();
+      final entry = Map<String, dynamic>.from(
+        (jsonDecode(raw) as Map<String, dynamic>)['devices'][0]
+            as Map<String, dynamic>,
+      );
+      entry['name'] = name;
+      entry['current_temperature'] = current;
+      entry['target_temperature'] = target;
+      entry['mode'] = mode;
+      entry['target_temperature_low'] = low;
+      entry['target_temperature_high'] = high;
+      return Device.fromJson(entry);
+    }
+
+    void stubSchedule(_Harness h) {
+      h.adapter.onGet(
+        '/api/schedule',
+        (s) => s.reply(200, _scheduleFixture()),
+        queryParameters: {'serial': 'abc'},
+      );
+    }
+
+    testWidgets('shows the scheduled device name and measured/target temps in '
+        '°F', (tester) async {
+      final h = _setup(serial: 'abc', device: headerDevice());
+      stubSchedule(h);
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Upstairs'), findsOneWidget);
+      expect(find.textContaining('Now 77°F'), findsOneWidget);
+      // Humidity (60% in the fixture) sits between the measured temp and Set.
+      expect(find.textContaining('· 60%'), findsOneWidget);
+      expect(find.textContaining('Set 76°F'), findsOneWidget);
+      // The plain "Schedule" title is replaced when a device is present.
+      expect(find.text('Schedule'), findsNothing);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('honors a local display-name override', (tester) async {
+      const serial = '02AA01AC041403JM';
+      final h = _setup(
+        serial: 'abc',
+        device: headerDevice(),
+        overrides: const {serial: 'Basement'},
+      );
+      stubSchedule(h);
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Basement'), findsOneWidget);
+      expect(find.text('Upstairs'), findsNothing);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('formats the header temps in °C when the scale is C', (
+      tester,
+    ) async {
+      final h = _setup(
+        serial: 'abc',
+        temperatureScale: 'C',
+        device: headerDevice(),
+      );
+      stubSchedule(h);
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Now 25°C'), findsOneWidget);
+      expect(find.textContaining('Set 24°C'), findsOneWidget);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('the header updates when a poll delivers new device state', (
+      tester,
+    ) async {
+      final h = _setup(serial: 'abc', device: headerDevice());
+      stubSchedule(h);
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Now 77°F'), findsOneWidget);
+
+      // Next poll: measured rises to 26.11°C ≈ 79°F.
+      h.device.value = headerDevice(current: 26.11);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Now 79°F'), findsOneWidget);
+      expect(find.textContaining('Now 77°F'), findsNothing);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('falls back to the plain "Schedule" title with no device', (
+      tester,
+    ) async {
+      final h = _setup(serial: 'abc');
+      stubSchedule(h);
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Schedule'), findsOneWidget);
+      expect(find.textContaining('Now '), findsNothing);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('a heat-cool device shows the target as a low–high band, like '
+        'Details', (tester) async {
+      final h = _setup(
+        serial: 'abc',
+        device: headerDevice(
+          mode: 'heat-cool',
+          low: 20.0, // 68°F
+          high: 24.0, // 75.2°F → 75°F
+        ),
+      );
+      stubSchedule(h);
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Set 68°F – 75°F'), findsOneWidget);
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('the temps line exposes a spelled-out semantics label', (
+      tester,
+    ) async {
+      final h = _setup(serial: 'abc', device: headerDevice());
+      stubSchedule(h);
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      // Screen readers get the comma-form label, not the middot visual string.
+      // (AppBar may merge the title's child nodes, so match the substring.)
+      expect(
+        find.bySemanticsLabel(RegExp('Now 77°F, humidity 60%, set to 76°F')),
+        findsOne,
+      );
+
+      await _disposeTree(tester);
+    });
+
+    testWidgets('the two-line header does not overflow at large text scale', (
+      tester,
+    ) async {
+      final h = _setup(
+        serial: 'abc',
+        device: headerDevice(name: 'Downstairs Guest Bedroom'),
+        textScale: 3.0,
+      );
+      stubSchedule(h);
+
+      await tester.pumpWidget(h.widget);
+      await tester.pumpAndSettle();
+
+      // A clipped/overflowing toolbar throws a RenderFlex overflow during
+      // layout; assert none was swallowed.
+      expect(tester.takeException(), isNull);
+      expect(find.textContaining('Now 77°F'), findsOneWidget);
+
+      await _disposeTree(tester);
+    });
   });
 }

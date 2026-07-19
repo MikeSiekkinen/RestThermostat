@@ -33,6 +33,21 @@ void main() {
         throwsA(isA<FormatException>()),
       );
     });
+
+    test('scheduleWireMode derives the schedule_mode per operating mode', () {
+      expect(DeviceMode.heat.scheduleWireMode, 'HEAT');
+      expect(DeviceMode.cool.scheduleWireMode, 'COOL');
+      expect(DeviceMode.heatCool.scheduleWireMode, 'RANGE');
+      // Emergency heat is still heating.
+      expect(DeviceMode.emergency.scheduleWireMode, 'HEAT');
+      // Off derives nothing — the save path keeps the stored mode.
+      expect(DeviceMode.off.scheduleWireMode, isNull);
+    });
+
+    test('scheduleWireMode handles the read-mode "range" spelling', () {
+      expect(DeviceMode.fromApi('range').scheduleWireMode, 'RANGE');
+      expect(DeviceMode.fromApi('heat-cool').scheduleWireMode, 'RANGE');
+    });
   });
 
   group('Device.isAway', () {

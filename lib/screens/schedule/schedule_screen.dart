@@ -1,9 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/gen/app_localizations.dart';
 import '../../models/device.dart';
 import '../../models/schedule.dart';
+import '../../services/device_display_name.dart';
+import '../../services/schedule_helpers.dart';
+import '../../services/setpoint_source.dart';
+import '../../settings/numeral_font.dart';
 import '../../state/providers.dart';
 import '../../theme/colors.dart';
 import 'day_index.dart';
@@ -34,11 +40,36 @@ class ScheduleScreen extends ConsumerStatefulWidget {
   /// caller doesn't have a `Device` handy (tests, mostly).
   final Capabilities capabilities;
 
+  /// The device's shared-bucket `schedule_mode` as last read from
+  /// `/api/devices` (`Device.scheduleMode`, nullable). Forwarded to Edit
+  /// Event so its save path can decide whether a `set_schedule_mode` command
+  /// is needed alongside `set_schedule` (Issue #93).
+  final String? scheduleMode;
+
+  /// The resolved active device — feeds `deriveSetpointSource` (its
+  /// `targetTemperature` and away state) for the in-control event highlight
+  /// (Issue #97). Nullable for callers without a full `Device` (tests,
+  /// mostly); the highlight simply stays off then.
+  final Device? device;
+
+  /// Clock injection so the highlight's active-event derivation is
+  /// deterministic in tests. Production callers use the [DateTime.now] default.
+  final DateTime Function() now;
+
+  /// Per-device display-name overrides (DESIGN §4.4), forwarded from
+  /// `MainShell` so the header can resolve which thermostat is being scheduled
+  /// (Issue #100). Defaults to empty for callers without them (tests).
+  final Map<String, String> overrides;
+
   const ScheduleScreen({
     super.key,
     required this.serial,
     this.temperatureScale = 'F',
     this.deviceMode = DeviceMode.heat,
+    this.scheduleMode,
+    this.device,
+    this.now = DateTime.now,
+    this.overrides = const {},
     this.capabilities = const Capabilities(
       canHeat: true,
       canCool: false,
@@ -55,9 +86,158 @@ class ScheduleScreen extends ConsumerStatefulWidget {
 
 class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
   /// Internal day index (Mon=0..Sun=6) currently shown in the event list.
-  /// Initialized to today's index in `initState`; user taps on the tab strip
-  /// move this around.
-  int _selectedDay = weekdayToIndex(DateTime.now().weekday);
+  /// Seeded to today in `initState` off the injected clock (so tests and the
+  /// tint share one notion of "now"); user taps on the tab strip move it.
+  late int _selectedDay;
+
+  /// While the loaded schedule is stale for the current mode (see
+  /// [_scheduleMatchesMode]), we refetch on this cadence until the device
+  /// pushes the new mode's bucket. One-shot, re-armed from `build` each time a
+  /// stale result comes back, and cancelled the moment a matching schedule
+  /// arrives — so it stops on its own.
+  Timer? _staleRetryTimer;
+  int _staleRetries = 0;
+  static const _maxStaleRetries = 24;
+  static const _staleRetryInterval = Duration(seconds: 8);
+
+  /// True from the moment the device's mode changes until a schedule that
+  /// matches the new mode arrives. Only while this is set do we hold the
+  /// spinner over a mode-mismatched (stale) schedule — outside the switch
+  /// window we trust the served data, so a steady-state screen never gates.
+  bool _awaitingModeSync = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDay = weekdayToIndex(widget.now().weekday);
+  }
+
+  @override
+  void didUpdateWidget(ScheduleScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Mode was switched (e.g. on Home). Our cached schedule is now for the old
+    // mode; drop it so the sanity gate shows the spinner and refetch the new
+    // mode's schedule. `_maxStaleRetries` resets so the fresh switch gets a
+    // full retry budget.
+    if (oldWidget.device?.mode != widget.device?.mode) {
+      _awaitingModeSync = true;
+      _staleRetries = 0;
+      _cancelStaleRetry();
+      ref.invalidate(scheduleProvider(widget.serial));
+    }
+  }
+
+  @override
+  void dispose() {
+    _cancelStaleRetry();
+    super.dispose();
+  }
+
+  /// True when [schedule] is the schedule the device's current [expected] wire
+  /// mode should show. A stale bucket (the previous mode's, still served until
+  /// the device pushes) fails this: either its top-level `schedule_mode` or one
+  /// of its event `type`s will disagree. `null` expected (device off) never
+  /// gates — there's no mode to check against.
+  bool _scheduleMatchesMode(Schedule schedule, String? expected) {
+    if (expected == null) return true;
+    if (schedule.mode != null && schedule.mode != expected) return false;
+    for (final event in schedule.events.values.expand((day) => day)) {
+      if (event.type != expected) return false;
+    }
+    return true;
+  }
+
+  void _armStaleRetry() {
+    if (_staleRetryTimer != null || _staleRetries >= _maxStaleRetries) return;
+    _staleRetryTimer = Timer(_staleRetryInterval, () {
+      _staleRetryTimer = null;
+      if (!mounted) return;
+      _staleRetries++;
+      ref.invalidate(scheduleProvider(widget.serial));
+    });
+  }
+
+  void _cancelStaleRetry() {
+    _staleRetryTimer?.cancel();
+    _staleRetryTimer = null;
+  }
+
+  /// The scheduled event currently driving the setpoint, whose row gets the
+  /// in-control highlight (Issue #97) — or `null` when the schedule isn't in
+  /// control: manual override, away, no/failed schedule, or an active RANGE
+  /// event (which `deriveSetpointSource` deliberately never matches, DESIGN
+  /// §9.5).
+  ///
+  /// Reuses `deriveSetpointSource` unchanged so the highlight always agrees
+  /// with the Details screen's Scheduled/Manual row by construction: only when
+  /// it reports `scheduled` do we surface the active event.
+  ScheduleEvent? _activeDrivingEvent(Schedule? schedule) {
+    final device = widget.device;
+    if (device == null || schedule == null) return null;
+    final now = widget.now();
+    final source = deriveSetpointSource(
+      device: device,
+      schedule: schedule,
+      now: now,
+    );
+    if (source != SetpointSource.scheduled) return null;
+    return findActiveEvent(schedule, now);
+  }
+
+  /// Header title (Issue #100): the scheduled device's display name over a
+  /// small current-measured / target line. Falls back to the plain "Schedule"
+  /// title when no `Device` is available (test callers).
+  Widget _buildHeaderTitle(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final device = widget.device;
+    if (device == null) return Text(l.scheduleTitle);
+
+    final name = displayNameFor(device, widget.overrides);
+    final measured = _convertTemp(
+      device.currentTemperature,
+      widget.temperatureScale,
+    );
+    final target = _headerTarget(device);
+    final humidity = '${device.humidity}%';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        const SizedBox(height: 2),
+        Text(
+          l.scheduleHeaderTemps(measured, humidity, target),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(color: EmberColors.textSecondary),
+          semanticsLabel: l.scheduleHeaderTempsSemantics(
+            measured,
+            humidity,
+            target,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The header's "Set" value. Mirrors the Details screen's `_setpointDisplay`
+  /// (details_screen.dart) so the two never disagree: a heat-cool device with
+  /// both bounds shows the `low – high` band (the scalar `targetTemperature`
+  /// is a midpoint/sentinel on the wire in that mode); every other mode shows
+  /// the single target.
+  String _headerTarget(Device device) {
+    if (device.mode == DeviceMode.heatCool) {
+      final low = device.targetTemperatureLow;
+      final high = device.targetTemperatureHigh;
+      if (low != null && high != null) {
+        return '${_convertTemp(low, widget.temperatureScale)} – '
+            '${_convertTemp(high, widget.temperatureScale)}';
+      }
+    }
+    return _convertTemp(device.targetTemperature, widget.temperatureScale);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,10 +245,19 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
     final order = localeDayOrder(locale);
     final labels = displayDayLabels(locale);
     final asyncSchedule = ref.watch(scheduleProvider(widget.serial));
+    // A failed refetch keeps its previous data in `AsyncValue.value`, but the
+    // screen shows the error view then — keep the highlight in agreement with
+    // what is actually visible by treating any error as "no schedule".
+    final activeEvent = _activeDrivingEvent(
+      asyncSchedule.hasError ? null : asyncSchedule.value,
+    );
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppLocalizations.of(context).scheduleTitle),
+        // Scale the two-line header's height with the text scale so a large
+        // accessibility font grows the toolbar instead of clipping it.
+        toolbarHeight: MediaQuery.textScalerOf(context).scale(72),
+        title: _buildHeaderTitle(context),
         actions: [
           IconButton(
             key: const ValueKey('add-event-button'),
@@ -91,20 +280,50 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
             Expanded(
               child: RefreshIndicator(
                 onRefresh: () async {
+                  _staleRetries = 0;
                   ref.invalidate(scheduleProvider(widget.serial));
                   // Wait for the next value so RefreshIndicator can dismiss
                   // its spinner only when fresh data has arrived.
                   await ref.read(scheduleProvider(widget.serial).future);
                 },
                 child: asyncSchedule.when(
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (e, _) => _ErrorView(error: e),
-                  data: (schedule) => _DayEventList(
-                    events: schedule?.eventsForDay(_selectedDay) ?? const [],
-                    temperatureScale: widget.temperatureScale,
-                    onTapEvent: (event) => _openEditEvent(schedule, event),
+                  loading: () => _ScheduleLoadingView(
+                    accent: _modeTint(widget.deviceMode),
                   ),
+                  error: (e, _) => _ErrorView(error: e),
+                  data: (schedule) {
+                    // After a mode switch the server keeps serving the previous
+                    // mode's bucket until the device pushes the new one (NLE
+                    // per-mode-bucket model). While awaiting that sync, hold the
+                    // spinner over any schedule that doesn't match the new mode
+                    // and keep refetching — so the old mode's events never flash.
+                    final expectedWireMode =
+                        widget.device?.mode.scheduleWireMode;
+                    final matches =
+                        schedule == null ||
+                        expectedWireMode == null ||
+                        _scheduleMatchesMode(schedule, expectedWireMode);
+                    if (_awaitingModeSync) {
+                      if (matches || _staleRetries >= _maxStaleRetries) {
+                        // Synced (or gave up) — stop gating and render.
+                        _awaitingModeSync = false;
+                        _cancelStaleRetry();
+                      } else {
+                        _armStaleRetry();
+                        return _ScheduleLoadingView(
+                          accent: _modeTint(widget.deviceMode),
+                          message: AppLocalizations.of(context).scheduleSyncing,
+                        );
+                      }
+                    }
+                    return _DayEventList(
+                      events: schedule?.eventsForDay(_selectedDay) ?? const [],
+                      temperatureScale: widget.temperatureScale,
+                      activeEvent: activeEvent,
+                      numeralStyle: ref.watch(numeralFontProvider).style,
+                      onTapEvent: (event) => _openEditEvent(schedule, event),
+                    );
+                  },
                 ),
               ),
             ),
@@ -120,10 +339,12 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
   /// minimal empty schedule. `set_schedule` is full-replace so an empty 7-day
   /// payload is valid (DESIGN §6.7).
   Schedule _scheduleOrEmpty(Schedule? existing) {
+    // No `mode` on the synthesized schedule: the written `schedule_mode` is
+    // derived from the device's operating mode at save time (Issue #93), so
+    // a hardcoded default here would only mislead.
     return existing ??
-        Schedule(
-          events: const {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []},
-          mode: 'HEAT',
+        const Schedule(
+          events: {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []},
         );
   }
 
@@ -136,6 +357,8 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
           temperatureScale: widget.temperatureScale,
           currentSchedule: _scheduleOrEmpty(schedule),
           defaultDayIndex: _selectedDay,
+          deviceMode: widget.deviceMode,
+          storedScheduleMode: widget.scheduleMode,
         ),
       ),
     );
@@ -157,6 +380,8 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
           temperatureScale: widget.temperatureScale,
           currentSchedule: _scheduleOrEmpty(schedule),
           defaultDayIndex: event.dayIndex,
+          deviceMode: widget.deviceMode,
+          storedScheduleMode: widget.scheduleMode,
           existingEvent: event,
         ),
       ),
@@ -265,11 +490,20 @@ class _DayTab extends StatelessWidget {
 class _DayEventList extends StatelessWidget {
   final List<ScheduleEvent> events;
   final String temperatureScale;
+
+  /// The event currently driving the setpoint (Issue #97), or `null`. When one
+  /// of this day's events equals it, that row gets the in-control highlight.
+  final ScheduleEvent? activeEvent;
+
+  /// Numeral face for the row times and temperatures.
+  final TextStyle? numeralStyle;
   final ValueChanged<ScheduleEvent> onTapEvent;
 
   const _DayEventList({
     required this.events,
     required this.temperatureScale,
+    required this.activeEvent,
+    required this.numeralStyle,
     required this.onTapEvent,
   });
 
@@ -308,6 +542,8 @@ class _DayEventList extends StatelessWidget {
       itemBuilder: (context, i) => _EventRow(
         event: events[i],
         temperatureScale: temperatureScale,
+        isActive: activeEvent != null && events[i] == activeEvent,
+        numeralStyle: numeralStyle,
         onTap: () => onTapEvent(events[i]),
       ),
     );
@@ -317,11 +553,21 @@ class _DayEventList extends StatelessWidget {
 class _EventRow extends StatelessWidget {
   final ScheduleEvent event;
   final String temperatureScale;
+
+  /// Whether this event is the one currently driving the setpoint (Issue #97).
+  /// When true the row gets a full-strength type-colored border and glow so it
+  /// reads as "the schedule is holding this right now" regardless of mode.
+  final bool isActive;
+
+  /// Numeral face for the time and temperature, merged onto their styles.
+  final TextStyle? numeralStyle;
   final VoidCallback onTap;
 
   const _EventRow({
     required this.event,
     required this.temperatureScale,
+    required this.isActive,
+    required this.numeralStyle,
     required this.onTap,
   });
 
@@ -339,13 +585,18 @@ class _EventRow extends StatelessWidget {
     // Screen-reader announcement: one merged label combining time + temp +
     // mode so TalkBack/VoiceOver reads "Event at 6:00 AM, 68 degrees Heat,
     // tap to edit." instead of three separate `Text` nodes whose color
-    // tinting carries the mode signal visually.
+    // tinting carries the mode signal visually. When this is the active event
+    // the highlight is purely visual, so prepend the state for non-sighted
+    // users.
     final l = AppLocalizations.of(context);
-    final semanticLabel = l.scheduleEventSemanticLabel(
+    final baseLabel = l.scheduleEventSemanticLabel(
       timeLabel,
       tempLabel,
       event.type.toLowerCase(),
     );
+    final semanticLabel = isActive
+        ? l.scheduleActiveEventSemanticLabel(baseLabel)
+        : baseLabel;
     final typeLabel = _typeLabel(context, event.type);
 
     return Semantics(
@@ -357,19 +608,40 @@ class _EventRow extends StatelessWidget {
           child: InkWell(
             onTap: onTap,
             borderRadius: BorderRadius.circular(12),
-            child: Container(
+            // AnimatedContainer so the highlight glides on/off (300ms
+            // easeInOutCubic, DESIGN §11.4) as the clock crosses into a new
+            // event or a poll changes the match. Keyed by content so a moving
+            // highlight animates on stable per-event elements.
+            child: AnimatedContainer(
+              key: ValueKey('event-row-${event.dayIndex}-${event.timeSeconds}'),
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOutCubic,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: tint.withValues(alpha: 0.10),
+                color: tint.withValues(alpha: isActive ? 0.20 : 0.10),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: tint.withValues(alpha: 0.35)),
+                border: Border.all(
+                  color: isActive ? tint : tint.withValues(alpha: 0.35),
+                  width: isActive ? 2 : 1,
+                ),
+                boxShadow: isActive
+                    ? [
+                        BoxShadow(
+                          color: tint.withValues(alpha: 0.45),
+                          blurRadius: 16,
+                        ),
+                      ]
+                    : null,
               ),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(
                       timeLabel,
-                      style: Theme.of(context).textTheme.headlineLarge,
+                      style:
+                          (Theme.of(context).textTheme.headlineLarge ??
+                                  const TextStyle())
+                              .merge(numeralStyle),
                     ),
                   ),
                   Column(
@@ -377,10 +649,14 @@ class _EventRow extends StatelessWidget {
                     children: [
                       Text(
                         tempLabel,
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: tint,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style:
+                            (Theme.of(context).textTheme.bodyLarge ??
+                                    const TextStyle())
+                                .copyWith(
+                                  color: tint,
+                                  fontWeight: FontWeight.w600,
+                                )
+                                .merge(numeralStyle),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -470,6 +746,53 @@ String _convertTemp(double? celsius, String scale) {
   }
   final f = celsius * 9 / 5 + 32;
   return '${f.round()}°F';
+}
+
+/// Centered, mode-tinted loading spinner for the schedule body — shown on the
+/// first load and while a post-mode-switch schedule is still syncing. Wrapped
+/// in a scrollable list so pull-to-refresh keeps working underneath it.
+class _ScheduleLoadingView extends StatelessWidget {
+  final Color accent;
+  final String? message;
+  const _ScheduleLoadingView({required this.accent, this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        const SizedBox(height: 88),
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 34,
+                height: 34,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  valueColor: AlwaysStoppedAnimation<Color>(accent),
+                ),
+              ),
+              if (message != null) ...[
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Text(
+                    message!,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: EmberColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _ErrorView extends StatelessWidget {

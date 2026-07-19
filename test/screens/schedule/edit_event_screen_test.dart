@@ -15,10 +15,22 @@ import 'package:rest_thermostat/state/providers.dart';
 
 class _Harness {
   final Widget widget;
+  final Dio dio;
   final DioAdapter adapter;
   final ValueNotifier<Schedule?> result;
 
-  _Harness({required this.widget, required this.adapter, required this.result});
+  /// Every `/command` body POSTed during the test, in order — lets tests
+  /// assert the set_schedule_mode / set_schedule orchestration on the raw
+  /// wire payloads.
+  final List<Map<String, dynamic>> requests;
+
+  _Harness({
+    required this.widget,
+    required this.dio,
+    required this.adapter,
+    required this.result,
+    required this.requests,
+  });
 }
 
 class _SeedActiveServer extends ActiveServerNotifier {
@@ -57,11 +69,24 @@ _Harness _setup({
   int defaultDayIndex = 0,
   Capabilities capabilities = _bothCaps,
   String temperatureScale = 'C',
+  DeviceMode deviceMode = DeviceMode.heat,
+  String? storedScheduleMode,
   Locale locale = const Locale('en', 'GB'),
+  bool use24Hour = false,
 }) {
   final dio = Dio(BaseOptions(baseUrl: 'http://test.local:8082'));
   final adapter = DioAdapter(dio: dio);
   final result = ValueNotifier<Schedule?>(null);
+  final requests = <Map<String, dynamic>>[];
+  dio.interceptors.add(
+    InterceptorsWrapper(
+      onRequest: (options, handler) {
+        final data = options.data;
+        if (data is Map<String, dynamic>) requests.add(data);
+        handler.next(options);
+      },
+    ),
+  );
 
   // Capture the optimistic-pop return value so tests can assert on the local
   // schedule update without depending on the network roundtrip completing.
@@ -89,13 +114,20 @@ _Harness _setup({
               onPressed: () async {
                 final r = await Navigator.of(context).push<Schedule?>(
                   MaterialPageRoute(
-                    builder: (_) => EditEventScreen(
-                      serial: 'abc',
-                      capabilities: capabilities,
-                      temperatureScale: temperatureScale,
-                      currentSchedule: schedule,
-                      defaultDayIndex: defaultDayIndex,
-                      existingEvent: existingEvent,
+                    builder: (routeContext) => MediaQuery(
+                      data: MediaQuery.of(
+                        routeContext,
+                      ).copyWith(alwaysUse24HourFormat: use24Hour),
+                      child: EditEventScreen(
+                        serial: 'abc',
+                        capabilities: capabilities,
+                        temperatureScale: temperatureScale,
+                        currentSchedule: schedule,
+                        defaultDayIndex: defaultDayIndex,
+                        deviceMode: deviceMode,
+                        storedScheduleMode: storedScheduleMode,
+                        existingEvent: existingEvent,
+                      ),
                     ),
                   ),
                 );
@@ -109,7 +141,13 @@ _Harness _setup({
     ),
   );
 
-  return _Harness(widget: widget, adapter: adapter, result: result);
+  return _Harness(
+    widget: widget,
+    dio: dio,
+    adapter: adapter,
+    result: result,
+    requests: requests,
+  );
 }
 
 Future<void> _openEditor(WidgetTester tester) async {
@@ -168,34 +206,60 @@ void main() {
     expect(find.byKey(const ValueKey('mode-pill-RANGE')), findsNothing);
   });
 
-  testWidgets('mode selector shows HEAT/COOL/RANGE when both caps present', (
+  // Since Issue #93, the event-type pills are constrained to the single type
+  // matching the derived schedule mode — the device ignores a schedule whose
+  // events contradict its schedule_mode, so a heat-mode device only offers
+  // HEAT events even when it could also cool.
+  testWidgets('mode selector offers only the derived type (heat device)', (
     tester,
   ) async {
-    final h = _setup(schedule: _emptyWeek());
+    final h = _setup(schedule: _emptyWeek(), deviceMode: DeviceMode.heat);
     await tester.pumpWidget(h.widget);
     await _openEditor(tester);
 
     expect(find.byKey(const ValueKey('mode-pill-HEAT')), findsOneWidget);
-    expect(find.byKey(const ValueKey('mode-pill-COOL')), findsOneWidget);
-    expect(find.byKey(const ValueKey('mode-pill-RANGE')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mode-pill-COOL')), findsNothing);
+    expect(find.byKey(const ValueKey('mode-pill-RANGE')), findsNothing);
   });
 
-  testWidgets('selecting RANGE reveals dual temperature pickers', (
+  testWidgets('mode selector offers only COOL for a cool-mode device', (
     tester,
   ) async {
-    final h = _setup(schedule: _emptyWeek());
+    final h = _setup(schedule: _emptyWeek(), deviceMode: DeviceMode.cool);
     await tester.pumpWidget(h.widget);
     await _openEditor(tester);
 
-    await tester.tap(find.byKey(const ValueKey('mode-pill-RANGE')));
-    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('mode-pill-COOL')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mode-pill-HEAT')), findsNothing);
+    expect(find.byKey(const ValueKey('mode-pill-RANGE')), findsNothing);
+  });
 
-    // Both labels visible side-by-side.
-    expect(find.text('HEAT'), findsWidgets);
-    expect(find.text('COOL'), findsWidgets);
-    // Two temp-up buttons present (one per stepper).
+  testWidgets('heat-cool device preselects RANGE with dual temperature '
+      'pickers', (tester) async {
+    final h = _setup(schedule: _emptyWeek(), deviceMode: DeviceMode.heatCool);
+    await tester.pumpWidget(h.widget);
+    await _openEditor(tester);
+
+    expect(find.byKey(const ValueKey('mode-pill-RANGE')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mode-pill-HEAT')), findsNothing);
+    expect(find.byKey(const ValueKey('mode-pill-COOL')), findsNothing);
+    // Dual pickers shown without any tap — RANGE is the only valid type.
     expect(find.byKey(const ValueKey('temp-up-HEAT')), findsOneWidget);
     expect(find.byKey(const ValueKey('temp-up-COOL')), findsOneWidget);
+  });
+
+  testWidgets('off device falls back to the stored schedule_mode for the '
+      'pill set', (tester) async {
+    final h = _setup(
+      schedule: _emptyWeek(),
+      deviceMode: DeviceMode.off,
+      storedScheduleMode: 'COOL',
+    );
+    await tester.pumpWidget(h.widget);
+    await _openEditor(tester);
+
+    expect(find.byKey(const ValueKey('mode-pill-COOL')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mode-pill-HEAT')), findsNothing);
   });
 
   testWidgets('Cancel returns null without mutating the schedule', (
@@ -421,5 +485,452 @@ void main() {
 
     final saved = h.result.value!;
     expect(saved.eventsForDay(2), isEmpty);
+  });
+
+  group('time text inputs (Issue #96)', () {
+    const hourField = ValueKey('time-hour-field');
+    const minuteField = ValueKey('time-minute-field');
+    const amPill = ValueKey('time-am-pill');
+    const pmPill = ValueKey('time-pm-pill');
+
+    /// The `time` values of every event in [day] of the set_schedule wire
+    /// payload — pins the 12h→24h conversion at the raw JSON layer.
+    List<int> wireTimes(List<Map<String, dynamic>> requests, int day) {
+      final write = requests.lastWhere((r) => r['command'] == 'set_schedule');
+      final days = (write['value'] as Map<String, dynamic>)['days'] as Map;
+      final dayMap = (days['$day'] ?? const {}) as Map;
+      return [
+        for (final e in dayMap.values) ((e as Map)['time'] as num).toInt(),
+      ];
+    }
+
+    testWidgets('12 AM serializes to time 0 on the wire', (tester) async {
+      final h = _setup(schedule: _emptyWeek(), storedScheduleMode: 'HEAT');
+      h.adapter.onPost(
+        '/command',
+        (s) => s.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      // 12-hour mode (harness default); the 7:00 seed is AM already.
+      await tester.enterText(find.byKey(hourField), '12');
+      await tester.enterText(find.byKey(minuteField), '00');
+      await tester.tap(find.byKey(amPill));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(wireTimes(h.requests, 0), [0]);
+    });
+
+    testWidgets('12 PM serializes to time 43200 on the wire', (tester) async {
+      final h = _setup(schedule: _emptyWeek(), storedScheduleMode: 'HEAT');
+      h.adapter.onPost(
+        '/command',
+        (s) => s.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      await tester.enterText(find.byKey(hourField), '12');
+      await tester.enterText(find.byKey(minuteField), '00');
+      await tester.tap(find.byKey(pmPill));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(wireTimes(h.requests, 0), [43200]);
+    });
+
+    testWidgets('7:30 PM serializes to time 70200 on the wire', (tester) async {
+      final h = _setup(schedule: _emptyWeek(), storedScheduleMode: 'HEAT');
+      h.adapter.onPost(
+        '/command',
+        (s) => s.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      await tester.enterText(find.byKey(hourField), '7');
+      await tester.enterText(find.byKey(minuteField), '30');
+      await tester.tap(find.byKey(pmPill));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(wireTimes(h.requests, 0), [70200]);
+    });
+
+    testWidgets('24-hour mode hides AM/PM and takes 19:30 directly', (
+      tester,
+    ) async {
+      final h = _setup(
+        schedule: _emptyWeek(),
+        storedScheduleMode: 'HEAT',
+        use24Hour: true,
+      );
+      h.adapter.onPost(
+        '/command',
+        (s) => s.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      expect(find.byKey(amPill), findsNothing);
+      expect(find.byKey(pmPill), findsNothing);
+
+      await tester.enterText(find.byKey(hourField), '19');
+      await tester.enterText(find.byKey(minuteField), '30');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(wireTimes(h.requests, 0), [70200]);
+    });
+
+    testWidgets('invalid minute disables Save with an inline error', (
+      tester,
+    ) async {
+      final h = _setup(schedule: _emptyWeek(), storedScheduleMode: 'HEAT');
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      await tester.enterText(find.byKey(minuteField), '75');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Enter minutes from 0–59'), findsOneWidget);
+      final save = tester.widget<TextButton>(
+        find.widgetWithText(TextButton, 'Save'),
+      );
+      expect(save.onPressed, isNull);
+      expect(h.requests, isEmpty);
+
+      // Correcting the field re-enables Save.
+      await tester.enterText(find.byKey(minuteField), '45');
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, 'Save'))
+            .onPressed,
+        isNotNull,
+      );
+    });
+
+    testWidgets('empty hour disables Save', (tester) async {
+      final h = _setup(schedule: _emptyWeek(), storedScheduleMode: 'HEAT');
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      await tester.enterText(find.byKey(hourField), '');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Enter an hour from 1–12'), findsOneWidget);
+      final save = tester.widget<TextButton>(
+        find.widgetWithText(TextButton, 'Save'),
+      );
+      expect(save.onPressed, isNull);
+      expect(h.requests, isEmpty);
+    });
+
+    testWidgets('editing a 19:30 event prefills 7/30 in 12-hour mode and '
+        'round-trips unchanged', (tester) async {
+      const existing = ScheduleEvent(
+        dayIndex: 1,
+        hour: 19,
+        minute: 30,
+        type: 'HEAT',
+        targetTemp: 20.0,
+      );
+      final h = _setup(
+        schedule: _emptyWeek().addEvent(existing),
+        existingEvent: existing,
+        defaultDayIndex: 1,
+        storedScheduleMode: 'HEAT',
+      );
+      h.adapter.onPost(
+        '/command',
+        (s) => s.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      expect(
+        tester.widget<TextField>(find.byKey(hourField)).controller!.text,
+        '7',
+      );
+      expect(
+        tester.widget<TextField>(find.byKey(minuteField)).controller!.text,
+        '30',
+      );
+
+      // Saving untouched keeps 19:30 — proves the PM half survived prefill.
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(wireTimes(h.requests, 1), [70200]);
+    });
+
+    testWidgets('tapping AM on a prefilled PM event re-derives the wire time', (
+      tester,
+    ) async {
+      const existing = ScheduleEvent(
+        dayIndex: 1,
+        hour: 19,
+        minute: 30,
+        type: 'HEAT',
+        targetTemp: 20.0,
+      );
+      final h = _setup(
+        schedule: _emptyWeek().addEvent(existing),
+        existingEvent: existing,
+        defaultDayIndex: 1,
+        storedScheduleMode: 'HEAT',
+      );
+      h.adapter.onPost(
+        '/command',
+        (s) => s.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      // Flip the prefilled 7:30 PM to AM without touching the text fields;
+      // expect 07:30 → 27000 on the wire.
+      await tester.tap(find.byKey(amPill));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(wireTimes(h.requests, 1), [27000]);
+    });
+
+    testWidgets('editing a 19:30 event prefills 19/30 in 24-hour mode', (
+      tester,
+    ) async {
+      const existing = ScheduleEvent(
+        dayIndex: 1,
+        hour: 19,
+        minute: 30,
+        type: 'HEAT',
+        targetTemp: 20.0,
+      );
+      final h = _setup(
+        schedule: _emptyWeek().addEvent(existing),
+        existingEvent: existing,
+        defaultDayIndex: 1,
+        storedScheduleMode: 'HEAT',
+        use24Hour: true,
+      );
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      expect(
+        tester.widget<TextField>(find.byKey(hourField)).controller!.text,
+        '19',
+      );
+      expect(
+        tester.widget<TextField>(find.byKey(minuteField)).controller!.text,
+        '30',
+      );
+    });
+  });
+
+  group('set_schedule_mode orchestration (Issue #93)', () {
+    testWidgets(
+      'derived mode differing from stored issues set_schedule_mode then '
+      'set_schedule',
+      (tester) async {
+        final h = _setup(
+          schedule: _emptyWeek(),
+          deviceMode: DeviceMode.cool,
+          storedScheduleMode: null, // shared bucket unset — must be synced
+        );
+        h.adapter.onPost(
+          '/command',
+          (s) => s.reply(200, {'ok': true}),
+          data: Matchers.any,
+        );
+
+        await tester.pumpWidget(h.widget);
+        await _openEditor(tester);
+        await tester.tap(find.text('Save'));
+        await tester.pumpAndSettle();
+
+        expect(h.requests, hasLength(2));
+        expect(h.requests[0], {
+          'serial': 'abc',
+          'command': 'set_schedule_mode',
+          'value': 'COOL',
+        });
+        expect(h.requests[1]['command'], 'set_schedule');
+        final value = h.requests[1]['value'] as Map<String, dynamic>;
+        expect(value['schedule_mode'], 'COOL');
+      },
+    );
+
+    testWidgets('derived mode agreeing with stored issues only set_schedule', (
+      tester,
+    ) async {
+      final h = _setup(
+        schedule: _emptyWeek(),
+        deviceMode: DeviceMode.cool,
+        storedScheduleMode: 'COOL',
+      );
+      h.adapter.onPost(
+        '/command',
+        (s) => s.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(h.requests, hasLength(1));
+      expect(h.requests.single['command'], 'set_schedule');
+      final value = h.requests.single['value'] as Map<String, dynamic>;
+      expect(value['schedule_mode'], 'COOL');
+    });
+
+    testWidgets(
+      'stale events from a previous mode are coerced — the payload never '
+      'contradicts its schedule_mode',
+      (tester) async {
+        // Schedule read from the server still holds a HEAT event, but the
+        // device now runs in cool mode.
+        const stale = ScheduleEvent(
+          dayIndex: 3,
+          hour: 6,
+          minute: 0,
+          type: 'HEAT',
+          targetTemp: 20.0,
+        );
+        final h = _setup(
+          schedule: _emptyWeek().addEvent(stale),
+          deviceMode: DeviceMode.cool,
+          storedScheduleMode: 'COOL',
+          defaultDayIndex: 0,
+        );
+        h.adapter.onPost(
+          '/command',
+          (s) => s.reply(200, {'ok': true}),
+          data: Matchers.any,
+        );
+
+        await tester.pumpWidget(h.widget);
+        await _openEditor(tester);
+        await tester.tap(find.text('Save'));
+        await tester.pumpAndSettle();
+
+        final value = h.requests.single['value'] as Map<String, dynamic>;
+        expect(value['schedule_mode'], 'COOL');
+        final days = value['days'] as Map<String, dynamic>;
+        final allEvents = [
+          for (final day in days.values)
+            ...(day as Map<String, dynamic>).values,
+        ];
+        expect(allEvents, isNotEmpty);
+        for (final event in allEvents) {
+          expect((event as Map<String, dynamic>)['type'], 'COOL');
+          expect(event['entry_type'], 'setpoint');
+        }
+      },
+    );
+
+    testWidgets('editing an event whose type predates the mode switch '
+        'prefills the allowed type', (tester) async {
+      const stale = ScheduleEvent(
+        dayIndex: 1,
+        hour: 7,
+        minute: 0,
+        type: 'HEAT',
+        targetTemp: 20.0,
+      );
+      final h = _setup(
+        schedule: _emptyWeek().addEvent(stale),
+        existingEvent: stale,
+        defaultDayIndex: 1,
+        deviceMode: DeviceMode.cool,
+        storedScheduleMode: 'COOL',
+      );
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      // Only the COOL pill exists and the stepper carries the temp over.
+      expect(find.byKey(const ValueKey('mode-pill-COOL')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mode-pill-HEAT')), findsNothing);
+      expect(find.byKey(const ValueKey('temp-up-COOL')), findsOneWidget);
+    });
+
+    testWidgets('set_schedule failure after a successful mode change rolls the '
+        'shared-bucket mode back', (tester) async {
+      // Mode differs (stored HEAT, device cool) so the save sends
+      // set_schedule_mode COOL first. The set_schedule that follows is
+      // forced to fail with a non-transient 400; without a rollback the
+      // device would be stranded with bucket mode COOL against its stored
+      // HEAT schedule — which the firmware answers by ignoring the whole
+      // schedule.
+      final h = _setup(
+        schedule: _emptyWeek(),
+        deviceMode: DeviceMode.cool,
+        storedScheduleMode: 'HEAT',
+      );
+      h.adapter.onPost(
+        '/command',
+        (s) => s.reply(200, {'ok': true}),
+        data: Matchers.any,
+      );
+      // Registered after the harness's capture interceptor, so the body is
+      // recorded before the rejection fires.
+      h.dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            final data = options.data;
+            if (data is Map<String, dynamic> &&
+                data['command'] == 'set_schedule') {
+              handler.reject(
+                DioException(
+                  requestOptions: options,
+                  type: DioExceptionType.badResponse,
+                  response: Response(requestOptions: options, statusCode: 400),
+                ),
+              );
+              return;
+            }
+            handler.next(options);
+          },
+        ),
+      );
+
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      final commands = [for (final r in h.requests) r['command']];
+      expect(commands, [
+        'set_schedule_mode', // sync to the derived mode
+        'set_schedule', // fails with 400 (no retry on 4xx)
+        'set_schedule_mode', // best-effort rollback to the stored mode
+      ]);
+      expect(h.requests.first['value'], 'COOL');
+      expect(h.requests.last['value'], 'HEAT');
+    });
   });
 }

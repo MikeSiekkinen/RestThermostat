@@ -386,6 +386,32 @@ class AppLocalizationsEn extends AppLocalizations {
       'In-memory diagnostic log of recent app activity.';
 
   @override
+  String get settingsAppearanceSection => 'Appearance';
+
+  @override
+  String get settingsTimeFieldPaletteLabel => 'Schedule time boxes';
+
+  @override
+  String get settingsTimeFieldPaletteHelp =>
+      'How the Hour/Minute boxes on Edit Event are colored.';
+
+  @override
+  String get settingsTimeFieldPaletteMatchMode => 'Match mode';
+
+  @override
+  String get settingsTimeFieldPaletteNeutral => 'Neutral';
+
+  @override
+  String get scheduleSyncing => 'Updating schedule for the new mode…';
+
+  @override
+  String get settingsNumeralFontLabel => 'Schedule numerals';
+
+  @override
+  String get settingsNumeralFontHelp =>
+      'Font for the numbers on the schedule time & temperature displays.';
+
+  @override
   String get settingsAboutSection => 'About';
 
   @override
@@ -467,6 +493,25 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String scheduleActiveEventSemanticLabel(String event) {
+    return 'Currently active. $event';
+  }
+
+  @override
+  String scheduleHeaderTemps(String measured, String humidity, String target) {
+    return 'Now $measured · $humidity • Set $target';
+  }
+
+  @override
+  String scheduleHeaderTempsSemantics(
+    String measured,
+    String humidity,
+    String target,
+  ) {
+    return 'Now $measured, humidity $humidity, set to $target';
+  }
+
+  @override
   String get editEventTitleNew => 'New Event';
 
   @override
@@ -498,6 +543,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editEventDeleteConfirm => 'Delete';
 
   @override
+  String get editEventHourLabel => 'Hour';
+
+  @override
+  String get editEventMinuteLabel => 'Minute';
+
+  @override
+  String get editEventAmLabel => 'AM';
+
+  @override
+  String get editEventPmLabel => 'PM';
+
+  @override
+  String get editEventHourError24 => 'Enter an hour from 0–23';
+
+  @override
+  String get editEventHourError12 => 'Enter an hour from 1–12';
+
+  @override
+  String get editEventMinuteError => 'Enter minutes from 0–59';
+
+  @override
   String get editEventSavedSnack => 'Schedule saved';
 
   @override
@@ -505,6 +571,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get editEventRetryAction => 'Retry';
+
+  @override
+  String get editEventTempEntryTitle => 'Set temperature';
+
+  @override
+  String get editEventTempEntryConfirm => 'Set';
 
   @override
   String get detailsSectionCurrent => 'CURRENT';

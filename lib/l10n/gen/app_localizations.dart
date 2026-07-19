@@ -754,6 +754,54 @@ abstract class AppLocalizations {
   /// **'In-memory diagnostic log of recent app activity.'**
   String get settingsViewLogsSubtitle;
 
+  /// Settings section header for appearance/theme options.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get settingsAppearanceSection;
+
+  /// Label for the time-box color-scheme selector in Settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule time boxes'**
+  String get settingsTimeFieldPaletteLabel;
+
+  /// Helper text under the time-box color-scheme selector.
+  ///
+  /// In en, this message translates to:
+  /// **'How the Hour/Minute boxes on Edit Event are colored.'**
+  String get settingsTimeFieldPaletteHelp;
+
+  /// Segmented-button option: tint the time boxes by the event's mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Match mode'**
+  String get settingsTimeFieldPaletteMatchMode;
+
+  /// Segmented-button option: keep the time boxes a mode-agnostic gray.
+  ///
+  /// In en, this message translates to:
+  /// **'Neutral'**
+  String get settingsTimeFieldPaletteNeutral;
+
+  /// Loading caption shown on the Schedule tab after a mode switch, while waiting for the device to push the new mode's schedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Updating schedule for the new mode…'**
+  String get scheduleSyncing;
+
+  /// Label for the numeral-font selector in Settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule numerals'**
+  String get settingsNumeralFontLabel;
+
+  /// Helper text under the numeral-font selector.
+  ///
+  /// In en, this message translates to:
+  /// **'Font for the numbers on the schedule time & temperature displays.'**
+  String get settingsNumeralFontHelp;
+
   /// Settings section header for the About/version/credit block.
   ///
   /// In en, this message translates to:
@@ -886,6 +934,28 @@ abstract class AppLocalizations {
   /// **'Event at {time}, {temp} {modeLower}, tap to edit.'**
   String scheduleEventSemanticLabel(String time, String temp, String modeLower);
 
+  /// Semantics label for the schedule event currently driving the setpoint (Issue #97) — prepends the active state to the base event label, since the highlight is otherwise only visual.
+  ///
+  /// In en, this message translates to:
+  /// **'Currently active. {event}'**
+  String scheduleActiveEventSemanticLabel(String event);
+
+  /// Schedule header line showing the scheduled device's current measured temperature, relative humidity, and target temperature (Issue #100). The temperatures arrive pre-formatted with their unit; humidity arrives pre-formatted with a percent sign.
+  ///
+  /// In en, this message translates to:
+  /// **'Now {measured} · {humidity} • Set {target}'**
+  String scheduleHeaderTemps(String measured, String humidity, String target);
+
+  /// Screen-reader version of the Schedule header line (Issue #100), spelled out rather than using the middot separators.
+  ///
+  /// In en, this message translates to:
+  /// **'Now {measured}, humidity {humidity}, set to {target}'**
+  String scheduleHeaderTempsSemantics(
+    String measured,
+    String humidity,
+    String target,
+  );
+
   /// AppBar title when creating a new schedule event.
   ///
   /// In en, this message translates to:
@@ -946,6 +1016,48 @@ abstract class AppLocalizations {
   /// **'Delete'**
   String get editEventDeleteConfirm;
 
+  /// Label above the hour text field on the edit-event screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Hour'**
+  String get editEventHourLabel;
+
+  /// Label above the minute text field on the edit-event screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Minute'**
+  String get editEventMinuteLabel;
+
+  /// AM pill of the 12-hour-mode time selector.
+  ///
+  /// In en, this message translates to:
+  /// **'AM'**
+  String get editEventAmLabel;
+
+  /// PM pill of the 12-hour-mode time selector.
+  ///
+  /// In en, this message translates to:
+  /// **'PM'**
+  String get editEventPmLabel;
+
+  /// Inline validation message for an invalid hour in 24-hour mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an hour from 0–23'**
+  String get editEventHourError24;
+
+  /// Inline validation message for an invalid hour in 12-hour mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an hour from 1–12'**
+  String get editEventHourError12;
+
+  /// Inline validation message for an invalid minute value.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter minutes from 0–59'**
+  String get editEventMinuteError;
+
   /// Snackbar shown after a successful set_schedule write.
   ///
   /// In en, this message translates to:
@@ -963,6 +1075,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Retry'**
   String get editEventRetryAction;
+
+  /// Title of the dialog for typing a schedule event's temperature directly.
+  ///
+  /// In en, this message translates to:
+  /// **'Set temperature'**
+  String get editEventTempEntryTitle;
+
+  /// Confirm action in the type-a-temperature dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Set'**
+  String get editEventTempEntryConfirm;
 
   /// Section header above the current humidity + setpoint tiles on the Details tab.
   ///

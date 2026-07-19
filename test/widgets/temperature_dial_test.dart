@@ -204,7 +204,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('68°'), findsOneWidget);
-      expect(find.text('Currently 64°'), findsOneWidget);
+      expect(find.text('64°'), findsOneWidget);
     });
 
     testWidgets('renders target + current label in °C when unit is C', (
@@ -224,7 +224,26 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('20°'), findsOneWidget);
-      expect(find.text('Currently 18°'), findsOneWidget);
+      expect(find.text('18°'), findsOneWidget);
+    });
+
+    testWidgets('appends the humidity reading to the current label when '
+        'humidityPercent is set', (tester) async {
+      await tester.pumpWidget(
+        _host(
+          const TemperatureDial(
+            currentTemperatureCelsius: 18.0,
+            targetTemperatureCelsius: 20.0,
+            mode: DeviceMode.heat,
+            displayUnit: 'C',
+            capabilities: _allCapable,
+            humidityPercent: 45,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('18° · 45%'), findsOneWidget);
     });
 
     testWidgets('mounts a CustomPaint for the dial drawing', (tester) async {

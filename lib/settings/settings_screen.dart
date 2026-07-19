@@ -11,6 +11,8 @@ import '../services/nle_error_messages.dart';
 import '../services/onboarding_store.dart';
 import '../services/url_normalizer.dart';
 import '../state/providers.dart';
+import 'numeral_font.dart';
+import 'time_field_palette.dart';
 
 /// GitHub repo link shown in the About section. Centralized so tests can
 /// assert against it without re-typing the URL.
@@ -347,6 +349,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     const Divider(),
                     _buildDiagnosticsSection(context),
                     const Divider(),
+                    _buildAppearanceSection(context),
+                    const Divider(),
                     _buildAboutSection(context),
                     const Divider(),
                     _buildDangerZone(context),
@@ -613,6 +617,76 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Navigator.of(
                 context,
               ).push(MaterialPageRoute(builder: (_) => const LogsScreen()));
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppearanceSection(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final palette = ref.watch(timeFieldPaletteProvider);
+    final numeral = ref.watch(numeralFontProvider);
+    final dim = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SectionHeader(text: l.settingsAppearanceSection),
+          Text(
+            l.settingsTimeFieldPaletteLabel,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 4),
+          Text(l.settingsTimeFieldPaletteHelp, style: dim),
+          const SizedBox(height: 12),
+          SegmentedButton<TimeFieldPalette>(
+            segments: [
+              ButtonSegment(
+                value: TimeFieldPalette.matchMode,
+                label: Text(l.settingsTimeFieldPaletteMatchMode),
+              ),
+              ButtonSegment(
+                value: TimeFieldPalette.neutral,
+                label: Text(l.settingsTimeFieldPaletteNeutral),
+              ),
+            ],
+            selected: {palette},
+            onSelectionChanged: (selection) => ref
+                .read(timeFieldPaletteProvider.notifier)
+                .set(selection.first),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            l.settingsNumeralFontLabel,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 4),
+          Text(l.settingsNumeralFontHelp, style: dim),
+          const SizedBox(height: 8),
+          DropdownButton<NumeralFont>(
+            key: const ValueKey('numeral-font-dropdown'),
+            isExpanded: true,
+            value: numeral,
+            items: [
+              for (final font in NumeralFont.values)
+                DropdownMenuItem(
+                  value: font,
+                  child: Text(
+                    // Preview each option in its own face, with a numeric sample.
+                    '${font.label}   012 · 34°',
+                    style: font.style.copyWith(fontSize: 18),
+                  ),
+                ),
+            ],
+            onChanged: (font) {
+              if (font != null) {
+                ref.read(numeralFontProvider.notifier).set(font);
+              }
             },
           ),
         ],

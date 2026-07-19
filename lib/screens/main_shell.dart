@@ -32,7 +32,9 @@ class MainShell extends StatefulWidget {
   /// providers.
   final Widget homeTab;
 
-  /// `now()` injection for the Details tab's relative-time formatting.
+  /// `now()` injection for time-dependent tab logic: the Details tab's
+  /// relative-time formatting and the Schedule tab's setpoint-source
+  /// derivation for the in-control event highlight (Issue #97).
   final DateTime Function() now;
 
   const MainShell({
@@ -71,7 +73,11 @@ class _MainShellState extends State<MainShell> {
             serial: widget.device.serial,
             temperatureScale: widget.device.temperatureScale,
             deviceMode: widget.device.mode,
+            scheduleMode: widget.device.scheduleMode,
             capabilities: widget.device.capabilities,
+            device: widget.device,
+            now: widget.now,
+            overrides: widget.overrides,
           ),
           DetailsScreen(
             device: widget.device,
