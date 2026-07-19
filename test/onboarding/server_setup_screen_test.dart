@@ -67,7 +67,11 @@ void main() {
       find.byWidgetPredicate((w) => w is DropdownButton),
     );
     final color = (dropdown as dynamic).dropdownColor as Color?;
-    expect(color, isNotNull, reason: 'auth dropdown needs an opaque menu color');
+    expect(
+      color,
+      isNotNull,
+      reason: 'auth dropdown needs an opaque menu color',
+    );
     expect(color!.a, greaterThan(0.99), reason: 'menu color must be opaque');
   });
 
