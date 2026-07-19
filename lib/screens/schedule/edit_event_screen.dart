@@ -287,48 +287,24 @@ class _EditEventScreenState extends ConsumerState<EditEventScreen> {
     );
   }
 
-  /// Section header above the time fields, as a reminder of when the event
-  /// runs. Edit mode resolves to the event's single day; new mode uses the
-  /// day(s) picked in the repeat row below.
-  ///
-  /// - none selected → the generic "Time".
-  /// - one day → the compact next-occurrence form, e.g. "Monday (Jul 20)".
-  /// - several days (an arbitrary set, not a range) → each day on its own line
-  ///   with its last and next occurrence, e.g. "Monday (Jul 13, Jul 20)",
-  ///   sorted chronologically by next occurrence.
-  ///
-  /// A day that lands on today renders "(Jul 18 today)" instead of dates.
+  /// Section header above the time fields. In new-event mode the repeat-day
+  /// panels below already carry each day's date, so this stays the generic
+  /// "Time". In edit mode there's no day picker, so it names the event's
+  /// weekday plus, as a reminder, the next date it falls on — e.g. "Monday
+  /// (Jul 20)", or "Saturday (Jul 18 today)" when that's today.
   String _timeSectionHeader(BuildContext context, AppLocalizations l) {
-    final Iterable<int> days = widget.isNew
-        ? _selectedDays
-        : [widget.existingEvent!.dayIndex];
-    if (days.isEmpty) return l.editEventTimeLabel;
-
+    if (widget.isNew) return l.editEventTimeLabel;
+    final dayIndex = widget.existingEvent!.dayIndex;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final ml = MaterialLocalizations.of(context);
     // dayIndex is Mon=0..Sun=6; DateTime.weekday is Mon=1..Sun=7. Dart's % is
     // non-negative, so this is the days until the next occurrence (0 = today).
-    DateTime nextFor(int dayIndex) =>
-        today.add(Duration(days: (dayIndex + 1 - now.weekday) % 7));
-    String fmt(DateTime d) => ml.formatShortMonthDay(d);
-
-    final sorted = days.toList()
-      ..sort((a, b) => nextFor(a).compareTo(nextFor(b)));
-
-    if (sorted.length == 1) {
-      final next = nextFor(sorted.first);
-      final paren = next == today ? '${fmt(today)} today' : fmt(next);
-      return '${fullDayNames[sorted.first]} ($paren)';
-    }
-
-    return sorted.map((dayIndex) {
-      final next = nextFor(dayIndex);
-      final paren = next == today
-          ? '${fmt(today)} today'
-          : '${fmt(next.subtract(const Duration(days: 7)))}, ${fmt(next)}';
-      return '${fullDayNames[dayIndex]} ($paren)';
-    }).join('\n');
+    final next = today.add(Duration(days: (dayIndex + 1 - now.weekday) % 7));
+    final ml = MaterialLocalizations.of(context);
+    final paren = next == today
+        ? '${ml.formatShortMonthDay(today)} today'
+        : ml.formatShortMonthDay(next);
+    return '${fullDayNames[dayIndex]} ($paren)';
   }
 
   Future<void> _save() async {
