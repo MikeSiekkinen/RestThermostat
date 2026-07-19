@@ -2,7 +2,7 @@ name: rest_thermostat
 description: Community Flutter app for NoLongerEvil firmware on Nest Gen 1/2 thermostats.
 publish_to: 'none'
 
-version: 1.2.0+17
+version: 1.2.0+19
 
 environment:
   sdk: ^3.12.0
@@ -33,7 +33,14 @@ dependencies:
   package_info_plus: ^10.1.0
   intl: ^0.20.2
   share_plus: ^13.1.0
-
+  # Encrypted config backup/restore (Issue #109, ADR-0001). `cryptography` is
+  # pure-Dart (no NDK/CMake weight on the signed APK): Argon2id KDF +
+  # XChaCha20-Poly1305 AEAD. `flutter_file_dialog` gives a real filesystem
+  # save/open dialog (Android SAF) with no `win32` dependency — `file_picker`
+  # pins win32 5.x and collides with `share_plus`'s win32 6.x, and
+  # `share_plus`'s share sheet can't save to a user-chosen folder anyway.
+  cryptography: ^2.9.0
+  flutter_file_dialog: ^3.3.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

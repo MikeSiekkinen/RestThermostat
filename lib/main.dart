@@ -9,8 +9,11 @@ import 'onboarding/onboarding_flow.dart';
 import 'screens/home/home_body.dart';
 import 'screens/main_shell.dart';
 import 'services/app_info.dart';
+import 'services/backup/backup_service.dart';
 import 'services/onboarding_store.dart';
+import 'settings/numeral_font.dart';
 import 'settings/settings_screen.dart';
+import 'settings/time_field_palette.dart';
 import 'state/auth_failure_coordinator.dart';
 import 'state/devices_snapshot.dart';
 import 'state/lifecycle_bridge.dart';
@@ -147,6 +150,16 @@ class _BootstrapState extends ConsumerState<_Bootstrap> {
           initial: config,
           clientFactory: ref.read(clientFactoryProvider),
           onComplete: _onOnboardingComplete,
+          // Built from widget.store (not backupServiceProvider) so Bootstrap
+          // stays self-contained — it already persists through widget.store and
+          // doesn't require the provider override to be wired.
+          backupService: BackupService(store: widget.store),
+          onRestoreApplied: () async {
+            // Appearance notifiers hydrated at startup with the fresh-install
+            // defaults; a restore rewrites their prefs, so force a re-read.
+            ref.invalidate(numeralFontProvider);
+            ref.invalidate(timeFieldPaletteProvider);
+          },
         );
       },
     );
@@ -213,6 +226,10 @@ class _HomeState extends ConsumerState<_Home> {
                 builder: (_) => SettingsScreen(
                   initiallyExpandAuth: true,
                   onDisconnect: () {
+                    Navigator.of(context).pop();
+                    widget.onDisconnect();
+                  },
+                  onConfigRestored: () {
                     Navigator.of(context).pop();
                     widget.onDisconnect();
                   },
@@ -337,6 +354,10 @@ class _HomeState extends ConsumerState<_Home> {
                   MaterialPageRoute(
                     builder: (_) => SettingsScreen(
                       onDisconnect: () {
+                        Navigator.of(context).pop();
+                        widget.onDisconnect();
+                      },
+                      onConfigRestored: () {
                         Navigator.of(context).pop();
                         widget.onDisconnect();
                       },

@@ -502,4 +502,61 @@ void main() {
 
     await _disposeTree(tester);
   });
+
+  testWidgets('Backup section shows Export and Restore rows', (tester) async {
+    final h = _setup(initialUrl: 'http://saved.local:8082');
+    h.adapter.onGet('/api/devices', (s) => s.reply(200, _devicesOne()));
+
+    await tester.pumpWidget(h.widget);
+    await _settleAndUnmount(tester);
+
+    expect(find.text('Backup'), findsOneWidget);
+    expect(find.text('Export backup…'), findsOneWidget);
+    expect(find.text('Restore from backup…'), findsOneWidget);
+
+    await _disposeTree(tester);
+  });
+
+  testWidgets('Export passphrase dialog enforces length and match', (
+    tester,
+  ) async {
+    final h = _setup(initialUrl: 'http://saved.local:8082');
+    h.adapter.onGet('/api/devices', (s) => s.reply(200, _devicesOne()));
+
+    await tester.pumpWidget(h.widget);
+    await _settleAndUnmount(tester);
+
+    await tester.ensureVisible(find.text('Export backup…'));
+    await tester.tap(find.text('Export backup…'));
+    await tester.pumpAndSettle();
+
+    // Dialog is up with a passphrase + confirm field.
+    expect(find.text('Set a backup passphrase'), findsOneWidget);
+
+    // Too-short passphrase fails validation (Export is the dialog's confirm).
+    final passField = find.widgetWithText(TextFormField, 'Passphrase');
+    final confirmField = find.widgetWithText(
+      TextFormField,
+      'Confirm passphrase',
+    );
+    await tester.enterText(passField, 'short');
+    await tester.enterText(confirmField, 'short');
+    await tester.tap(find.widgetWithText(FilledButton, 'Export'));
+    await tester.pumpAndSettle();
+    expect(find.text('Use at least 8 characters.'), findsOneWidget);
+
+    // Long enough but mismatched confirm fails on the confirm field.
+    await tester.enterText(passField, 'longenough1');
+    await tester.enterText(confirmField, 'different123');
+    await tester.tap(find.widgetWithText(FilledButton, 'Export'));
+    await tester.pumpAndSettle();
+    expect(find.text("Passphrases don't match."), findsOneWidget);
+
+    // Cancel out before any encryption/share happens.
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Set a backup passphrase'), findsNothing);
+
+    await _disposeTree(tester);
+  });
 }

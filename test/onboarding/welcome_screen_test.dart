@@ -34,4 +34,35 @@ void main() {
     await tester.tap(find.text('Get started'));
     expect(tapped, isTrue);
   });
+
+  testWidgets('Restore button is hidden without an onRestore callback', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: WelcomeScreen(onStart: () {}),
+      ),
+    );
+
+    expect(find.text('Restore from backup'), findsNothing);
+  });
+
+  testWidgets('Restore button shows and triggers onRestore when provided', (
+    tester,
+  ) async {
+    var restored = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: WelcomeScreen(onStart: () {}, onRestore: () => restored = true),
+      ),
+    );
+
+    expect(find.text('Restore from backup'), findsOneWidget);
+    await tester.tap(find.text('Restore from backup'));
+    expect(restored, isTrue);
+  });
 }

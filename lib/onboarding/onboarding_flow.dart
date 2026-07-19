@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/auth_config.dart';
 import '../models/device.dart';
+import '../services/backup/backup_service.dart';
 import '../services/nle_api_client.dart';
 import '../services/nle_error.dart';
 import '../services/nle_error_messages.dart';
 import '../services/onboarding_store.dart';
+import '../settings/backup_flow.dart';
 import 'connect_outcome.dart';
 import 'device_picker_screen.dart';
 import 'server_setup_screen.dart';
@@ -23,12 +25,22 @@ class OnboardingFlow extends StatefulWidget {
   final NleClientFactory clientFactory;
   final VoidCallback onComplete;
 
+  /// Backup service for the welcome-screen "Restore from backup" affordance
+  /// (Issue #109). When null, the affordance is hidden.
+  final BackupService? backupService;
+
+  /// Runs after a restore writes config, before [onComplete] rebuilds the app —
+  /// the host uses it to refresh appearance providers that hydrated at startup.
+  final Future<void> Function()? onRestoreApplied;
+
   const OnboardingFlow({
     super.key,
     required this.store,
     required this.initial,
     required this.clientFactory,
     required this.onComplete,
+    this.backupService,
+    this.onRestoreApplied,
   });
 
   @override
@@ -90,16 +102,47 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     widget.onComplete();
   }
 
+  bool _restoring = false;
+
+  Future<void> _onRestore() async {
+    final service = widget.backupService;
+    if (service == null || _restoring) return;
+    setState(() => _restoring = true);
+    try {
+      await _runRestore(service);
+    } finally {
+      if (mounted) setState(() => _restoring = false);
+    }
+  }
+
+  Future<void> _runRestore(BackupService service) async {
+    final applied = await runBackupImport(
+      context,
+      service,
+      onApplied: () async => widget.onRestoreApplied?.call(),
+    );
+    if (!applied || !mounted) return;
+    final l = AppLocalizations.of(context);
+    // Root ScaffoldMessenger survives the rebuild triggered by onComplete().
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l.backupRestoredSnack)));
+    // Config now marks onboarding complete → Bootstrap re-reads and lands Home.
+    widget.onComplete();
+  }
+
   @override
   Widget build(BuildContext context) {
     return switch (_step) {
       _Step.welcome => WelcomeScreen(
         onStart: () => setState(() => _step = _Step.serverSetup),
+        onRestore: widget.backupService == null ? null : _onRestore,
       ),
       _Step.serverSetup => ServerSetupScreen(
         initialUrl: _resumedUrl,
         initialAuth: _resumedAuth,
         onConnect: _attemptConnect,
+        onRestore: widget.backupService == null ? null : _onRestore,
       ),
       _Step.noDevices => NoDevicesScreen(
         onBack: () => setState(() => _step = _Step.serverSetup),

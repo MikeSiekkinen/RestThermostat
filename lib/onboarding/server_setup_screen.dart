@@ -15,11 +15,18 @@ class ServerSetupScreen extends StatefulWidget {
   final AuthConfig initialAuth;
   final ConnectFn onConnect;
 
+  /// Optional "Restore from backup" affordance (Issue #109). Reached here
+  /// (not just Welcome) because a signing-key blowout can wipe the Keystore
+  /// credentials while the persisted URL survives, resuming the flow straight
+  /// on this screen and skipping Welcome. Null hides the button.
+  final VoidCallback? onRestore;
+
   const ServerSetupScreen({
     super.key,
     required this.initialUrl,
     required this.initialAuth,
     required this.onConnect,
+    this.onRestore,
   });
 
   @override
@@ -262,6 +269,11 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                         )
                       : Text(l.connectButton),
                 ),
+                if (widget.onRestore != null)
+                  TextButton(
+                    onPressed: _busy ? null : widget.onRestore,
+                    child: Text(l.welcomeRestoreButton),
+                  ),
               ],
             ),
           ),

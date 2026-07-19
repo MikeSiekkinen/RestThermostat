@@ -580,6 +580,16 @@ Two-state model (no graduated thresholds):
 
 Settings → "Disconnect from server" (destructive style, red text, bottom of Settings). Confirmation dialog → wipe → back to Welcome.
 
+### 12.8 Encrypted config backup/restore
+
+Reinstalls, new devices, and Android signing-key changes wipe local config (at minimum the server URL). Because `flutter_secure_storage` + Android Auto Backup is a known footgun — the encrypted blob backs up but the Keystore key does not, yielding an undecryptable restore — the app offers an **explicit, passphrase-encrypted JSON backup** the user controls. On import the app re-writes credentials into the *new* device's Keystore fresh. See **[ADR-0001](adr/0001-encrypted-config-backup-format.md)** for the envelope format, crypto choices, and forward-compatibility policy — the backup format is a contract and the ADR is its record.
+
+**Scope.** Backed up: `server_url`, all auth (type + credentials from secure storage), `device_name_overrides`, `active_device_serial`, and the two appearance keys (`numeralFont`, `timeFieldPalette`). **Not** backed up: `last_state_cache` (device *state*, not config) and temperature scale (server-driven per [§8.1](#81-server-is-source-of-truth-for-units) — there is no user-owned temp-scale setting; the Issue #109 scope line naming it was corrected). Restore sets `onboarding_complete` so the user lands connected, not back in setup.
+
+**Flows.** Export (Settings → Backup): set a passphrase (confirm + "no recovery if forgotten" warning) → encrypt off the UI thread → write the file to a user-chosen location via the OS save-document dialog (`FlutterFileDialog.saveFile`). Restore (Settings → Backup, and a "Restore from backup" affordance on both onboarding screens — Welcome and Server Setup, since a signing-key blowout can wipe the Keystore credentials while the persisted URL survives, resuming the flow straight on Server Setup and skipping Welcome): pick a file (`FlutterFileDialog.pickFile`) → reject foreign/too-new/damaged files *before* prompting → enter passphrase (re-prompt on wrong) → confirm summary → apply → the host refreshes appearance providers and re-bootstraps to Home. Implementation: `lib/services/backup/` (codec + service) and `lib/settings/backup_flow.dart` (shared UI).
+
+A real filesystem save (choose a folder) is used rather than a share sheet — `share_plus` (kept for the logs screen) can only hand the file to another app, not save it where the user wants. `flutter_file_dialog` supplies both the save and open dialogs via the OS document picker (Android SAF; iOS `UIDocumentPicker`) and, being Android/iOS-only, carries **no `win32` dependency** — sidestepping the `file_picker` (win32 5.x) vs `share_plus` (win32 6.x) conflict that a dependency override couldn't fix (`file_picker`'s Windows Dart code won't compile against win32 6, and `flutter test` compiles every platform's sources). Neither the SAF nor the `UIDocumentPicker` path needs a manifest permission or Info.plist key.
+
 ---
 
 ## 13. Build and distribution
