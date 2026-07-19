@@ -70,22 +70,14 @@ class DetailsScreen extends ConsumerWidget {
           '${displayNameFor(device, overrides)} · '
           '${_modeLabel(context, device.mode)}',
         ),
-        // IntrinsicHeight so the three tiles share the tallest card's height
-        // (the temperature tile has no footer line); stretch alone can't size
-        // a Row whose height is otherwise unbounded inside a ListView.
+        // Row 1: temperature + humidity. IntrinsicHeight so the pair share the
+        // taller card's height (the temperature tile has no footer line);
+        // stretch alone can't size a Row whose height is otherwise unbounded
+        // inside a ListView.
         IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: _StatTile(
-                  label: l.detailsHumidity,
-                  value: '${device.humidity}%',
-                  sub: _comfortLabel(context, device.humidity),
-                  numeralStyle: numeralStyle,
-                ),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: _StatTile(
                   label: l.detailsTemperature,
@@ -99,15 +91,23 @@ class DetailsScreen extends ConsumerWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: _StatTile(
-                  label: l.detailsSetpoint,
-                  value: _setpointDisplay(device),
-                  sub: source.label(context),
-                  subTooltip: l.detailsSetpointSourceTooltip,
+                  label: l.detailsHumidity,
+                  value: '${device.humidity}%',
+                  sub: _comfortLabel(context, device.humidity),
                   numeralStyle: numeralStyle,
                 ),
               ),
             ],
           ),
+        ),
+        const SizedBox(height: 12),
+        // Row 2: setpoint, full width — plenty of room for a "68° – 72°" range.
+        _StatTile(
+          label: l.detailsSetpoint,
+          value: _setpointDisplay(device),
+          sub: source.label(context),
+          subTooltip: l.detailsSetpointSourceTooltip,
+          numeralStyle: numeralStyle,
         ),
         const SizedBox(height: 24),
         _SectionHeading(l.detailsSectionSystem),
@@ -219,7 +219,7 @@ class _StatTile extends StatelessWidget {
             style: EmberTypography.bodyMedium(color: EmberColors.textSecondary),
           );
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: EmberColors.textPrimary.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(12),
