@@ -580,6 +580,14 @@ Two-state model (no graduated thresholds):
 
 Settings → "Disconnect from server" (destructive style, red text, bottom of Settings). Confirmation dialog → wipe → back to Welcome.
 
+### 12.8 Encrypted config backup/restore
+
+Reinstalls, new devices, and Android signing-key changes wipe local config (at minimum the server URL). Because `flutter_secure_storage` + Android Auto Backup is a known footgun — the encrypted blob backs up but the Keystore key does not, yielding an undecryptable restore — the app offers an **explicit, passphrase-encrypted JSON backup** the user controls. On import the app re-writes credentials into the *new* device's Keystore fresh. See **[ADR-0001](adr/0001-encrypted-config-backup-format.md)** for the envelope format, crypto choices, and forward-compatibility policy — the backup format is a contract and the ADR is its record.
+
+**Scope.** Backed up: `server_url`, all auth (type + credentials from secure storage), `device_name_overrides`, `active_device_serial`, and the two appearance keys (`numeralFont`, `timeFieldPalette`). **Not** backed up: `last_state_cache` (device *state*, not config) and temperature scale (server-driven per [§8.1](#81-server-is-source-of-truth-for-units) — there is no user-owned temp-scale setting; the Issue #109 scope line naming it was corrected). Restore sets `onboarding_complete` so the user lands connected, not back in setup.
+
+**Flows.** Export (Settings → Backup): set a passphrase (confirm + "no recovery if forgotten" warning) → encrypt off the UI thread → `share_plus` share sheet. Restore (Settings → Backup, and a "Restore from backup" affordance on the onboarding Welcome screen): pick a file (`file_selector`) → reject foreign/too-new/damaged files *before* prompting → enter passphrase (re-prompt on wrong) → confirm summary → apply → the host refreshes appearance providers and re-bootstraps to Home. Implementation: `lib/services/backup/` (codec + service) and `lib/settings/backup_flow.dart` (shared UI). `file_selector` was chosen over `file_picker`, which caps `win32` below what `share_plus` requires.
+
 ---
 
 ## 13. Build and distribution
