@@ -1387,12 +1387,6 @@ abstract class AppLocalizations {
   /// **'Set'**
   String get editEventTempEntryConfirm;
 
-  /// Section header above the current humidity + setpoint tiles on the Details tab.
-  ///
-  /// In en, this message translates to:
-  /// **'CURRENT'**
-  String get detailsSectionCurrent;
-
   /// Section header above the system-info rows on the Details tab.
   ///
   /// In en, this message translates to:
@@ -1405,11 +1399,23 @@ abstract class AppLocalizations {
   /// **'HUMIDITY'**
   String get detailsHumidity;
 
+  /// Label for the current-temperature stat tile.
+  ///
+  /// In en, this message translates to:
+  /// **'TEMP'**
+  String get detailsTemperature;
+
   /// Label for the setpoint stat tile.
   ///
   /// In en, this message translates to:
   /// **'SETPOINT'**
   String get detailsSetpoint;
+
+  /// Header above the Details stat tiles: the device's display name and its current operating mode. Mirrors the scheduleHeaderNow separator convention so other locales can reorder name/mode without a code change.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · {mode}'**
+  String detailsCurrentHeader(String name, String mode);
 
   /// Long-press tooltip body explaining the (Derived) suffix.
   ///

@@ -763,16 +763,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editEventTempEntryConfirm => 'Set';
 
   @override
-  String get detailsSectionCurrent => 'CURRENT';
-
-  @override
   String get detailsSectionSystem => 'SYSTEM';
 
   @override
   String get detailsHumidity => 'HUMIDITY';
 
   @override
+  String get detailsTemperature => 'TEMP';
+
+  @override
   String get detailsSetpoint => 'SETPOINT';
+
+  @override
+  String detailsCurrentHeader(String name, String mode) {
+    return '$name · $mode';
+  }
 
   @override
   String get detailsSetpointSourceTooltip =>

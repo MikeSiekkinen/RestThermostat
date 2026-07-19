@@ -641,10 +641,11 @@
   "@editEventTempEntryTitle": { "description": "Title of the dialog for typing a schedule event's temperature directly." },
   "@editEventTempEntryConfirm": { "description": "Confirm action in the type-a-temperature dialog." },
 
-  "detailsSectionCurrent": "CURRENT",
   "detailsSectionSystem": "SYSTEM",
   "detailsHumidity": "HUMIDITY",
+  "detailsTemperature": "TEMP",
   "detailsSetpoint": "SETPOINT",
+  "detailsCurrentHeader": "{name} · {mode}",
   "detailsSetpointSourceTooltip": "Source is derived locally from schedule + away state. (Derived)",
   "detailsComfortDry": "Dry",
   "detailsComfortComfortable": "Comfortable",
@@ -670,10 +671,17 @@
   "detailsLastSyncHours": "{hours} hours ago",
   "detailsLastSyncOneDay": "1 day ago",
   "detailsLastSyncDays": "{days} days ago",
-  "@detailsSectionCurrent": { "description": "Section header above the current humidity + setpoint tiles on the Details tab." },
   "@detailsSectionSystem": { "description": "Section header above the system-info rows on the Details tab." },
   "@detailsHumidity": { "description": "Label for the humidity stat tile." },
+  "@detailsTemperature": { "description": "Label for the current-temperature stat tile." },
   "@detailsSetpoint": { "description": "Label for the setpoint stat tile." },
+  "@detailsCurrentHeader": {
+    "description": "Header above the Details stat tiles: the device's display name and its current operating mode. Mirrors the scheduleHeaderNow separator convention so other locales can reorder name/mode without a code change.",
+    "placeholders": {
+      "name": { "type": "String", "example": "Upstairs" },
+      "mode": { "type": "String", "example": "Cool" }
+    }
+  },
   "@detailsSetpointSourceTooltip": { "description": "Long-press tooltip body explaining the (Derived) suffix." },
   "@detailsComfortDry": { "description": "Comfort-label subtitle on the humidity tile when humidity < 30%." },
   "@detailsComfortComfortable": { "description": "Comfort-label subtitle when 30–50% humidity." },

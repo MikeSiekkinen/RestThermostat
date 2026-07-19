@@ -21,7 +21,8 @@ class MainShell extends StatefulWidget {
   /// The currently-active device, resolved by the parent.
   final Device device;
 
-  /// Per-device display-name overrides forwarded to the Home tab.
+  /// Per-device display-name overrides forwarded to the Home, Schedule, and
+  /// Details tabs.
   final Map<String, String> overrides;
 
   /// Last successful poll timestamp forwarded to the Details tab.
@@ -83,6 +84,7 @@ class _MainShellState extends State<MainShell> {
             device: widget.device,
             lastSyncAt: widget.lastSyncAt,
             now: widget.now,
+            overrides: widget.overrides,
           ),
         ],
       ),

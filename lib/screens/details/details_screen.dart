@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/gen/app_localizations.dart';
 import '../../models/device.dart';
+import '../../services/device_display_name.dart';
 import '../../services/mac_formatter.dart';
 import '../../services/setpoint_source.dart';
+import '../../settings/numeral_font.dart';
 import '../../state/providers.dart';
 import '../../theme/colors.dart';
 import '../../theme/typography.dart';
+import '../../widgets/mode_pills.dart';
 import '../../widgets/temperature_dial.dart';
 
 /// Read-only Details screen per `docs/PRD.md` §5.3 + `docs/DESIGN.md` §9.5.
@@ -34,11 +37,17 @@ class DetailsScreen extends ConsumerWidget {
   /// `now()` injection for deterministic tests of relative-time formatting.
   final DateTime Function() now;
 
+  /// Per-device display-name overrides, forwarded from the shell so the
+  /// "CURRENT" header can resolve the same name shown elsewhere (Home,
+  /// Schedule, device picker). Empty map falls back to the server name.
+  final Map<String, String> overrides;
+
   const DetailsScreen({
     super.key,
     required this.device,
     required this.lastSyncAt,
     this.now = DateTime.now,
+    this.overrides = const {},
   });
 
   @override
@@ -51,32 +60,56 @@ class DetailsScreen extends ConsumerWidget {
       now: now(),
     );
     final activeServer = ref.watch(activeServerProvider);
+    final numeralStyle = ref.watch(numeralFontProvider).style;
     final l = AppLocalizations.of(context);
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       children: [
-        _SectionHeading(l.detailsSectionCurrent),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _StatTile(
-                label: l.detailsHumidity,
-                value: '${device.humidity}%',
-                sub: _comfortLabel(context, device.humidity),
+        _SectionHeading(
+          l.detailsCurrentHeader(
+            displayNameFor(device, overrides),
+            _modeLabel(context, device.mode),
+          ),
+        ),
+        // Row 1: temperature + humidity. IntrinsicHeight so the pair share the
+        // taller card's height (the temperature tile has no footer line);
+        // stretch alone can't size a Row whose height is otherwise unbounded
+        // inside a ListView.
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _StatTile(
+                  label: l.detailsTemperature,
+                  value: _format(
+                    device.currentTemperature,
+                    device.temperatureScale,
+                  ),
+                  numeralStyle: numeralStyle,
+                ),
               ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _StatTile(
-                label: l.detailsSetpoint,
-                value: _setpointDisplay(device),
-                sub: source.label(context),
-                subTooltip: l.detailsSetpointSourceTooltip,
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatTile(
+                  label: l.detailsHumidity,
+                  value: '${device.humidity}%',
+                  sub: _comfortLabel(context, device.humidity),
+                  numeralStyle: numeralStyle,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Row 2: setpoint, full width — plenty of room for a "68° – 72°" range.
+        _StatTile(
+          label: l.detailsSetpoint,
+          value: _setpointDisplay(device),
+          sub: source.label(context),
+          subTooltip: l.detailsSetpointSourceTooltip,
+          numeralStyle: numeralStyle,
         ),
         const SizedBox(height: 24),
         _SectionHeading(l.detailsSectionSystem),
@@ -128,6 +161,17 @@ class DetailsScreen extends ConsumerWidget {
     if (humidity <= 50) return l.detailsComfortComfortable;
     return l.detailsComfortHumid;
   }
+
+  /// Current operating mode as a first-letter-capitalised word (e.g. "Heat",
+  /// "Auto"). Reuses the pill labels so there are no new mode strings; those
+  /// are uppercase, so we down-case all but the first letter. `emergency` has
+  /// no v1 pill, so it falls back to Heat (it is a heating mode).
+  String _modeLabel(BuildContext context, DeviceMode mode) {
+    final pill = ModePillOption.fromDeviceMode(mode) ?? ModePillOption.heat;
+    final raw = pill.label(context);
+    if (raw.isEmpty) return raw;
+    return raw[0].toUpperCase() + raw.substring(1).toLowerCase();
+  }
 }
 
 class _SectionHeading extends StatelessWidget {
@@ -148,19 +192,34 @@ class _SectionHeading extends StatelessWidget {
 class _StatTile extends StatelessWidget {
   final String label;
   final String value;
-  final String sub;
+
+  /// Optional footer line (comfort band, setpoint source). Omitted for the
+  /// temperature tile, which has no derived sub-label.
+  final String? sub;
   final String? subTooltip;
+
+  /// Configured numeral face (Settings → Appearance), merged onto the value
+  /// style so the big number matches the Schedule screens. Only family+weight
+  /// are replaced; the base size/colour survive.
+  final TextStyle numeralStyle;
 
   const _StatTile({
     required this.label,
     required this.value,
-    required this.sub,
+    required this.numeralStyle,
+    this.sub,
     this.subTooltip,
   });
 
   @override
   Widget build(BuildContext context) {
-    final subWidget = Text(sub, style: EmberTypography.bodyMediumItalic());
+    final sub = this.sub;
+    final subWidget = sub == null
+        ? null
+        : Text(
+            sub,
+            style: EmberTypography.bodyMedium(color: EmberColors.textSecondary),
+          );
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -172,19 +231,29 @@ class _StatTile extends StatelessWidget {
         children: [
           Text(label, style: EmberTypography.labelSmall()),
           const SizedBox(height: 8),
-          Text(
-            value,
-            style: EmberTypography.displayLarge().copyWith(fontSize: 36),
+          // scaleDown keeps a wide value (e.g. a "68° – 72°" range) on one
+          // line when three tiles share a row on narrow phones.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: EmberTypography.displayLarge()
+                  .copyWith(fontSize: 36)
+                  .merge(numeralStyle),
+            ),
           ),
-          const SizedBox(height: 4),
-          if (subTooltip != null)
-            Tooltip(
-              message: subTooltip!,
-              triggerMode: TooltipTriggerMode.longPress,
-              child: subWidget,
-            )
-          else
-            subWidget,
+          if (subWidget != null) ...[
+            const SizedBox(height: 4),
+            if (subTooltip != null)
+              Tooltip(
+                message: subTooltip!,
+                triggerMode: TooltipTriggerMode.longPress,
+                child: subWidget,
+              )
+            else
+              subWidget,
+          ],
         ],
       ),
     );
