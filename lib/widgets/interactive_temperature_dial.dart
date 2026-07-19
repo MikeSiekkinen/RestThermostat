@@ -258,6 +258,10 @@ class _InteractiveTemperatureDialState
   /// sync with the dial's whole-degree readout (Issue #113).
   Future<void> _openKeyboard() async {
     final l = AppLocalizations.of(context);
+    // Supersede any pending pan/tap debounce up front, so a ring interaction in
+    // the 250ms before this tap can't fire its commit while the dialog is open
+    // (which would write the transient ring value on top of the typed one).
+    _commitTimer?.cancel();
     final displayedC = _optimisticC ?? widget.device.targetTemperature;
     final celsius = await showDialog<double>(
       context: context,
@@ -273,8 +277,6 @@ class _InteractiveTemperatureDialState
       ),
     );
     if (!mounted || celsius == null) return;
-    // Supersede any pending pan/tap debounce so the typed value wins.
-    _commitTimer?.cancel();
     _commit(celsius);
   }
 

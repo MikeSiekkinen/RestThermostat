@@ -339,6 +339,27 @@ void main() {
       expect(captured, isNotEmpty);
     });
 
+    testWidgets('opening the keyboard cancels a pending ring commit', (
+      tester,
+    ) async {
+      final result = await _pumpHost(tester, device: _device(target: 20.0));
+      final captured = _captureSetTemperature(result.dio);
+
+      final center = tester.getCenter(find.byType(InteractiveTemperatureDial));
+      // Ring tap starts the 250ms debounce (and jumps the displayed value, so
+      // find the readout by its stable semantics label rather than its text).
+      await tester.tapAt(center + const Offset(0, 108));
+      await tester.pump(const Duration(milliseconds: 50)); // < 250ms
+      await tester.tap(find.bySemanticsLabel(RegExp('Set temperature')));
+      await tester.pumpAndSettle(); // drains past the 250ms debounce window
+      await tester.enterText(find.byKey(field), '23');
+      await tester.tap(find.byKey(confirm));
+      await tester.pumpAndSettle();
+
+      // Only the typed value is written — the pending ring commit was cancelled.
+      expect(captured, [23.0]);
+    });
+
     testWidgets('exposes a "Set temperature" accessibility button', (
       tester,
     ) async {

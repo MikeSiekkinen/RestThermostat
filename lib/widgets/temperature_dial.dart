@@ -145,7 +145,11 @@ class TemperatureDial extends StatefulWidget {
     this.numeralStyle,
     this.onTargetTextTap,
     this.targetTapSemanticLabel,
-  });
+  }) : assert(
+         onTargetTextTap == null || targetTapSemanticLabel != null,
+         'targetTapSemanticLabel is required when onTargetTextTap is set, '
+         'so the tappable readout has an accessible name.',
+       );
 
   bool get _interactive =>
       onTargetDragUpdate != null ||
