@@ -36,6 +36,48 @@ class AppLocalizationsEn extends AppLocalizations {
       'Active device changed — it wasn\'t in the latest device list.';
 
   @override
+  String get homeSetTemperature => 'Set temperature';
+
+  @override
+  String get homeTempEntryTitle => 'Set temperature';
+
+  @override
+  String get homeTempEntryConfirm => 'Set';
+
+  @override
+  String get homeTempEntryCancel => 'Cancel';
+
+  @override
+  String get homeDialHeatLabel => 'HEAT';
+
+  @override
+  String get homeDialCoolLabel => 'COOL';
+
+  @override
+  String homeDialRangeSemantics(
+    String low,
+    String high,
+    String current,
+    String humidity,
+  ) {
+    return 'Temperature range: heat set to $low, cool set to $high. Current temperature $current.$humidity Tap to type a new range.';
+  }
+
+  @override
+  String get homeRangeEntryTitle => 'Set temperature range';
+
+  @override
+  String get homeRangeEntryHeatField => 'Heat';
+
+  @override
+  String get homeRangeEntryCoolField => 'Cool';
+
+  @override
+  String homeRangeEntryDeadbandError(String gap) {
+    return 'Heat must be at least $gap below cool.';
+  }
+
+  @override
   String get deviceUnnamedFallback => 'unnamed';
 
   @override

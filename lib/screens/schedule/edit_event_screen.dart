@@ -12,6 +12,7 @@ import '../../state/providers.dart';
 import '../../theme/colors.dart';
 import '../../widgets/ember_time_fields.dart';
 import '../../widgets/repeat_days_row.dart';
+import '../../widgets/temp_entry_dialog.dart';
 
 /// Per `docs/DESIGN.md` §6 / PRD §5.5 (with DESIGN §18 divergences).
 ///
@@ -658,70 +659,29 @@ class _TempStepper extends StatelessWidget {
   /// input leaves the value unchanged.
   Future<void> _editViaKeyboard(BuildContext context) async {
     final l = AppLocalizations.of(context);
-    final isF = scale.toUpperCase() != 'C';
-    final unit = isF ? '°F' : '°C';
-    final controller = TextEditingController(
-      text: isF ? (valueC * 9 / 5 + 32).round().toString() : _trimC(valueC),
-    );
-    final minD = isF
-        ? (_minTempC * 9 / 5 + 32).round().toString()
-        : _trimC(_minTempC);
-    final maxD = isF
-        ? (_maxTempC * 9 / 5 + 32).round().toString()
-        : _trimC(_maxTempC);
-
-    final confirmed = await showDialog<bool>(
+    // Shared [TempEntryDialog] owns its own controller and disposes it in its
+    // own `State.dispose()`, avoiding the dispose-after-pop race that tripped
+    // `_dependents.isEmpty` (Issue #111). The schedule editor allows a Celsius
+    // fraction, so decimals are permitted for °C.
+    final celsius = await showDialog<double>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l.editEventTempEntryTitle),
-        content: TextField(
-          key: const ValueKey('temp-entry-field'),
-          controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.numberWithOptions(decimal: !isF),
-          textAlign: TextAlign.center,
-          cursorColor: accent,
-          style: (Theme.of(ctx).textTheme.headlineMedium ?? const TextStyle())
-              .merge(numeralStyle),
-          decoration: InputDecoration(
-            suffixText: unit,
-            helperText: '$minD–$maxD $unit',
-            focusedBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: accent, width: 2),
-            ),
-          ),
-          onSubmitted: (_) => Navigator.of(ctx).pop(true),
-        ),
-        actions: [
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: accent),
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(l.editEventCancel),
-          ),
-          TextButton(
-            key: const ValueKey('temp-entry-confirm'),
-            style: TextButton.styleFrom(foregroundColor: accent),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(l.editEventTempEntryConfirm),
-          ),
-        ],
+      builder: (_) => TempEntryDialog(
+        valueC: valueC,
+        scale: scale,
+        accent: accent,
+        numeralStyle: numeralStyle,
+        allowDecimal: scale.toUpperCase() == 'C',
+        title: l.editEventTempEntryTitle,
+        confirmLabel: l.editEventTempEntryConfirm,
+        cancelLabel: l.editEventCancel,
       ),
     );
-
-    if (confirmed == true) {
-      final raw = double.tryParse(controller.text.trim());
-      if (raw != null) {
-        final celsius = isF ? (raw - 32) * 5 / 9 : raw;
-        onChanged(celsius.clamp(_minTempC, _maxTempC).toDouble());
-      }
-    }
-    controller.dispose();
+    // The parent screen sits under the (modal) dialog so it normally stays
+    // mounted, but guard the async gap defensively before the setState-driving
+    // callback in case the route was torn down while the dialog was open.
+    if (!context.mounted) return;
+    if (celsius != null) onChanged(celsius);
   }
-
-  /// Format a Celsius value for prefill: drop a trailing `.0` (20.0 → "20") but
-  /// keep a real fraction (20.5 → "20.5").
-  static String _trimC(double c) =>
-      c == c.roundToDouble() ? c.round().toString() : c.toString();
 
   static String _format(double celsius, String scale) {
     if (scale.toUpperCase() == 'C') return '${celsius.round()}°C';

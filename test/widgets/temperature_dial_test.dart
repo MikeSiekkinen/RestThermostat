@@ -359,5 +359,149 @@ void main() {
       expect(TemperatureDial.minCelsius, 4.5);
       expect(TemperatureDial.maxCelsius, 32.0);
     });
+
+    test(
+      'deadband is a single 1.5°C constant, shared with #102 (Issue #116)',
+      () {
+        expect(TemperatureDial.deadbandCelsius, 1.5);
+      },
+    );
+  });
+
+  group('TemperatureDial.nearestIsLow (Issue #116)', () {
+    test('a touch near the low marker grabs HEAT', () {
+      expect(
+        TemperatureDial.nearestIsLow(low: 10, high: 20, draggedC: 11),
+        isTrue,
+      );
+    });
+
+    test('a touch near the high marker grabs COOL', () {
+      expect(
+        TemperatureDial.nearestIsLow(low: 10, high: 20, draggedC: 19),
+        isFalse,
+      );
+    });
+
+    test('an exact-midpoint tie grabs HEAT/low', () {
+      // 15°C is tick-equidistant from 10°C and 20°C.
+      expect(
+        TemperatureDial.nearestIsLow(low: 10, high: 20, draggedC: 15),
+        isTrue,
+      );
+    });
+  });
+
+  group('TemperatureDial.moveMarker (Issue #116)', () {
+    test('moving the low marker within range leaves high untouched', () {
+      final r = TemperatureDial.moveMarker(
+        low: 18,
+        high: 24,
+        moveLow: true,
+        draggedC: 20,
+      );
+      expect(r.low, closeTo(20, 1e-9));
+      expect(r.high, closeTo(24, 1e-9));
+    });
+
+    test(
+      'pushing low into the deadband shoves high up to preserve the gap',
+      () {
+        final r = TemperatureDial.moveMarker(
+          low: 18,
+          high: 24,
+          moveLow: true,
+          draggedC: 23,
+        );
+        expect(r.low, closeTo(23, 1e-9));
+        expect(r.high, closeTo(24.5, 1e-9)); // 23 + 1.5 deadband
+      },
+    );
+
+    test('pushing low past the top rail stops the dragged marker too', () {
+      final r = TemperatureDial.moveMarker(
+        low: 18,
+        high: 24,
+        moveLow: true,
+        draggedC: 40, // clamps to 32, then high can't exceed 32
+      );
+      expect(r.high, closeTo(32, 1e-9));
+      expect(r.low, closeTo(30.5, 1e-9)); // 32 - 1.5
+    });
+
+    test('pushing high into the deadband shoves low down', () {
+      final r = TemperatureDial.moveMarker(
+        low: 18,
+        high: 24,
+        moveLow: false,
+        draggedC: 19,
+      );
+      expect(r.high, closeTo(19, 1e-9));
+      expect(r.low, closeTo(17.5, 1e-9)); // 19 - 1.5
+    });
+
+    test('pushing high past the bottom rail stops the dragged marker too', () {
+      final r = TemperatureDial.moveMarker(
+        low: 6,
+        high: 24,
+        moveLow: false,
+        draggedC: 4.5, // low can't go below 4.5
+      );
+      expect(r.low, closeTo(4.5, 1e-9));
+      expect(r.high, closeTo(6.0, 1e-9)); // 4.5 + 1.5
+    });
+  });
+
+  group('TemperatureDial dual band (Issue #116)', () {
+    testWidgets('heat-cool with both bounds renders HEAT/COOL labels and two '
+        'values', (tester) async {
+      await tester.pumpWidget(
+        _host(
+          const TemperatureDial(
+            currentTemperatureCelsius: 20.0,
+            targetTemperatureCelsius: 21.0, // unused in dual mode
+            targetLowCelsius: 18.0,
+            targetHighCelsius: 24.0,
+            mode: DeviceMode.heatCool,
+            displayUnit: 'C',
+            capabilities: _allCapable,
+            rangeHeatLabel: 'HEAT',
+            rangeCoolLabel: 'COOL',
+            rangeSemanticLabel: 'Temperature range',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('HEAT'), findsOneWidget);
+      expect(find.text('COOL'), findsOneWidget);
+      expect(find.text('18°'), findsOneWidget); // heat setpoint
+      expect(find.text('24°'), findsOneWidget); // cool setpoint
+      expect(find.text('20°'), findsOneWidget); // current temp still shown
+    });
+
+    testWidgets('a heat-cool device with a null bound falls back to the single '
+        'scalar marker', (tester) async {
+      await tester.pumpWidget(
+        _host(
+          const TemperatureDial(
+            currentTemperatureCelsius: 20.0,
+            targetTemperatureCelsius: 21.0,
+            targetLowCelsius: 18.0,
+            // high is null → not a dual band.
+            mode: DeviceMode.heatCool,
+            displayUnit: 'C',
+            capabilities: _allCapable,
+            rangeHeatLabel: 'HEAT',
+            rangeCoolLabel: 'COOL',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('21°'), findsOneWidget); // single scalar readout
+      expect(find.text('HEAT'), findsNothing);
+      expect(find.text('COOL'), findsNothing);
+    });
   });
 }

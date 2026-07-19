@@ -44,6 +44,70 @@
     "description": "One-time SnackBar shown when the persisted active serial isn't in the latest /api/devices response and the source falls back to the first device per DESIGN §4.5."
   },
 
+  "homeSetTemperature": "Set temperature",
+  "@homeSetTemperature": {
+    "description": "Accessibility label for the tappable target-temperature readout on the Home dial that opens the keyboard-entry dialog."
+  },
+
+  "homeTempEntryTitle": "Set temperature",
+  "@homeTempEntryTitle": {
+    "description": "Title of the Home dial's dialog for typing the target temperature directly."
+  },
+
+  "homeTempEntryConfirm": "Set",
+  "@homeTempEntryConfirm": {
+    "description": "Confirm action in the Home type-a-temperature dialog."
+  },
+
+  "homeTempEntryCancel": "Cancel",
+  "@homeTempEntryCancel": {
+    "description": "Cancel action in the Home type-a-temperature dialog."
+  },
+
+  "homeDialHeatLabel": "HEAT",
+  "@homeDialHeatLabel": {
+    "description": "Label above the low (heat) setpoint in the Home dial's stacked heat-cool readout (Issue #116)."
+  },
+
+  "homeDialCoolLabel": "COOL",
+  "@homeDialCoolLabel": {
+    "description": "Label below the high (cool) setpoint in the Home dial's stacked heat-cool readout (Issue #116)."
+  },
+
+  "homeDialRangeSemantics": "Temperature range: heat set to {low}, cool set to {high}. Current temperature {current}.{humidity} Tap to type a new range.",
+  "@homeDialRangeSemantics": {
+    "description": "Screen-reader announcement for the Home dial in heat-cool mode (Issue #116). Temperatures arrive pre-formatted with their unit; humidity is a full pre-formatted clause or empty.",
+    "placeholders": {
+      "low": { "type": "String", "example": "68°F" },
+      "high": { "type": "String", "example": "75°F" },
+      "current": { "type": "String", "example": "72°F" },
+      "humidity": { "type": "String", "example": " Humidity 45 percent." }
+    }
+  },
+
+  "homeRangeEntryTitle": "Set temperature range",
+  "@homeRangeEntryTitle": {
+    "description": "Title of the Home dial's dual-field dialog for typing the heat and cool setpoints (Issue #116)."
+  },
+
+  "homeRangeEntryHeatField": "Heat",
+  "@homeRangeEntryHeatField": {
+    "description": "Field label for the low (heat) setpoint input in the Home dial's range-entry dialog (Issue #116)."
+  },
+
+  "homeRangeEntryCoolField": "Cool",
+  "@homeRangeEntryCoolField": {
+    "description": "Field label for the high (cool) setpoint input in the Home dial's range-entry dialog (Issue #116)."
+  },
+
+  "homeRangeEntryDeadbandError": "Heat must be at least {gap} below cool.",
+  "@homeRangeEntryDeadbandError": {
+    "description": "Inline validation error in the range-entry dialog (Issue #116) shown until the heat and cool setpoints are at least the deadband apart. The gap arrives pre-formatted in the display unit.",
+    "placeholders": {
+      "gap": { "type": "String", "example": "3°F" }
+    }
+  },
+
   "deviceUnnamedFallback": "unnamed",
   "@deviceUnnamedFallback": {
     "description": "Display name used when a device's server-side name is null or empty AND no local override exists."

@@ -933,4 +933,178 @@ void main() {
       expect(h.requests.last['value'], 'HEAT');
     });
   });
+
+  group('temperature keypad (Issue #111)', () {
+    const tempValue = ValueKey('temp-value-HEAT');
+    const entryField = ValueKey('temp-entry-field');
+    const confirm = ValueKey('temp-entry-confirm');
+
+    const heatEvent = ScheduleEvent(
+      dayIndex: 1,
+      hour: 7,
+      minute: 0,
+      type: 'HEAT',
+      targetTemp: 20.0,
+    );
+
+    _Harness editHarness({String temperatureScale = 'C'}) => _setup(
+      schedule: _emptyWeek().addEvent(heatEvent),
+      existingEvent: heatEvent,
+      defaultDayIndex: 1,
+      temperatureScale: temperatureScale,
+    );
+
+    testWidgets('tapping Set commits the value without throwing', (
+      tester,
+    ) async {
+      final h = editHarness();
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      // Open the keypad, type a new value, confirm with Set.
+      await tester.tap(find.byKey(tempValue));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(entryField), '22');
+      await tester.tap(find.byKey(confirm));
+      await tester.pumpAndSettle();
+
+      // Regression: the dialog-local controller disposal used to race the route
+      // teardown, throwing `_dependents.isEmpty` (framework.dart:6268).
+      expect(tester.takeException(), isNull);
+      // The stepper display reflects the entered value.
+      expect(find.byKey(tempValue), findsOneWidget);
+      expect(
+        find.descendant(of: find.byKey(tempValue), matching: find.text('22°C')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('keyboard Done (onSubmitted) commits like Set', (tester) async {
+      final h = editHarness();
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      await tester.tap(find.byKey(tempValue));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(entryField), '25');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.descendant(of: find.byKey(tempValue), matching: find.text('25°C')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('Cancel dismisses without committing', (tester) async {
+      final h = editHarness();
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      await tester.tap(find.byKey(tempValue));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(entryField), '28');
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('Cancel'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // Unchanged from the seeded 20°C.
+      expect(
+        find.descendant(of: find.byKey(tempValue), matching: find.text('20°C')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('°F input converts back to Celsius on commit', (tester) async {
+      final h = editHarness(temperatureScale: 'F');
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      // The 20°C seed displays as 68°F; enter 70°F.
+      expect(
+        find.descendant(of: find.byKey(tempValue), matching: find.text('68°F')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(tempValue));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(entryField), '70');
+      await tester.tap(find.byKey(confirm));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // 70°F round-trips through Celsius storage back to a 70°F display.
+      expect(
+        find.descendant(of: find.byKey(tempValue), matching: find.text('70°F')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('out-of-range input clamps to the max setpoint', (
+      tester,
+    ) async {
+      final h = editHarness();
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      // Enter well above the 32°C ceiling; commit should clamp it.
+      await tester.tap(find.byKey(tempValue));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(entryField), '99');
+      await tester.tap(find.byKey(confirm));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.descendant(of: find.byKey(tempValue), matching: find.text('32°C')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a locale-comma decimal separator is accepted', (tester) async {
+      final h = editHarness();
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      // Numeric keyboards on comma-locales emit "25,0"; it must not be dropped.
+      await tester.tap(find.byKey(tempValue));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(entryField), '25,0');
+      await tester.tap(find.byKey(confirm));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.descendant(of: find.byKey(tempValue), matching: find.text('25°C')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('NaN input is rejected and leaves the value unchanged', (
+      tester,
+    ) async {
+      final h = editHarness();
+      await tester.pumpWidget(h.widget);
+      await _openEditor(tester);
+
+      // "NaN" parses to double.nan, which would survive clamp() as the ceiling
+      // and silently commit 32°C — reject it and leave the 20°C seed intact.
+      await tester.tap(find.byKey(tempValue));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(entryField), 'NaN');
+      await tester.tap(find.byKey(confirm));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.descendant(of: find.byKey(tempValue), matching: find.text('20°C')),
+        findsOneWidget,
+      );
+    });
+  });
 }

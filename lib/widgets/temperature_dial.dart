@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
 
@@ -6,6 +7,11 @@ import '../models/device.dart';
 import '../services/haptics.dart';
 import '../theme/colors.dart';
 import '../theme/typography.dart';
+
+/// Reports a resolved heat-cool `(low, high)` Celsius pair from a dual-band
+/// gesture (Issue #116). Both bounds are always sent — a single drag can move
+/// one marker and shove the other to preserve the deadband.
+typedef RangeChanged = void Function(double low, double high);
 
 /// Segmented-ring temperature dial per `docs/DESIGN.md` §10.3.
 ///
@@ -43,6 +49,12 @@ class TemperatureDial extends StatefulWidget {
   /// Maximum displayable temperature in Celsius. Maps to the final tick.
   static const double maxCelsius = 32.0;
 
+  /// Minimum gap enforced between the heat (low) and cool (high) setpoints in
+  /// heat-cool mode, in Celsius (≈3°F). A single app-wide constant (Issue #116)
+  /// — the Schedule Auto event editor (#102) references the same value so the
+  /// dial and the schedule never disagree on the deadband.
+  static const double deadbandCelsius = 1.5;
+
   /// Arc start angle (radians). Tick 0 sits at the south-west, then ticks
   /// sweep clockwise across the top. Using Flutter's canvas convention where
   /// 0 rad points east and positive angles rotate clockwise.
@@ -61,8 +73,21 @@ class TemperatureDial extends StatefulWidget {
   /// Current temperature in degrees Celsius.
   final double currentTemperatureCelsius;
 
-  /// Target temperature in degrees Celsius.
+  /// Target temperature in degrees Celsius. In heat-cool with a dual band
+  /// (see [targetLowCelsius]/[targetHighCelsius]) this scalar is unused for
+  /// rendering — the band drives the display.
   final double targetTemperatureCelsius;
+
+  /// Heat (low) setpoint in Celsius for the heat-cool dual band (Issue #116).
+  /// When [mode] is [DeviceMode.heatCool] and both this and [targetHighCelsius]
+  /// are non-null, the dial renders two markers + a warm→cool band + a stacked
+  /// HEAT/COOL readout. If either is null the dial falls back to the single
+  /// [targetTemperatureCelsius] marker (today's behavior).
+  final double? targetLowCelsius;
+
+  /// Cool (high) setpoint in Celsius for the heat-cool dual band (Issue #116).
+  /// See [targetLowCelsius].
+  final double? targetHighCelsius;
 
   /// HVAC mode — drives the tick gradient colors.
   final DeviceMode mode;
@@ -97,6 +122,16 @@ class TemperatureDial extends StatefulWidget {
   /// parent should treat it as both an optimistic update AND a commit point.
   final ValueChanged<double>? onTargetTap;
 
+  /// Dual-band (heat-cool) analogues of [onTargetDragUpdate]/[onTargetDragEnd]/
+  /// [onTargetTap] (Issue #116). The dial resolves the nearest marker, applies
+  /// the push + deadband + rail rules ([applyRangeDrag]), and reports the whole
+  /// resulting `(low, high)` Celsius pair — one drag may move both bounds. Only
+  /// consulted when the dial is rendering a dual band; null keeps the ring
+  /// presentation-only in heat-cool.
+  final RangeChanged? onRangeDragUpdate;
+  final RangeChanged? onRangeDragEnd;
+  final RangeChanged? onRangeTap;
+
   /// Optional callback wired to the [Semantics.onIncrease] action so screen
   /// readers (TalkBack/VoiceOver) can adjust the target temperature without
   /// the user needing to interact with the visual ring. Called with the
@@ -116,6 +151,27 @@ class TemperatureDial extends StatefulWidget {
   /// temperature in the "Currently …" line. Null hides the humidity readout.
   final int? humidityPercent;
 
+  /// Called when the large target-temperature readout is tapped, to open the
+  /// keyboard-entry alternative to the ring. When `null`, the readout is not
+  /// tappable (read-only renderings, and the ring's tap-to-jump is unaffected).
+  /// Only the target number carries this — the "Currently …" line stays a
+  /// plain readout.
+  final VoidCallback? onTargetTextTap;
+
+  /// Accessible label for the [onTargetTextTap] button (e.g. "Set
+  /// temperature"). Required in practice whenever [onTargetTextTap] is set.
+  final String? targetTapSemanticLabel;
+
+  /// Visible "HEAT"/"COOL" labels for the stacked dual-band readout (Issue
+  /// #116), supplied localized by the parent so the dial stays presentation-
+  /// only. Only used when [isDualBand] is true.
+  final String? rangeHeatLabel;
+  final String? rangeCoolLabel;
+
+  /// Screen-reader announcement for the heat-cool dual band, built by the
+  /// parent (it owns localization). Only used when [isDualBand] is true.
+  final String? rangeSemanticLabel;
+
   const TemperatureDial({
     super.key,
     required this.currentTemperatureCelsius,
@@ -123,21 +179,46 @@ class TemperatureDial extends StatefulWidget {
     required this.mode,
     required this.displayUnit,
     required this.capabilities,
+    this.targetLowCelsius,
+    this.targetHighCelsius,
     this.humidityPercent,
     this.animationDuration = const Duration(milliseconds: 400),
     this.animationCurve = Curves.easeInOutCubic,
     this.onTargetDragUpdate,
     this.onTargetDragEnd,
     this.onTargetTap,
+    this.onRangeDragUpdate,
+    this.onRangeDragEnd,
+    this.onRangeTap,
     this.onIncrease,
     this.onDecrease,
     this.numeralStyle,
-  });
+    this.onTargetTextTap,
+    this.targetTapSemanticLabel,
+    this.rangeHeatLabel,
+    this.rangeCoolLabel,
+    this.rangeSemanticLabel,
+  }) : assert(
+         onTargetTextTap == null || targetTapSemanticLabel != null,
+         'targetTapSemanticLabel is required when onTargetTextTap is set, '
+         'so the tappable readout has an accessible name.',
+       );
+
+  /// Whether the dial should render the heat-cool dual band (Issue #116): a
+  /// heat-cool device that reports both bounds. A null bound falls back to the
+  /// single-marker rendering.
+  bool get isDualBand =>
+      mode == DeviceMode.heatCool &&
+      targetLowCelsius != null &&
+      targetHighCelsius != null;
 
   bool get _interactive =>
       onTargetDragUpdate != null ||
       onTargetDragEnd != null ||
-      onTargetTap != null;
+      onTargetTap != null ||
+      onRangeDragUpdate != null ||
+      onRangeDragEnd != null ||
+      onRangeTap != null;
 
   @override
   State<TemperatureDial> createState() => _TemperatureDialState();
@@ -196,8 +277,14 @@ class TemperatureDial extends StatefulWidget {
     return celsius;
   }
 
-  /// Pick the mode-appropriate gradient stops for active ticks.
-  @visibleForTesting
+  /// Pick the mode-appropriate gradient stops for active ticks. Also reused by
+  /// [InteractiveTemperatureDial] to derive a mode-matched accent for the
+  /// keyboard-entry dialog.
+  ///
+  /// Note heat-cool stays neutral grey here: that gradient only drives the
+  /// single-marker fallback (a heat-cool device that reports a null bound). The
+  /// dual band (Issue #116) paints a warm→cool gradient via [rangeBandColors]
+  /// instead — see [_TemperatureDialPainter].
   static List<Color> gradientColorsFor(DeviceMode mode) {
     switch (mode) {
       case DeviceMode.heat:
@@ -211,6 +298,69 @@ class TemperatureDial extends StatefulWidget {
         // without going invisible. Matches the §10.3 "mode gradient" spec
         // by still being a 2-stop gradient, just neutral.
         return const [Color(0xFFA0A0A0), Color(0xFF606060)];
+    }
+  }
+
+  /// Endpoint colors for the heat-cool dual band (Issue #116): the warm heat
+  /// tone at the HEAT (low) marker lerping to the cool tone at the COOL (high)
+  /// marker. Drawn from [EmberColors.heatGradient]/[EmberColors.coolGradient]
+  /// so the band's ends match the single-mode heat and cool fills.
+  static const List<Color> rangeBandColors = [
+    Color(0xFFFF8A50), // EmberColors.heatGradient.first — warm, at HEAT.
+    Color(0xFF3070D0), // EmberColors.coolGradient.last — cool, at COOL.
+  ];
+
+  /// Which marker a touch at [draggedC] grabs: the HEAT (low) marker if it is
+  /// nearest by tick distance, else COOL (high). An exact-midpoint tie grabs
+  /// HEAT. The grab is resolved once at gesture start and held for the whole
+  /// drag, so pushing one marker past the other doesn't hand the drag off.
+  static bool nearestIsLow({
+    required double low,
+    required double high,
+    required double draggedC,
+  }) {
+    final dragTick = tickIndexForCelsius(
+      draggedC.clamp(minCelsius, maxCelsius),
+    );
+    final distLow = (dragTick - tickIndexForCelsius(low)).abs();
+    final distHigh = (dragTick - tickIndexForCelsius(high)).abs();
+    return distLow <= distHigh; // tie → HEAT/low
+  }
+
+  /// Move the grabbed marker to [draggedC], preserving the [deadbandCelsius]
+  /// gap by shoving the other marker, and clamping both to the
+  /// `[minCelsius, maxCelsius]` rails — when the shoved marker hits a rail the
+  /// dragged one stops too, so the gap is never violated. [moveLow] selects
+  /// the HEAT (low) marker; false selects COOL (high). Pure and total.
+  static ({double low, double high}) moveMarker({
+    required double low,
+    required double high,
+    required bool moveLow,
+    required double draggedC,
+  }) {
+    final dragged = draggedC.clamp(minCelsius, maxCelsius);
+    if (moveLow) {
+      var newLow = dragged;
+      var newHigh = high;
+      if (newLow > newHigh - deadbandCelsius) {
+        newHigh = newLow + deadbandCelsius;
+        if (newHigh > maxCelsius) {
+          newHigh = maxCelsius;
+          newLow = maxCelsius - deadbandCelsius;
+        }
+      }
+      return (low: newLow, high: newHigh);
+    } else {
+      var newHigh = dragged;
+      var newLow = low;
+      if (newHigh < newLow + deadbandCelsius) {
+        newLow = newHigh - deadbandCelsius;
+        if (newLow < minCelsius) {
+          newLow = minCelsius;
+          newHigh = minCelsius + deadbandCelsius;
+        }
+      }
+      return (low: newLow, high: newHigh);
     }
   }
 }
@@ -227,6 +377,15 @@ class _TemperatureDialState extends State<TemperatureDial> {
   /// Last celsius value observed during a drag — used as the commit value on
   /// `onPanEnd` since [DragEndDetails] doesn't carry a position.
   double? _lastDragCelsius;
+
+  /// Dual-band analogue of [_lastDragCelsius]: the last resolved `(low, high)`
+  /// pair during a heat-cool drag, committed on `onPanEnd` (Issue #116).
+  ({double low, double high})? _lastDragRange;
+
+  /// Which marker the active dual-band pan grabbed — resolved once at pan start
+  /// and held for the gesture so a push doesn't hand the drag to the other
+  /// marker. `null` between gestures.
+  bool? _rangeGrabLow;
 
   void _dispatchPan(Offset local, Size size) {
     final tick = TemperatureDial.tickIndexForLocalPoint(local, size);
@@ -253,6 +412,30 @@ class _TemperatureDialState extends State<TemperatureDial> {
     // callbacks as a single user intent.
     widget.onTargetDragUpdate?.call(celsius);
     widget.onTargetTap?.call(celsius);
+  }
+
+  /// The large target readout. When [TemperatureDial.onTargetTextTap] is set
+  /// (interactive Home), wrap it as a tappable "set temperature" button: a
+  /// nested [GestureDetector] wins the tap over the ring's ancestor tap-to-jump
+  /// while pans still fall through to the ring, and the [Semantics] node gives
+  /// screen-reader users a typed-entry action alongside the adjustable slider.
+  /// With no callback it's a plain readout (read-only renderings).
+  Widget _buildTargetLabel(String targetLabel) {
+    final text = Text(
+      targetLabel,
+      style: EmberTypography.displayLarge().merge(widget.numeralStyle),
+    );
+    final onTap = widget.onTargetTextTap;
+    if (onTap == null) return text;
+    return Semantics(
+      button: true,
+      label: widget.targetTapSemanticLabel,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: text,
+      ),
+    );
   }
 
   void _maybeHaptic(int tick) {
@@ -284,9 +467,6 @@ class _TemperatureDialState extends State<TemperatureDial> {
 
   @override
   Widget build(BuildContext context) {
-    final targetIndex = TemperatureDial.tickIndexForCelsius(
-      widget.targetTemperatureCelsius,
-    );
     final currentIndex = TemperatureDial.tickIndexForCelsius(
       widget.currentTemperatureCelsius,
     );
@@ -300,20 +480,66 @@ class _TemperatureDialState extends State<TemperatureDial> {
         ? Duration.zero
         : widget.animationDuration;
 
-    // Format center text up-front so we don't recompute on every paint.
-    final targetDisplay = TemperatureDial.celsiusToDisplay(
-      widget.targetTemperatureCelsius,
-      widget.displayUnit,
-    );
     final currentDisplay = TemperatureDial.celsiusToDisplay(
       widget.currentTemperatureCelsius,
       widget.displayUnit,
     );
-
-    final targetLabel = '${targetDisplay.round()}°';
     final currentLabel = widget.humidityPercent != null
         ? '${currentDisplay.round()}° · ${widget.humidityPercent}%'
         : '${currentDisplay.round()}°';
+
+    return widget.isDualBand
+        ? _buildDual(context, currentIndex, tweenDuration, currentLabel)
+        : _buildSingle(context, currentIndex, tweenDuration, currentLabel);
+  }
+
+  /// Wrap the center readout in the shared dial scaffolding: a 1:1
+  /// [AspectRatio], the ring [CustomPaint], and the §14.5 text-scale clamp so
+  /// the center never blows out of the 240dp circle.
+  Widget _dialScaffold({
+    required CustomPainter painter,
+    required Widget centerColumn,
+    required Widget Function(Widget canvas, Size size) wrap,
+  }) {
+    return AspectRatio(
+      aspectRatio: 1.0,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final size = Size(constraints.maxWidth, constraints.maxHeight);
+          final canvas = CustomPaint(
+            painter: painter,
+            child: Center(
+              child: MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  textScaler: MediaQuery.of(
+                    context,
+                  ).textScaler.clamp(minScaleFactor: 0.85, maxScaleFactor: 1.4),
+                ),
+                child: centerColumn,
+              ),
+            ),
+          );
+          return wrap(canvas, size);
+        },
+      ),
+    );
+  }
+
+  /// Single-marker dial (heat/cool/off, and heat-cool with a null bound).
+  Widget _buildSingle(
+    BuildContext context,
+    int currentIndex,
+    Duration tweenDuration,
+    String currentLabel,
+  ) {
+    final targetIndex = TemperatureDial.tickIndexForCelsius(
+      widget.targetTemperatureCelsius,
+    );
+    final targetDisplay = TemperatureDial.celsiusToDisplay(
+      widget.targetTemperatureCelsius,
+      widget.displayUnit,
+    );
+    final targetLabel = '${targetDisplay.round()}°';
 
     // Screen-reader announcement: TalkBack/VoiceOver reads the label, then the
     // value, then "tap to adjust" implicit on the slider role. The
@@ -327,7 +553,7 @@ class _TemperatureDialState extends State<TemperatureDial> {
     final semanticLabel =
         'Target temperature, '
         'currently set to ${targetDisplay.round()} $semanticUnit. '
-        'Current temperature ${currentDisplay.round()} $semanticUnit.'
+        'Current temperature ${_currentDisplayRounded()} $semanticUnit.'
         '$humiditySemantics';
 
     return TweenAnimationBuilder<double>(
@@ -343,104 +569,318 @@ class _TemperatureDialState extends State<TemperatureDial> {
       duration: tweenDuration,
       curve: widget.animationCurve,
       builder: (context, animatedIndex, _) {
-        final paint = AspectRatio(
-          aspectRatio: 1.0,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final size = Size(constraints.maxWidth, constraints.maxHeight);
-              final canvas = CustomPaint(
-                painter: _TemperatureDialPainter(
-                  animatedActiveIndex: animatedIndex,
-                  currentIndex: currentIndex,
-                  gradientColors: TemperatureDial.gradientColorsFor(
-                    widget.mode,
-                  ),
-                ),
-                child: Center(
-                  // DESIGN §14.5: clamp the display-text scale so extreme
-                  // accessibility text sizes don't blow the dial center out
-                  // of its 240dp circle. Tighter than the 0.85–1.4 range the
-                  // spec suggests for body text — the giant target temp would
-                  // overflow the ring at 1.4×.
-                  child: MediaQuery(
-                    data: MediaQuery.of(context).copyWith(
-                      textScaler: MediaQuery.of(context).textScaler.clamp(
-                        minScaleFactor: 0.85,
-                        maxScaleFactor: 1.4,
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          targetLabel,
-                          style: EmberTypography.displayLarge().merge(
-                            widget.numeralStyle,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          currentLabel,
-                          style: EmberTypography.bodyMedium(
-                            color: EmberColors.textSecondary,
-                          ).merge(widget.numeralStyle),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-              if (!widget._interactive) {
-                return Semantics(
-                  label: semanticLabel,
-                  value: '${targetDisplay.round()}°$semanticUnit',
-                  readOnly: true,
-                  child: canvas,
-                );
-              }
-              // increasedValue/decreasedValue describe what the value will
-              // BECOME after the increase/decrease action — required by the
-              // Semantics framework whenever the corresponding onIncrease /
-              // onDecrease actions are set. Compute the next/prev tick's
-              // display value so screen readers can preview the change.
-              final nextDisplay = _adjacentDisplay(targetIndex, 1, widget);
-              final prevDisplay = _adjacentDisplay(targetIndex, -1, widget);
+        final centerColumn = Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildTargetLabel(targetLabel),
+            const SizedBox(height: 8),
+            Text(
+              currentLabel,
+              style: EmberTypography.bodyMedium(
+                color: EmberColors.textSecondary,
+              ).merge(widget.numeralStyle),
+            ),
+          ],
+        );
+        return _dialScaffold(
+          painter: _TemperatureDialPainter(
+            lowFillIndex: 0,
+            highFillIndex: animatedIndex,
+            dual: false,
+            currentIndex: currentIndex,
+            gradientColors: TemperatureDial.gradientColorsFor(widget.mode),
+          ),
+          centerColumn: centerColumn,
+          wrap: (canvas, size) {
+            if (!widget._interactive) {
               return Semantics(
-                slider: true,
                 label: semanticLabel,
                 value: '${targetDisplay.round()}°$semanticUnit',
-                increasedValue: '${nextDisplay.round()}°$semanticUnit',
-                decreasedValue: '${prevDisplay.round()}°$semanticUnit',
-                onIncrease: widget.onIncrease,
-                onDecrease: widget.onDecrease,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onPanStart: (d) => _dispatchPan(d.localPosition, size),
-                  onPanUpdate: (d) => _dispatchPan(d.localPosition, size),
-                  onPanEnd: (_) => _dispatchPanEnd(),
-                  onTapUp: (d) => _dispatchTap(d.localPosition, size),
-                  child: canvas,
-                ),
+                readOnly: true,
+                child: canvas,
               );
-            },
-          ),
+            }
+            // increasedValue/decreasedValue describe what the value will
+            // BECOME after the increase/decrease action — required by the
+            // Semantics framework whenever the corresponding onIncrease /
+            // onDecrease actions are set. Compute the next/prev tick's
+            // display value so screen readers can preview the change.
+            final nextDisplay = _adjacentDisplay(targetIndex, 1, widget);
+            final prevDisplay = _adjacentDisplay(targetIndex, -1, widget);
+            return Semantics(
+              slider: true,
+              label: semanticLabel,
+              value: '${targetDisplay.round()}°$semanticUnit',
+              increasedValue: '${nextDisplay.round()}°$semanticUnit',
+              decreasedValue: '${prevDisplay.round()}°$semanticUnit',
+              onIncrease: widget.onIncrease,
+              onDecrease: widget.onDecrease,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onPanStart: (d) => _dispatchPan(d.localPosition, size),
+                onPanUpdate: (d) => _dispatchPan(d.localPosition, size),
+                onPanEnd: (_) => _dispatchPanEnd(),
+                onTapUp: (d) => _dispatchTap(d.localPosition, size),
+                child: canvas,
+              ),
+            );
+          },
         );
-        return paint;
       },
     );
   }
+
+  /// Heat-cool dual-band dial (Issue #116): two markers, a warm→cool band, and
+  /// a stacked HEAT/COOL readout. Both bounds animate together via a
+  /// [_DialBand] tween so reduced-motion and the +1/+3/+7s reconciliation
+  /// tween the two markers in lockstep.
+  Widget _buildDual(
+    BuildContext context,
+    int currentIndex,
+    Duration tweenDuration,
+    String currentLabel,
+  ) {
+    final lowC = widget.targetLowCelsius!;
+    final highC = widget.targetHighCelsius!;
+    final lowIndex = TemperatureDial.tickIndexForCelsius(lowC);
+    final highIndex = TemperatureDial.tickIndexForCelsius(highC);
+    final lowLabel =
+        '${TemperatureDial.celsiusToDisplay(lowC, widget.displayUnit).round()}°';
+    final highLabel =
+        '${TemperatureDial.celsiusToDisplay(highC, widget.displayUnit).round()}°';
+
+    return TweenAnimationBuilder<_DialBand>(
+      tween: _DialBandTween(
+        begin: _DialBand(lowIndex.toDouble(), highIndex.toDouble()),
+        end: _DialBand(lowIndex.toDouble(), highIndex.toDouble()),
+      ),
+      duration: tweenDuration,
+      curve: widget.animationCurve,
+      builder: (context, band, _) {
+        final centerColumn = Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildRangeReadout(lowLabel: lowLabel, highLabel: highLabel),
+            const SizedBox(height: 8),
+            Text(
+              currentLabel,
+              style: EmberTypography.bodyMedium(
+                color: EmberColors.textSecondary,
+              ).merge(widget.numeralStyle),
+            ),
+          ],
+        );
+        return _dialScaffold(
+          painter: _TemperatureDialPainter(
+            lowFillIndex: band.lowIndex,
+            highFillIndex: band.highIndex,
+            dual: true,
+            currentIndex: currentIndex,
+            gradientColors: TemperatureDial.rangeBandColors,
+          ),
+          centerColumn: centerColumn,
+          wrap: (canvas, size) {
+            final semanticsChild = Semantics(
+              label: widget.rangeSemanticLabel,
+              container: true,
+              child: canvas,
+            );
+            if (!widget._interactive) return semanticsChild;
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onPanStart: (d) => _dispatchRangePanStart(d.localPosition, size),
+              onPanUpdate: (d) =>
+                  _dispatchRangePanUpdate(d.localPosition, size),
+              onPanEnd: (_) => _dispatchRangePanEnd(),
+              onTapUp: (d) => _dispatchRangeTap(d.localPosition, size),
+              child: semanticsChild,
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// The display-unit current temperature, rounded — used in the single-mode
+  /// semantic label.
+  int _currentDisplayRounded() => TemperatureDial.celsiusToDisplay(
+    widget.currentTemperatureCelsius,
+    widget.displayUnit,
+  ).round();
+
+  /// Stacked HEAT / value / divider / value / COOL readout for the dual band.
+  /// The whole stack is one tap target (Issue #116) that opens the dual-field
+  /// range dialog via [TemperatureDial.onTargetTextTap]. Combined height is
+  /// tuned to roughly match the single-setpoint number.
+  Widget _buildRangeReadout({
+    required String lowLabel,
+    required String highLabel,
+  }) {
+    final numberStyle = EmberTypography.displayLarge()
+        .merge(widget.numeralStyle)
+        .copyWith(fontSize: 42, letterSpacing: -1.0, height: 1.0);
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          widget.rangeHeatLabel ?? '',
+          style: EmberTypography.labelSmall(color: EmberColors.heatGlow),
+        ),
+        Text(lowLabel, style: numberStyle),
+        Container(
+          height: 1.5,
+          width: 44,
+          margin: const EdgeInsets.symmetric(vertical: 3),
+          color: EmberColors.textTertiary,
+        ),
+        Text(highLabel, style: numberStyle),
+        Text(
+          widget.rangeCoolLabel ?? '',
+          style: EmberTypography.labelSmall(color: EmberColors.coolGlow),
+        ),
+      ],
+    );
+    final onTap = widget.onTargetTextTap;
+    if (onTap == null) return content;
+    return Semantics(
+      button: true,
+      label: widget.targetTapSemanticLabel,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: content,
+      ),
+    );
+  }
+
+  void _dispatchRangePanStart(Offset local, Size size) {
+    final tick = TemperatureDial.tickIndexForLocalPoint(local, size);
+    if (tick == null) {
+      _rangeGrabLow = null;
+      return;
+    }
+    final draggedC = TemperatureDial.celsiusForTickIndex(tick);
+    // Resolve the grabbed marker once, at the start of the gesture.
+    _rangeGrabLow = TemperatureDial.nearestIsLow(
+      low: widget.targetLowCelsius!,
+      high: widget.targetHighCelsius!,
+      draggedC: draggedC,
+    );
+    _applyRangeMove(draggedC, tick);
+  }
+
+  void _dispatchRangePanUpdate(Offset local, Size size) {
+    final tick = TemperatureDial.tickIndexForLocalPoint(local, size);
+    if (tick == null) return;
+    final draggedC = TemperatureDial.celsiusForTickIndex(tick);
+    // If the pan started in the bottom gap (null tick), grab on first update.
+    _rangeGrabLow ??= TemperatureDial.nearestIsLow(
+      low: widget.targetLowCelsius!,
+      high: widget.targetHighCelsius!,
+      draggedC: draggedC,
+    );
+    _applyRangeMove(draggedC, tick);
+  }
+
+  void _applyRangeMove(double draggedC, int tick) {
+    final next = TemperatureDial.moveMarker(
+      low: widget.targetLowCelsius!,
+      high: widget.targetHighCelsius!,
+      moveLow: _rangeGrabLow!,
+      draggedC: draggedC,
+    );
+    _lastDragRange = next;
+    // The grabbed marker follows the dragged tick, so haptics keyed off the
+    // dragged tick fire per-tick on the marker that is actually moving.
+    _maybeHaptic(tick);
+    widget.onRangeDragUpdate?.call(next.low, next.high);
+  }
+
+  void _dispatchRangePanEnd() {
+    _rangeGrabLow = null;
+    final r = _lastDragRange;
+    _lastDragRange = null;
+    if (r == null) return;
+    widget.onRangeDragEnd?.call(r.low, r.high);
+  }
+
+  void _dispatchRangeTap(Offset local, Size size) {
+    final tick = TemperatureDial.tickIndexForLocalPoint(local, size);
+    if (tick == null) return;
+    final draggedC = TemperatureDial.celsiusForTickIndex(tick);
+    // A tap grabs the nearest marker for its single-shot move.
+    final moveLow = TemperatureDial.nearestIsLow(
+      low: widget.targetLowCelsius!,
+      high: widget.targetHighCelsius!,
+      draggedC: draggedC,
+    );
+    final next = TemperatureDial.moveMarker(
+      low: widget.targetLowCelsius!,
+      high: widget.targetHighCelsius!,
+      moveLow: moveLow,
+      draggedC: draggedC,
+    );
+    _maybeHaptic(tick);
+    widget.onRangeDragUpdate?.call(next.low, next.high);
+    widget.onRangeTap?.call(next.low, next.high);
+  }
+}
+
+/// The pair of animated fill indices for the heat-cool dual band, so a single
+/// [TweenAnimationBuilder] tweens both the HEAT and COOL markers together.
+class _DialBand {
+  final double lowIndex;
+  final double highIndex;
+  const _DialBand(this.lowIndex, this.highIndex);
+
+  // Value equality so TweenAnimationBuilder only re-animates on a real setpoint
+  // change (it compares the target with `!=`); without this the identity
+  // compare restarts the tween on every unrelated rebuild, as Tween<double>
+  // (the single-marker path) never does.
+  @override
+  bool operator ==(Object other) =>
+      other is _DialBand &&
+      other.lowIndex == lowIndex &&
+      other.highIndex == highIndex;
+
+  @override
+  int get hashCode => Object.hash(lowIndex, highIndex);
+}
+
+class _DialBandTween extends Tween<_DialBand> {
+  _DialBandTween({
+    required _DialBand super.begin,
+    required _DialBand super.end,
+  });
+
+  @override
+  _DialBand lerp(double t) => _DialBand(
+    lerpDouble(begin!.lowIndex, end!.lowIndex, t)!,
+    lerpDouble(begin!.highIndex, end!.highIndex, t)!,
+  );
 }
 
 class _TemperatureDialPainter extends CustomPainter {
-  /// Animated fill cursor — a continuous value in `[0, tickCount - 1]` that
-  /// the tween interpolates between target-temp changes. Ticks with index
-  /// `<= animatedActiveIndex` paint as "active"; the rest paint inactive.
-  final double animatedActiveIndex;
+  /// Lower edge of the active fill, a continuous value in `[0, tickCount - 1]`.
+  /// Single-marker mode fills from tick 0, so this is 0; the heat-cool dual
+  /// band (Issue #116) fills from the animated HEAT marker instead.
+  final double lowFillIndex;
+
+  /// Upper edge of the active fill (the single target marker, or the COOL
+  /// marker in dual mode). Ticks in `[lowFillIndex, highFillIndex]` paint
+  /// active; the rest inactive.
+  final double highFillIndex;
+
+  /// Whether to render the heat-cool dual band: two discrete markers at
+  /// [lowFillIndex]/[highFillIndex] and a warm→cool gradient across the band.
+  final bool dual;
 
   /// Index of the tick that should pop as the "current temperature" indicator.
   final int currentIndex;
 
-  /// Mode-gradient stops (high -> low) for active ticks.
+  /// Active-tick gradient stops. Single mode: the mode gradient (high → low),
+  /// interpolated across the whole ring. Dual mode: [TemperatureDial.rangeBandColors]
+  /// (warm → cool), interpolated across the band only.
   final List<Color> gradientColors;
 
   static const _tickStrokeWidth = 3.0;
@@ -448,7 +888,9 @@ class _TemperatureDialPainter extends CustomPainter {
   static const _inactiveColor = Color(0x0FFFFFFF); // rgba(255, 255, 255, 0.06)
 
   _TemperatureDialPainter({
-    required this.animatedActiveIndex,
+    required this.lowFillIndex,
+    required this.highFillIndex,
+    required this.dual,
     required this.currentIndex,
     required this.gradientColors,
   });
@@ -465,6 +907,9 @@ class _TemperatureDialPainter extends CustomPainter {
     final stepRadians =
         TemperatureDial.arcSweep / (TemperatureDial.tickCount - 1);
     final lastIndex = TemperatureDial.tickCount - 1;
+    final lowMarker = lowFillIndex.round();
+    final highMarker = highFillIndex.round();
+    final bandSpan = highFillIndex - lowFillIndex;
 
     for (int i = 0; i < TemperatureDial.tickCount; i++) {
       final theta = TemperatureDial.arcStart + i * stepRadians;
@@ -483,10 +928,20 @@ class _TemperatureDialPainter extends CustomPainter {
         ..strokeWidth = _tickStrokeWidth
         ..strokeCap = StrokeCap.round;
 
-      if (i <= animatedActiveIndex) {
-        // Interpolate along the mode gradient so the band has a subtle
-        // value shift from start to end. `gradientColors` is (high, low).
-        final t = i / lastIndex;
+      // Active = within the fill. Single mode fills from 0; dual fills only
+      // between the two markers.
+      final active = dual
+          ? (i >= lowFillIndex && i <= highFillIndex)
+          : (i <= highFillIndex);
+      if (active) {
+        // Interpolate along the gradient. Single mode shifts across the whole
+        // ring; dual mode shifts across the band so the warm→cool blend is
+        // visible regardless of where the band sits.
+        final t = dual
+            ? (bandSpan.abs() < 1e-6
+                  ? 0.0
+                  : ((i - lowFillIndex) / bandSpan).clamp(0.0, 1.0))
+            : i / lastIndex;
         paint
           ..color = Color.lerp(gradientColors[0], gradientColors[1], t)!
           ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 2.0);
@@ -495,6 +950,17 @@ class _TemperatureDialPainter extends CustomPainter {
       }
 
       canvas.drawLine(inner, outer, paint);
+
+      // Dual-band markers: a thicker, saturated handle at each setpoint tick so
+      // the two draggable bounds read as discrete markers over the band.
+      if (dual && (i == lowMarker || i == highMarker)) {
+        final marker = Paint()
+          ..color = i == lowMarker ? gradientColors.first : gradientColors.last
+          ..strokeWidth = _tickStrokeWidth + 2.0
+          ..strokeCap = StrokeCap.round
+          ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 2.5);
+        canvas.drawLine(inner, outer, marker);
+      }
 
       // Current-temperature pop: a slightly thicker, brighter overlay tick.
       // Drawn last so it sits on top of whichever band it falls in.
@@ -511,7 +977,9 @@ class _TemperatureDialPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _TemperatureDialPainter old) {
-    return old.animatedActiveIndex != animatedActiveIndex ||
+    return old.lowFillIndex != lowFillIndex ||
+        old.highFillIndex != highFillIndex ||
+        old.dual != dual ||
         old.currentIndex != currentIndex ||
         old.gradientColors != gradientColors;
   }

@@ -10,6 +10,9 @@ import '../settings/numeral_font.dart';
 import '../state/auth_failure_coordinator.dart';
 import '../state/devices_snapshot.dart';
 import '../state/providers.dart';
+import '../theme/colors.dart';
+import 'range_entry_dialog.dart';
+import 'temp_entry_dialog.dart';
 import 'temperature_dial.dart';
 
 /// Stateful wrapper that adds the interactive write-path around
@@ -32,10 +35,12 @@ import 'temperature_dial.dart';
 ///
 /// Mode handling:
 /// - `heat`, `cool`, `off`, `emergency`: writes `set_temperature` with a
-///   single number (Celsius).
-/// - `heat-cool`: v1 scope per the ticket — picks whichever bound (low/high)
-///   is closer to the new target and POSTs `{"high": h, "low": l}` with that
-///   bound replaced. Proper dual-marker UI is a follow-up ticket.
+///   single number (Celsius); single optimistic scalar + confirm-watch.
+/// - `heat-cool` with both bounds present (Issue #116): a true dual band — a
+///   paired optimistic `(low, high)` state, POSTs the explicit
+///   `{"low": l, "high": h}` the user set (no nearest-bound inference), and a
+///   dual confirm-watch that reconciles both bounds. A heat-cool device that
+///   reports a null bound falls back to the single-scalar path above.
 class InteractiveTemperatureDial extends ConsumerStatefulWidget {
   final Device device;
 
@@ -62,6 +67,11 @@ class _InteractiveTemperatureDialState
   /// device snapshot".
   double? _optimisticC;
 
+  /// Paired optimistic overrides for the heat-cool dual band (Issue #116).
+  /// Both are set/cleared together; `null` means "trust the snapshot bounds".
+  double? _optimisticLowC;
+  double? _optimisticHighC;
+
   /// Pending pan-end commit. Cancelled and restarted by every new pan/tap.
   Timer? _commitTimer;
 
@@ -75,6 +85,19 @@ class _InteractiveTemperatureDialState
 
   /// The value we're currently waiting to reconcile against, if any.
   double? _pendingConfirmC;
+
+  /// The dual-band pair we're waiting to reconcile against (Issue #116).
+  double? _pendingConfirmLowC;
+  double? _pendingConfirmHighC;
+
+  /// Whether the device should render/write the heat-cool dual band: heat-cool
+  /// with both bounds reported. A null bound falls back to the single path.
+  bool get _isDual =>
+      widget.device.mode == DeviceMode.heatCool &&
+      widget.device.targetTemperatureLow != null &&
+      widget.device.targetTemperatureHigh != null;
+
+  bool get _isF => widget.displayUnit.toUpperCase() != 'C';
 
   /// Per-tick gap used by the [TemperatureDial.tickIndexForCelsius] mapping —
   /// reconciliation tolerates a difference of <= half-a-tick so server-side
@@ -145,7 +168,7 @@ class _InteractiveTemperatureDialState
       if (!mounted) return;
       _showSnack(
         AppLocalizations.of(context).dialTemperatureFailed,
-        retryC: clamped,
+        onRetry: () => _commit(clamped),
       );
       setState(() {
         _optimisticC = null;
@@ -207,7 +230,7 @@ class _InteractiveTemperatureDialState
       if (!mounted) return;
       _showSnack(
         AppLocalizations.of(context).dialTemperatureNotConfirmed,
-        retryC: expectedC,
+        onRetry: () => _commit(expectedC),
       );
       _confirmSub?.close();
       _confirmSub = null;
@@ -216,7 +239,172 @@ class _InteractiveTemperatureDialState
     });
   }
 
-  void _showSnack(String message, {required double retryC}) {
+  // ---- Heat-cool dual band (Issue #116) -----------------------------------
+
+  void _onRangeDragUpdate(double low, double high) {
+    setState(() {
+      _optimisticLowC = low;
+      _optimisticHighC = high;
+    });
+    _commitTimer?.cancel();
+    _commitTimer = null;
+  }
+
+  void _onRangeDragEnd(double low, double high) {
+    _commitTimer?.cancel();
+    _commitTimer = Timer(const Duration(milliseconds: 250), () {
+      _commitRange(low, high);
+    });
+  }
+
+  void _onRangeTap(double low, double high) {
+    _commitTimer?.cancel();
+    _commitTimer = Timer(const Duration(milliseconds: 250), () {
+      _commitRange(low, high);
+    });
+  }
+
+  /// POST the explicit `{low, high}` the user set (no nearest-bound inference),
+  /// then reconcile both bounds. Mirrors [_commit]'s optimistic + failure
+  /// handling, but for the paired state.
+  Future<void> _commitRange(double low, double high) async {
+    final clampedLow = low.clamp(
+      TemperatureDial.minCelsius,
+      TemperatureDial.maxCelsius,
+    );
+    final clampedHigh = high.clamp(
+      TemperatureDial.minCelsius,
+      TemperatureDial.maxCelsius,
+    );
+    setState(() {
+      _optimisticLowC = clampedLow;
+      _optimisticHighC = clampedHigh;
+      _pendingConfirmLowC = clampedLow;
+      _pendingConfirmHighC = clampedHigh;
+    });
+
+    final client = ref.read(nleApiClientProvider);
+    try {
+      await client.sendCommand(
+        serial: widget.device.serial,
+        command: 'set_temperature',
+        value: {'low': clampedLow, 'high': clampedHigh},
+      );
+    } on NleAuthError catch (_) {
+      if (!mounted) return;
+      ref.read(authFailureCoordinatorProvider).fire();
+      _revertRange();
+      return;
+    } catch (_) {
+      if (!mounted) return;
+      _showSnack(
+        AppLocalizations.of(context).dialTemperatureFailed,
+        onRetry: () => _commitRange(clampedLow, clampedHigh),
+      );
+      _revertRange();
+      return;
+    }
+
+    if (!mounted) return;
+    ref.read(deviceStateSourceProvider).refresh();
+    _startRangeConfirmWatch(clampedLow, clampedHigh);
+  }
+
+  void _revertRange() {
+    setState(() {
+      _optimisticLowC = null;
+      _optimisticHighC = null;
+      _pendingConfirmLowC = null;
+      _pendingConfirmHighC = null;
+    });
+  }
+
+  void _startRangeConfirmWatch(double expectedLow, double expectedHigh) {
+    _confirmTimer?.cancel();
+    _confirmSub?.close();
+    _confirmSub = ref.listenManual<AsyncValue<DevicesSnapshot>>(
+      devicesSnapshotProvider,
+      (_, next) {
+        final pLow = _pendingConfirmLowC;
+        final pHigh = _pendingConfirmHighC;
+        if (pLow == null || pHigh == null) return;
+        next.whenData((snapshot) {
+          final match = snapshot.devices.firstWhere(
+            (d) => d.serial == widget.device.serial,
+            orElse: () => widget.device,
+          );
+          final mLow = match.targetTemperatureLow;
+          final mHigh = match.targetTemperatureHigh;
+          // Both bounds must land within half-a-tick of what we wrote.
+          if (mLow != null &&
+              mHigh != null &&
+              (mLow - pLow).abs() <= _confirmEpsilonC &&
+              (mHigh - pHigh).abs() <= _confirmEpsilonC) {
+            if (!mounted) return;
+            setState(() {
+              _optimisticLowC = null;
+              _optimisticHighC = null;
+              _pendingConfirmLowC = null;
+              _pendingConfirmHighC = null;
+            });
+            _confirmTimer?.cancel();
+            _confirmSub?.close();
+            _confirmSub = null;
+          }
+        });
+      },
+    );
+    _confirmTimer = Timer(const Duration(seconds: 7), () {
+      if (!mounted) return;
+      _showSnack(
+        AppLocalizations.of(context).dialTemperatureNotConfirmed,
+        onRetry: () => _commitRange(expectedLow, expectedHigh),
+      );
+      _confirmSub?.close();
+      _confirmSub = null;
+      _pendingConfirmLowC = null;
+      _pendingConfirmHighC = null;
+      // Keep the optimistic band visible per §3.4 — don't auto-revert.
+    });
+  }
+
+  /// Open the dual-field range dialog as an alternative to the ring. Prefills
+  /// the currently displayed band, and on confirm commits both bounds via
+  /// [_commitRange]. The deadband is enforced inside the dialog.
+  Future<void> _openRangeKeyboard() async {
+    final l = AppLocalizations.of(context);
+    _commitTimer?.cancel();
+    final low = _optimisticLowC ?? widget.device.targetTemperatureLow!;
+    final high = _optimisticHighC ?? widget.device.targetTemperatureHigh!;
+    // Unit-aware display of the enforced gap for the inline error copy.
+    final gapDisplay = _isF
+        ? '${(TemperatureDial.deadbandCelsius * 9 / 5).round()}°F'
+        : '${TemperatureDial.deadbandCelsius}°C';
+    final result = await showDialog<RangeEntryResult>(
+      context: context,
+      builder: (_) => RangeEntryDialog(
+        lowC: low,
+        highC: high,
+        scale: widget.displayUnit,
+        heatAccent: EmberColors.heatGlow,
+        coolAccent: EmberColors.coolGlow,
+        numeralStyle: ref.read(numeralFontProvider).style,
+        minCelsius: TemperatureDial.minCelsius,
+        maxCelsius: TemperatureDial.maxCelsius,
+        deadbandCelsius: TemperatureDial.deadbandCelsius,
+        title: l.homeRangeEntryTitle,
+        heatLabel: l.homeRangeEntryHeatField,
+        coolLabel: l.homeRangeEntryCoolField,
+        confirmLabel: l.homeTempEntryConfirm,
+        cancelLabel: l.homeTempEntryCancel,
+        deadbandError: l.homeRangeEntryDeadbandError(gapDisplay),
+      ),
+    );
+    if (!mounted || result == null) return;
+    _commitRange(result.lowC, result.highC);
+  }
+
+  void _showSnack(String message, {required VoidCallback onRetry}) {
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
     messenger.showSnackBar(
@@ -224,7 +412,7 @@ class _InteractiveTemperatureDialState
         content: Text(message),
         action: SnackBarAction(
           label: AppLocalizations.of(context).dialRetry,
-          onPressed: () => _commit(retryC),
+          onPressed: onRetry,
         ),
       ),
     );
@@ -250,22 +438,100 @@ class _InteractiveTemperatureDialState
     });
   }
 
+  /// Open the keyboard-entry dialog as an alternative to the ring. Prefills the
+  /// currently displayed setpoint, and on confirm commits the typed value
+  /// straight through [_commit] — no debounce, since a modal dismissal has no
+  /// follow-up pan to coalesce. Integer-only entry keeps the typed value in
+  /// sync with the dial's whole-degree readout (Issue #113).
+  Future<void> _openKeyboard() async {
+    final l = AppLocalizations.of(context);
+    // Supersede any pending pan/tap debounce up front, so a ring interaction in
+    // the 250ms before this tap can't fire its commit while the dialog is open
+    // (which would write the transient ring value on top of the typed one).
+    _commitTimer?.cancel();
+    final displayedC = _optimisticC ?? widget.device.targetTemperature;
+    final celsius = await showDialog<double>(
+      context: context,
+      builder: (_) => TempEntryDialog(
+        valueC: displayedC,
+        scale: widget.displayUnit,
+        accent: TemperatureDial.gradientColorsFor(widget.device.mode).first,
+        numeralStyle: ref.read(numeralFontProvider).style,
+        allowDecimal: false,
+        title: l.homeTempEntryTitle,
+        confirmLabel: l.homeTempEntryConfirm,
+        cancelLabel: l.homeTempEntryCancel,
+      ),
+    );
+    if (!mounted || celsius == null) return;
+    _commit(celsius);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final displayedC = _optimisticC ?? widget.device.targetTemperature;
+    final l = AppLocalizations.of(context);
+    final device = widget.device;
+
+    if (_isDual) {
+      final low = _optimisticLowC ?? device.targetTemperatureLow!;
+      final high = _optimisticHighC ?? device.targetTemperatureHigh!;
+      return TemperatureDial(
+        currentTemperatureCelsius: device.currentTemperature,
+        // The scalar is unused for the dual band, but the widget still requires
+        // it — pass the midpoint so a mid-gesture fallback (a bound going null)
+        // lands somewhere sane.
+        targetTemperatureCelsius: (low + high) / 2,
+        targetLowCelsius: low,
+        targetHighCelsius: high,
+        mode: device.mode,
+        displayUnit: widget.displayUnit,
+        capabilities: device.capabilities,
+        onRangeDragUpdate: _onRangeDragUpdate,
+        onRangeDragEnd: _onRangeDragEnd,
+        onRangeTap: _onRangeTap,
+        numeralStyle: ref.watch(numeralFontProvider).style,
+        humidityPercent: device.humidity,
+        onTargetTextTap: _openRangeKeyboard,
+        targetTapSemanticLabel: l.homeSetTemperature,
+        rangeHeatLabel: l.homeDialHeatLabel,
+        rangeCoolLabel: l.homeDialCoolLabel,
+        // Always announce humidity, matching the always-visible "· NN%" on the
+        // current-temp line (the single-marker dial does the same).
+        rangeSemanticLabel: l.homeDialRangeSemantics(
+          _fmt(low),
+          _fmt(high),
+          _fmt(device.currentTemperature),
+          ' Humidity ${device.humidity} percent.',
+        ),
+      );
+    }
+
+    final displayedC = _optimisticC ?? device.targetTemperature;
     return TemperatureDial(
-      currentTemperatureCelsius: widget.device.currentTemperature,
+      currentTemperatureCelsius: device.currentTemperature,
       targetTemperatureCelsius: displayedC,
-      mode: widget.device.mode,
+      mode: device.mode,
       displayUnit: widget.displayUnit,
-      capabilities: widget.device.capabilities,
+      capabilities: device.capabilities,
       onTargetDragUpdate: _onDragUpdate,
       onTargetDragEnd: _onDragEnd,
       onTargetTap: _onTap,
       onIncrease: () => _bump(1),
       onDecrease: () => _bump(-1),
       numeralStyle: ref.watch(numeralFontProvider).style,
-      humidityPercent: widget.device.humidity,
+      humidityPercent: device.humidity,
+      onTargetTextTap: _openKeyboard,
+      targetTapSemanticLabel: l.homeSetTemperature,
     );
+  }
+
+  /// Format a Celsius value as a rounded, unit-suffixed display string (e.g.
+  /// "68°F") for the dual-band screen-reader announcement.
+  String _fmt(double celsius) {
+    final display = TemperatureDial.celsiusToDisplay(
+      celsius,
+      widget.displayUnit,
+    ).round();
+    return '$display°${_isF ? 'F' : 'C'}';
   }
 }
