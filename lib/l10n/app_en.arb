@@ -44,6 +44,26 @@
     "description": "One-time SnackBar shown when the persisted active serial isn't in the latest /api/devices response and the source falls back to the first device per DESIGN §4.5."
   },
 
+  "homeSetTemperature": "Set temperature",
+  "@homeSetTemperature": {
+    "description": "Accessibility label for the tappable target-temperature readout on the Home dial that opens the keyboard-entry dialog."
+  },
+
+  "homeTempEntryTitle": "Set temperature",
+  "@homeTempEntryTitle": {
+    "description": "Title of the Home dial's dialog for typing the target temperature directly."
+  },
+
+  "homeTempEntryConfirm": "Set",
+  "@homeTempEntryConfirm": {
+    "description": "Confirm action in the Home type-a-temperature dialog."
+  },
+
+  "homeTempEntryCancel": "Cancel",
+  "@homeTempEntryCancel": {
+    "description": "Cancel action in the Home type-a-temperature dialog."
+  },
+
   "deviceUnnamedFallback": "unnamed",
   "@deviceUnnamedFallback": {
     "description": "Display name used when a device's server-side name is null or empty AND no local override exists."

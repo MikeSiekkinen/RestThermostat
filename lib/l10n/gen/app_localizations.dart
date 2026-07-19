@@ -142,6 +142,30 @@ abstract class AppLocalizations {
   /// **'Active device changed — it wasn\'t in the latest device list.'**
   String get homeActiveDeviceFallback;
 
+  /// Accessibility label for the tappable target-temperature readout on the Home dial that opens the keyboard-entry dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Set temperature'**
+  String get homeSetTemperature;
+
+  /// Title of the Home dial's dialog for typing the target temperature directly.
+  ///
+  /// In en, this message translates to:
+  /// **'Set temperature'**
+  String get homeTempEntryTitle;
+
+  /// Confirm action in the Home type-a-temperature dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Set'**
+  String get homeTempEntryConfirm;
+
+  /// Cancel action in the Home type-a-temperature dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get homeTempEntryCancel;
+
   /// Display name used when a device's server-side name is null or empty AND no local override exists.
   ///
   /// In en, this message translates to:

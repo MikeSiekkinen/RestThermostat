@@ -10,6 +10,7 @@ import '../settings/numeral_font.dart';
 import '../state/auth_failure_coordinator.dart';
 import '../state/devices_snapshot.dart';
 import '../state/providers.dart';
+import 'temp_entry_dialog.dart';
 import 'temperature_dial.dart';
 
 /// Stateful wrapper that adds the interactive write-path around
@@ -250,8 +251,36 @@ class _InteractiveTemperatureDialState
     });
   }
 
+  /// Open the keyboard-entry dialog as an alternative to the ring. Prefills the
+  /// currently displayed setpoint, and on confirm commits the typed value
+  /// straight through [_commit] — no debounce, since a modal dismissal has no
+  /// follow-up pan to coalesce. Integer-only entry keeps the typed value in
+  /// sync with the dial's whole-degree readout (Issue #113).
+  Future<void> _openKeyboard() async {
+    final l = AppLocalizations.of(context);
+    final displayedC = _optimisticC ?? widget.device.targetTemperature;
+    final celsius = await showDialog<double>(
+      context: context,
+      builder: (_) => TempEntryDialog(
+        valueC: displayedC,
+        scale: widget.displayUnit,
+        accent: TemperatureDial.gradientColorsFor(widget.device.mode).first,
+        numeralStyle: ref.read(numeralFontProvider).style,
+        allowDecimal: false,
+        title: l.homeTempEntryTitle,
+        confirmLabel: l.homeTempEntryConfirm,
+        cancelLabel: l.homeTempEntryCancel,
+      ),
+    );
+    if (!mounted || celsius == null) return;
+    // Supersede any pending pan/tap debounce so the typed value wins.
+    _commitTimer?.cancel();
+    _commit(celsius);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final displayedC = _optimisticC ?? widget.device.targetTemperature;
     return TemperatureDial(
       currentTemperatureCelsius: widget.device.currentTemperature,
@@ -266,6 +295,8 @@ class _InteractiveTemperatureDialState
       onDecrease: () => _bump(-1),
       numeralStyle: ref.watch(numeralFontProvider).style,
       humidityPercent: widget.device.humidity,
+      onTargetTextTap: _openKeyboard,
+      targetTapSemanticLabel: l.homeSetTemperature,
     );
   }
 }

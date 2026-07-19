@@ -57,6 +57,7 @@ class _StubSource implements DeviceStateSource {
 Future<({Dio dio, _StubSource source})> _pumpHost(
   WidgetTester tester, {
   required Device device,
+  String displayUnit = 'C',
 }) async {
   final dio = Dio(BaseOptions(baseUrl: 'http://test.local:8082'));
   final source = _StubSource();
@@ -76,7 +77,7 @@ Future<({Dio dio, _StubSource source})> _pumpHost(
               height: 240,
               child: InteractiveTemperatureDial(
                 device: device,
-                displayUnit: 'C',
+                displayUnit: displayUnit,
               ),
             ),
           ),
@@ -86,6 +87,28 @@ Future<({Dio dio, _StubSource source})> _pumpHost(
   );
   await tester.pump();
   return (dio: dio, source: source);
+}
+
+/// Capture the `value` of every `set_temperature` POST on [dio].
+List<Object?> _captureSetTemperature(Dio dio) {
+  final captured = <Object?>[];
+  dio.interceptors.add(
+    InterceptorsWrapper(
+      onRequest: (options, handler) {
+        final body = options.data as Map<String, dynamic>?;
+        if (body != null && body['command'] == 'set_temperature') {
+          captured.add(body['value']);
+        }
+        handler.next(options);
+      },
+    ),
+  );
+  DioAdapter(dio: dio).onPost(
+    '/command',
+    (server) => server.reply(200, {'ok': true}),
+    data: Matchers.any,
+  );
+  return captured;
 }
 
 void main() {
@@ -199,6 +222,132 @@ void main() {
       expect(capturedValue, isA<Map<String, dynamic>>());
       final m = capturedValue! as Map<String, dynamic>;
       expect(m.keys, containsAll(['high', 'low']));
+    });
+  });
+
+  group('InteractiveTemperatureDial — keyboard entry (Issue #113)', () {
+    const field = ValueKey('temp-entry-field');
+    const confirm = ValueKey('temp-entry-confirm');
+
+    testWidgets('tapping the target readout opens the keyboard dialog', (
+      tester,
+    ) async {
+      final result = await _pumpHost(tester, device: _device(target: 20.0));
+      _captureSetTemperature(result.dio);
+
+      expect(find.byKey(field), findsNothing);
+      // The large '20°' target readout (current-temp line shows 25°).
+      await tester.tap(find.text('20°'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(field), findsOneWidget);
+    });
+
+    testWidgets('Set commits the typed value via set_temperature (°C)', (
+      tester,
+    ) async {
+      final result = await _pumpHost(tester, device: _device(target: 20.0));
+      final captured = _captureSetTemperature(result.dio);
+
+      await tester.tap(find.text('20°'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(field), '23');
+      await tester.tap(find.byKey(confirm));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(captured, [23.0]);
+      expect(result.source.refreshCount, 1);
+      expect(find.text('23°'), findsOneWidget);
+    });
+
+    testWidgets('°F entry converts back to Celsius on commit', (tester) async {
+      final result = await _pumpHost(
+        tester,
+        device: _device(target: 20.0),
+        displayUnit: 'F',
+      );
+      final captured = _captureSetTemperature(result.dio);
+
+      // 20°C shows as 68°F.
+      await tester.tap(find.text('68°'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(field), '70');
+      await tester.tap(find.byKey(confirm));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(captured, hasLength(1));
+      expect(captured.single, isA<double>());
+      // 70°F → 21.11°C.
+      expect(captured.single! as double, closeTo(21.11, 0.01));
+      expect(find.text('70°'), findsOneWidget);
+    });
+
+    testWidgets('integer-only: a typed decimal is rounded before commit', (
+      tester,
+    ) async {
+      final result = await _pumpHost(tester, device: _device(target: 19.0));
+      final captured = _captureSetTemperature(result.dio);
+
+      await tester.tap(find.text('19°'));
+      await tester.pumpAndSettle();
+      // enterText bypasses the integer keyboard; the dialog must still round.
+      await tester.enterText(find.byKey(field), '20.5');
+      await tester.tap(find.byKey(confirm));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(captured, [21.0]); // 20.5 rounds to 21, not a fractional setpoint.
+    });
+
+    testWidgets('Cancel dismisses without committing', (tester) async {
+      final result = await _pumpHost(tester, device: _device(target: 20.0));
+      final captured = _captureSetTemperature(result.dio);
+
+      await tester.tap(find.text('20°'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(field), '28');
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('Cancel'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(captured, isEmpty);
+      expect(find.text('20°'), findsOneWidget);
+    });
+
+    testWidgets('tapping the ring (off-center) still jumps, not keyboard', (
+      tester,
+    ) async {
+      final result = await _pumpHost(tester, device: _device(target: 20.0));
+      final captured = _captureSetTemperature(result.dio);
+
+      final center = tester.getCenter(find.byType(InteractiveTemperatureDial));
+      // Tap low on the ring, well below the center readout cluster (the large
+      // target glyph reaches ~100px above center, so stay clear of it).
+      await tester.tapAt(center + const Offset(0, 108));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump();
+
+      // No keyboard dialog; the ring tap jump-commits instead.
+      expect(find.byKey(field), findsNothing);
+      expect(captured, isNotEmpty);
+    });
+
+    testWidgets('exposes a "Set temperature" accessibility button', (
+      tester,
+    ) async {
+      final result = await _pumpHost(tester, device: _device(target: 20.0));
+      _captureSetTemperature(result.dio);
+
+      // The child "20°" text merges into the button node's label, so match on
+      // the "Set temperature" substring.
+      expect(find.bySemanticsLabel(RegExp('Set temperature')), findsOneWidget);
     });
   });
 }
