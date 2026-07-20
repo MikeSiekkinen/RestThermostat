@@ -85,11 +85,6 @@ class ScheduleScreen extends ConsumerStatefulWidget {
 }
 
 class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
-  /// Internal day index (Mon=0..Sun=6) currently shown in the event list.
-  /// Seeded to today in `initState` off the injected clock (so tests and the
-  /// tint share one notion of "now"); user taps on the tab strip move it.
-  late int _selectedDay;
-
   /// While the loaded schedule is stale for the current mode (see
   /// [_scheduleMatchesMode]), we refetch on this cadence until the device
   /// pushes the new mode's bucket. One-shot, re-armed from `build` each time a
@@ -106,11 +101,14 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
   /// window we trust the served data, so a steady-state screen never gates.
   bool _awaitingModeSync = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _selectedDay = weekdayToIndex(widget.now().weekday);
-  }
+  /// Resolves the day-of-week shown in the event list (Mon=0..Sun=6) from the
+  /// shared [scheduleSelectedDayProvider] value, falling back to today (off the
+  /// injected clock) until the user picks a day. The provider is shared across
+  /// devices so the selection carries over when swiping between thermostats.
+  /// Callers pass a `watch`ed value from `build` (so the UI rebuilds on change)
+  /// or a `read` value from a callback.
+  int _selectedDayOr(int? selected) =>
+      selected ?? weekdayToIndex(widget.now().weekday);
 
   @override
   void didUpdateWidget(ScheduleScreen oldWidget) {
@@ -260,6 +258,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
     final order = localeDayOrder(locale);
     final labels = displayDayLabels(locale);
     final asyncSchedule = ref.watch(scheduleProvider(widget.serial));
+    final selectedDay = _selectedDayOr(ref.watch(scheduleSelectedDayProvider));
     // A failed refetch keeps its previous data in `AsyncValue.value`, but the
     // screen shows the error view then — keep the highlight in agreement with
     // what is actually visible by treating any error as "no schedule".
@@ -289,9 +288,10 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
             _DayTabStrip(
               order: order,
               labels: labels,
-              selectedDay: _selectedDay,
+              selectedDay: selectedDay,
               underlineColor: _modeTint(widget.deviceMode),
-              onTap: (day) => setState(() => _selectedDay = day),
+              onTap: (day) =>
+                  ref.read(scheduleSelectedDayProvider.notifier).set(day),
             ),
             Expanded(
               child: RefreshIndicator(
@@ -333,7 +333,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                       }
                     }
                     return _DayEventList(
-                      events: schedule?.eventsForDay(_selectedDay) ?? const [],
+                      events: schedule?.eventsForDay(selectedDay) ?? const [],
                       temperatureScale: widget.temperatureScale,
                       activeEvent: activeEvent,
                       numeralStyle: ref.watch(numeralFontProvider).style,
@@ -372,7 +372,9 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
           capabilities: widget.capabilities,
           temperatureScale: widget.temperatureScale,
           currentSchedule: _scheduleOrEmpty(schedule),
-          defaultDayIndex: _selectedDay,
+          defaultDayIndex: _selectedDayOr(
+            ref.read(scheduleSelectedDayProvider),
+          ),
           deviceMode: widget.deviceMode,
           storedScheduleMode: widget.scheduleMode,
         ),

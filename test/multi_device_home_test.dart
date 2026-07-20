@@ -99,7 +99,10 @@ void main() {
     await tester.pumpWidget(_wrap(store: store, dio: dio));
     await _pumpUntilStable(tester);
 
-    // PageView wraps Home when there are 2+ devices.
+    // With 2+ devices every tab wraps its body in a device-swipe PageView
+    // (Home, Schedule, Details — Issue #125), but only the active tab's is
+    // onstage in the shell's IndexedStack, so the (skip-offstage) finder sees
+    // exactly one: Home's.
     expect(find.byType(PageView), findsOneWidget);
     // Caret renders next to the device name.
     expect(find.byIcon(Icons.expand_more), findsOneWidget);
@@ -136,8 +139,13 @@ void main() {
     await tester.pumpWidget(_wrap(store: store, dio: dio));
     await _pumpUntilStable(tester);
 
-    // Swipe left on the PageView → advance to device index 1.
-    await tester.fling(find.byType(PageView), const Offset(-400, 0), 1200);
+    // Swipe left on the Home PageView (first in tree order) → advance to
+    // device index 1.
+    await tester.fling(
+      find.byType(PageView).first,
+      const Offset(-400, 0),
+      1200,
+    );
     await _pumpUntilStable(tester);
 
     expect(store.activeSerial, '02BB02BD041404KL');
@@ -175,13 +183,83 @@ void main() {
 
       expect(topLevel().mode, DeviceMode.cool);
 
-      // Swipe to advance to the heat-mode device.
-      await tester.fling(find.byType(PageView), const Offset(-400, 0), 1200);
+      // Swipe to advance to the heat-mode device (Home PageView is first).
+      await tester.fling(
+        find.byType(PageView).first,
+        const Offset(-400, 0),
+        1200,
+      );
       await _pumpUntilStable(tester);
 
       expect(topLevel().mode, DeviceMode.heat);
     },
   );
+
+  testWidgets('swiping the Schedule tab advances the active-device provider', (
+    tester,
+  ) async {
+    final store = FakeOnboardingStore()
+      ..serverUrl = 'http://test.local:8082'
+      ..activeSerial = '02AA01AC041403JM'
+      ..complete = true;
+
+    final dio = Dio(BaseOptions(baseUrl: 'http://test.local:8082'));
+    final adapter = DioAdapter(dio: dio);
+    adapter.onGet('/api/devices', (s) => s.reply(200, _twoDeviceBody()));
+
+    await tester.pumpWidget(_wrap(store: store, dio: dio));
+    await _pumpUntilStable(tester);
+
+    // Switch to the Schedule tab, then swipe between devices there (Issue
+    // #125) rather than having to return to Home first. Only the active tab's
+    // PageView is onstage, so the (skip-offstage) finder resolves to
+    // Schedule's.
+    await tester.tap(find.text('SCHEDULE'));
+    await _pumpUntilStable(tester);
+
+    // The Schedule header renders the active device's name (Issue #100),
+    // independent of the schedule fetch — so it doubles as a "which device is
+    // visible" probe. Device 0 first.
+    expect(find.text('Upstairs'), findsOneWidget);
+
+    await tester.fling(find.byType(PageView), const Offset(-400, 0), 1200);
+    await _pumpUntilStable(tester);
+
+    // Both the shared state AND the visible page advanced to device 1.
+    expect(store.activeSerial, '02BB02BD041404KL');
+    expect(find.text('Downstairs'), findsOneWidget);
+  });
+
+  testWidgets('swiping the Details tab advances the active-device provider', (
+    tester,
+  ) async {
+    final store = FakeOnboardingStore()
+      ..serverUrl = 'http://test.local:8082'
+      ..activeSerial = '02AA01AC041403JM'
+      ..complete = true;
+
+    final dio = Dio(BaseOptions(baseUrl: 'http://test.local:8082'));
+    final adapter = DioAdapter(dio: dio);
+    adapter.onGet('/api/devices', (s) => s.reply(200, _twoDeviceBody()));
+
+    await tester.pumpWidget(_wrap(store: store, dio: dio));
+    await _pumpUntilStable(tester);
+
+    await tester.tap(find.text('DETAILS'));
+    await _pumpUntilStable(tester);
+
+    // The Details "CURRENT" header renders the active device's name (as
+    // "{name} · {mode}") — a "which device is visible" probe. Device 0 first.
+    expect(find.textContaining('Upstairs'), findsOneWidget);
+
+    // Only the active (Details) tab's PageView is onstage.
+    await tester.fling(find.byType(PageView), const Offset(-400, 0), 1200);
+    await _pumpUntilStable(tester);
+
+    // Both the shared state AND the visible page advanced to device 1.
+    expect(store.activeSerial, '02BB02BD041404KL');
+    expect(find.textContaining('Downstairs'), findsOneWidget);
+  });
 
   testWidgets(
     'persisted serial not in latest snapshot falls back and snackbars once',

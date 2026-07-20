@@ -147,3 +147,22 @@ final activeDeviceSerialProvider =
     NotifierProvider<ActiveDeviceSerialNotifier, String?>(
       ActiveDeviceSerialNotifier.new,
     );
+
+/// The day-of-week currently selected on the Schedule tab (Mon=0..Sun=6),
+/// shared across devices so the selection carries over when swiping between
+/// thermostats — e.g. pick Tuesday on one device, swipe, and the next device's
+/// schedule opens on Tuesday too. `null` means "not chosen yet this session",
+/// in which case the Schedule screen falls back to today off its injected
+/// clock. Resets to `null` on app restart.
+class ScheduleSelectedDayNotifier extends Notifier<int?> {
+  @override
+  int? build() => null;
+
+  // ignore: use_setters_to_change_properties
+  void set(int dayIndex) => state = dayIndex;
+}
+
+final scheduleSelectedDayProvider =
+    NotifierProvider<ScheduleSelectedDayNotifier, int?>(
+      ScheduleSelectedDayNotifier.new,
+    );
