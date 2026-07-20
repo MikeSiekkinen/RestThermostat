@@ -49,6 +49,7 @@ Future<void> _pumpHost(
   Schedule? schedule,
   DateTime? lastSyncAt,
   DateTime? now,
+  DateTime Function()? clock,
   Map<String, String> overrides = const {},
   NumeralFont? numeralFont,
   VoidCallback? onDeviceNameTap,
@@ -72,7 +73,7 @@ Future<void> _pumpHost(
           body: DetailsScreen(
             device: device,
             lastSyncAt: lastSyncAt,
-            now: () => now ?? DateTime(2026, 5, 13, 12, 0, 0),
+            now: clock ?? () => now ?? DateTime(2026, 5, 13, 12, 0, 0),
             overrides: overrides,
             onDeviceNameTap: onDeviceNameTap,
           ),
@@ -234,6 +235,59 @@ void main() {
     testWidgets('Last sync renders em-dash when never synced', (tester) async {
       await _pumpHost(tester, device: _device(target: 22.0));
       expect(find.textContaining('—'), findsWidgets);
+    });
+  });
+
+  group('DetailsScreen — live Last Sync ticker (Issue #130)', () {
+    testWidgets('relative label advances on the 1s tick without a parent '
+        'rebuild', (tester) async {
+      // A mutable clock the ticker reads via now(); we advance it by hand and
+      // never re-pump DetailsScreen, so any label change comes from the row's
+      // own periodic setState — not a new poll / parent rebuild.
+      var clock = DateTime(2026, 5, 13, 12, 0, 0);
+      final last = clock;
+      await _pumpHost(
+        tester,
+        device: _device(target: 22.0),
+        lastSyncAt: last,
+        clock: () => clock,
+      );
+      expect(find.text('just now'), findsOneWidget);
+
+      clock = clock.add(const Duration(seconds: 10));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('just now'), findsNothing);
+      expect(find.text('10 seconds ago'), findsOneWidget);
+
+      clock = clock.add(const Duration(minutes: 1));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('1 minute ago'), findsOneWidget);
+    });
+
+    testWidgets('empty (never-synced) state does not start a ticker', (
+      tester,
+    ) async {
+      // lastSyncAt is null → no timer is scheduled. If one were, flutter_test
+      // would fail this test with a pending-timer error when it completes.
+      await _pumpHost(tester, device: _device(target: 22.0));
+      expect(find.textContaining('—'), findsWidgets);
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.textContaining('—'), findsWidgets);
+    });
+
+    testWidgets('ticker is cancelled on dispose (no leaked timer)', (
+      tester,
+    ) async {
+      await _pumpHost(
+        tester,
+        device: _device(target: 22.0),
+        lastSyncAt: DateTime(2026, 5, 13, 12, 0, 0),
+        clock: () => DateTime(2026, 5, 13, 12, 0, 0),
+      );
+      // Tear the row out of the tree, then advance time. A leaked periodic
+      // timer would still be pending here and trip flutter_test's timer guard.
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 2));
     });
   });
 
