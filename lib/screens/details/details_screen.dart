@@ -140,6 +140,9 @@ class DetailsScreen extends ConsumerWidget {
               ? l.detailsLastSyncEmpty
               : device.softwareVersion,
         ),
+        // Read-only reflection of the device's server-reported scale (there is
+        // no app-level unit override — every screen renders in this scale).
+        _InfoRow(label: l.detailsUnits, value: _unitLabel(l)),
         // Only servers running NLE-SelfHosted main newer than 2026-06-29
         // report these; hide the rows entirely (no placeholder) elsewhere.
         if (device.localIp case final String ip when ip.isNotEmpty)
@@ -165,6 +168,16 @@ class DetailsScreen extends ConsumerWidget {
 
   String _format(double c, String unit) =>
       '${TemperatureDial.celsiusToDisplay(c, unit).round()}°';
+
+  /// Human-readable name for the device's `temperatureScale` (`'F'`/`'C'`).
+  /// Mirrors [TemperatureDial.celsiusToDisplay] exactly — Fahrenheit iff the
+  /// (case-insensitive) scale is `'F'`, Celsius otherwise — so this label can
+  /// never contradict the units the temperatures are actually rendered in,
+  /// even for a non-canonical/unexpected `temperature_scale` value.
+  String _unitLabel(AppLocalizations l) =>
+      device.temperatureScale.toUpperCase() == 'F'
+      ? l.detailsUnitsFahrenheit
+      : l.detailsUnitsCelsius;
 
   String _comfortLabel(BuildContext context, int humidity) {
     final l = AppLocalizations.of(context);

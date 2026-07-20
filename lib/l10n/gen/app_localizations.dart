@@ -1489,6 +1489,24 @@ abstract class AppLocalizations {
   /// **'FIRMWARE'**
   String get detailsFirmware;
 
+  /// Row label for the device's temperature-unit scale on the Details tab.
+  ///
+  /// In en, this message translates to:
+  /// **'UNITS'**
+  String get detailsUnits;
+
+  /// Read-only UNITS row value when the device reports temperatures in Fahrenheit (temperature_scale 'F').
+  ///
+  /// In en, this message translates to:
+  /// **'Fahrenheit'**
+  String get detailsUnitsFahrenheit;
+
+  /// Read-only UNITS row value when the device reports temperatures in Celsius (temperature_scale 'C').
+  ///
+  /// In en, this message translates to:
+  /// **'Celsius'**
+  String get detailsUnitsCelsius;
+
   /// Row label for the thermostat's LAN IP address. Row is hidden when the server doesn't report one (pre-2026-06-29 NLE servers).
   ///
   /// In en, this message translates to:
