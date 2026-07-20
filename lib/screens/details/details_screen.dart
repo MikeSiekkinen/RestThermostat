@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -355,20 +357,89 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-class _LastSyncRow extends StatelessWidget {
+/// The "LAST SYNC" row. The relative label ("just now" → "5 seconds ago" →
+/// "1 minute ago") self-updates roughly once per second so it stays live
+/// between device polls (Issue #130), rather than only recomputing when the
+/// parent rebuilds on the next poll.
+///
+/// Lifecycle-aware, mirroring the app's other 1Hz widgets ([FanWidget]'s
+/// countdown ticker, `StatusRow`'s pulse): the timer pauses on background and
+/// is cancelled in [dispose] so no timer leaks. The ticker only runs when
+/// there's a timestamp to age — the empty (never-synced) state doesn't tick.
+/// The injectable `now()` clock is preserved so relative-time formatting stays
+/// deterministic in tests.
+class _LastSyncRow extends StatefulWidget {
   final DateTime? lastSyncAt;
   final DateTime Function() now;
   const _LastSyncRow({required this.lastSyncAt, required this.now});
 
   @override
+  State<_LastSyncRow> createState() => _LastSyncRowState();
+}
+
+class _LastSyncRowState extends State<_LastSyncRow>
+    with WidgetsBindingObserver {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _maybeStartTicker();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LastSyncRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A poll can flip us from the empty state into a live timestamp (or, in
+    // theory, back), so re-evaluate whether the ticker should be running.
+    if ((oldWidget.lastSyncAt == null) != (widget.lastSyncAt == null)) {
+      _maybeStartTicker();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _maybeStartTicker();
+      // Repaint immediately so the label reflects the time elapsed while
+      // backgrounded, rather than staying frozen at its pre-background value
+      // until the first tick (up to a second, or the whole background span).
+      if (mounted && widget.lastSyncAt != null) setState(() {});
+    } else {
+      _ticker?.cancel();
+      _ticker = null;
+    }
+  }
+
+  /// (Re)starts the 1Hz tick when there's a timestamp to age; otherwise leaves
+  /// the ticker stopped (the empty state is static).
+  void _maybeStartTicker() {
+    _ticker?.cancel();
+    _ticker = null;
+    if (widget.lastSyncAt == null) return;
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
+    final lastSyncAt = widget.lastSyncAt;
     final relative = lastSyncAt == null
         ? l.detailsLastSyncEmpty
-        : _formatRelative(context, now().difference(lastSyncAt!));
+        : _formatRelative(context, widget.now().difference(lastSyncAt));
     final absolute = lastSyncAt == null
         ? l.detailsLastSyncNoPoll
-        : lastSyncAt!.toLocal().toString();
+        : lastSyncAt.toLocal().toString();
 
     return _InfoRow(
       label: l.detailsLastSync,
