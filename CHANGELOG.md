@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-20
+
+### Added
+
+- Swipe left/right between thermostats on the Schedule and Details tabs,
+  carrying the selected schedule day across devices. (#125)
+- Tappable device-name header on Schedule and Details opens the shared device
+  picker — a non-gesture way to switch the active thermostat. (#127)
+- Read-only UNITS row on the Details tab showing the device's temperature
+  scale (Fahrenheit / Celsius). (#129)
+
+### Changed
+
+- The Details tab "Last Sync" label now ticks in real time (~1 Hz) while the
+  tab is foregrounded, instead of only refreshing on the next poll; it pauses
+  when backgrounded. (#130)
+
 ## [1.2.2] - 2026-07-19
 
 ### Added
