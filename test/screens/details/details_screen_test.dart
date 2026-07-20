@@ -289,6 +289,37 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 2));
     });
+
+    testWidgets('ticker pauses on background and refreshes on resume', (
+      tester,
+    ) async {
+      var clock = DateTime(2026, 5, 13, 12, 0, 0);
+      final last = clock;
+      await _pumpHost(
+        tester,
+        device: _device(target: 22.0),
+        lastSyncAt: last,
+        clock: () => clock,
+      );
+      expect(find.text('just now'), findsOneWidget);
+
+      // Backgrounded: advancing the clock must NOT move the label — the ticker
+      // is cancelled, so no rebuild happens even as time passes.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      clock = clock.add(const Duration(seconds: 30));
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.text('just now'), findsOneWidget);
+
+      // Resumed: the label refreshes immediately (not one tick later) to the
+      // elapsed time, then keeps ticking.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(find.text('30 seconds ago'), findsOneWidget);
+
+      clock = clock.add(const Duration(seconds: 5));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('35 seconds ago'), findsOneWidget);
+    });
   });
 
   group('DetailsScreen — network rows (local_ip / mac_address)', () {

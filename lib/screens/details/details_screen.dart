@@ -402,6 +402,10 @@ class _LastSyncRowState extends State<_LastSyncRow>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _maybeStartTicker();
+      // Repaint immediately so the label reflects the time elapsed while
+      // backgrounded, rather than staying frozen at its pre-background value
+      // until the first tick (up to a second, or the whole background span).
+      if (mounted && widget.lastSyncAt != null) setState(() {});
     } else {
       _ticker?.cancel();
       _ticker = null;
