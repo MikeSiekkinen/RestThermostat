@@ -61,6 +61,14 @@ class ScheduleScreen extends ConsumerStatefulWidget {
   /// (Issue #100). Defaults to empty for callers without them (tests).
   final Map<String, String> overrides;
 
+  /// When non-null, the header device name becomes tappable and shows the same
+  /// caret (`Icons.expand_more`) Home uses, opening the shared
+  /// `DevicePickerSheet` (Issue #127). Gives assistive-tech / switch-control
+  /// users a non-gesture way to change the active device at parity with Home.
+  /// Null for the single-device case (no affordance) and for callers without a
+  /// picker (tests) — the name renders as bare text then.
+  final VoidCallback? onDeviceNameTap;
+
   const ScheduleScreen({
     super.key,
     required this.serial,
@@ -70,6 +78,7 @@ class ScheduleScreen extends ConsumerStatefulWidget {
     this.device,
     this.now = DateTime.now,
     this.overrides = const {},
+    this.onDeviceNameTap,
     this.capabilities = const Capabilities(
       canHeat: true,
       canCool: false,
@@ -207,7 +216,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        _HeaderName(name: name, onTap: widget.onDeviceNameTap),
         const SizedBox(height: 2),
         // The first visible line carries the full spelled-out semantics for the
         // whole summary so screen readers announce one coherent sentence; the
@@ -407,6 +416,46 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
     if (result != null && mounted) {
       ref.invalidate(scheduleProvider(widget.serial));
     }
+  }
+}
+
+/// The Schedule header's device name. When [onTap] is non-null (multi-device,
+/// Issue #127) it renders the same tappable name + `Icons.expand_more` caret
+/// Home uses (see `StatusRow`), opening the shared `DevicePickerSheet` so
+/// assistive-tech / switch-control users can change the active device without
+/// the horizontal swipe gesture. When null it's the bare name `Text` from
+/// before (Issue #100).
+class _HeaderName extends StatelessWidget {
+  final String name;
+  final VoidCallback? onTap;
+
+  const _HeaderName({required this.name, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final nameText = Text(name, maxLines: 1, overflow: TextOverflow.ellipsis);
+    if (onTap == null) return nameText;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Flexible(child: nameText),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.expand_more,
+              size: 20,
+              color: EmberColors.textSecondary,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
