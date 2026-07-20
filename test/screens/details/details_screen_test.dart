@@ -209,6 +209,16 @@ void main() {
       expect(find.text('Fahrenheit'), findsNothing);
     });
 
+    testWidgets('UNITS label never contradicts the rendered scale for a '
+        'non-canonical value (matches celsiusToDisplay)', (tester) async {
+      // celsiusToDisplay treats anything but a case-insensitive 'F' as Celsius,
+      // so a lowercase 'c' renders Celsius temps; the label must agree, not
+      // fall through to Fahrenheit on a case-sensitive check.
+      await _pumpHost(tester, device: _device(target: 22.0, unit: 'c'));
+      expect(find.text('Celsius'), findsOneWidget);
+      expect(find.text('Fahrenheit'), findsNothing);
+    });
+
     testWidgets('Last sync renders as relative time', (tester) async {
       final now = DateTime(2026, 5, 13, 12, 0, 0);
       final last = now.subtract(const Duration(minutes: 2));

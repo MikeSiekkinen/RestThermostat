@@ -170,12 +170,14 @@ class DetailsScreen extends ConsumerWidget {
       '${TemperatureDial.celsiusToDisplay(c, unit).round()}°';
 
   /// Human-readable name for the device's `temperatureScale` (`'F'`/`'C'`).
-  /// Anything other than `'C'` reads as Fahrenheit — the wire field is always
-  /// one of the two, and Fahrenheit is the safer default for the deprecated
-  /// US-market Nest hardware this app targets.
-  String _unitLabel(AppLocalizations l) => device.temperatureScale == 'C'
-      ? l.detailsUnitsCelsius
-      : l.detailsUnitsFahrenheit;
+  /// Mirrors [TemperatureDial.celsiusToDisplay] exactly — Fahrenheit iff the
+  /// (case-insensitive) scale is `'F'`, Celsius otherwise — so this label can
+  /// never contradict the units the temperatures are actually rendered in,
+  /// even for a non-canonical/unexpected `temperature_scale` value.
+  String _unitLabel(AppLocalizations l) =>
+      device.temperatureScale.toUpperCase() == 'F'
+      ? l.detailsUnitsFahrenheit
+      : l.detailsUnitsCelsius;
 
   String _comfortLabel(BuildContext context, int humidity) {
     final l = AppLocalizations.of(context);
