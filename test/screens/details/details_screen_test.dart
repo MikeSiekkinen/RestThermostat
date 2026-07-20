@@ -191,6 +191,24 @@ void main() {
       expect(find.text('Offline'), findsOneWidget);
     });
 
+    testWidgets('UNITS row reads Fahrenheit when scale is F (Issue #129)', (
+      tester,
+    ) async {
+      await _pumpHost(tester, device: _device(target: 22.0, unit: 'F'));
+      expect(find.text('UNITS'), findsOneWidget);
+      expect(find.text('Fahrenheit'), findsOneWidget);
+      expect(find.text('Celsius'), findsNothing);
+    });
+
+    testWidgets('UNITS row reads Celsius when scale is C (Issue #129)', (
+      tester,
+    ) async {
+      await _pumpHost(tester, device: _device(target: 22.0, unit: 'C'));
+      expect(find.text('UNITS'), findsOneWidget);
+      expect(find.text('Celsius'), findsOneWidget);
+      expect(find.text('Fahrenheit'), findsNothing);
+    });
+
     testWidgets('Last sync renders as relative time', (tester) async {
       final now = DateTime(2026, 5, 13, 12, 0, 0);
       final last = now.subtract(const Duration(minutes: 2));

@@ -817,6 +817,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get detailsFirmware => 'FIRMWARE';
 
   @override
+  String get detailsUnits => 'UNITS';
+
+  @override
+  String get detailsUnitsFahrenheit => 'Fahrenheit';
+
+  @override
+  String get detailsUnitsCelsius => 'Celsius';
+
+  @override
   String get detailsLocalIp => 'LOCAL IP';
 
   @override
