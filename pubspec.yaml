@@ -40,7 +40,7 @@ dependencies:
   # pins win32 5.x and collides with `share_plus`'s win32 6.x, and
   # `share_plus`'s share sheet can't save to a user-chosen folder anyway.
   cryptography: ^2.9.0
-  flutter_file_dialog: ^3.3.1
+  flutter_file_dialog: ^3.3.2
 dev_dependencies:
   flutter_test:
     sdk: flutter
