@@ -26,7 +26,7 @@ dependencies:
   # Floor 5.10.0: DioExceptionType.transformTimeout (handled in the error
   # classifier, retry logic, and logging interceptor) was added in 5.10.
   dio: ^5.10.0
-  flutter_riverpod: ^3.3.1
+  flutter_riverpod: ^3.4.2
   shared_preferences: ^2.5.5
   flutter_secure_storage: ^10.3.1
   google_fonts: ^8.2.0
